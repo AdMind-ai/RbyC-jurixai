@@ -1,0 +1,25 @@
+# core/views/__init__.py
+from .example_view import ExampleView
+
+from .company_info import CompanyInfoView as CompanyInfoViewAdm
+
+from .deepl import DeeplTranslateFileView
+from .deepl import DeeplTranslateTextView
+
+from .openai import OpenAIConversationViewSet, OpenAISendMessageView
+from .openai import OpenAISendAssistantMessageView
+
+from .extract_content_view import ExtractContentView
+
+from .quickdoc_view import QuickDocGenerateView
+
+__all__ = [
+    'CompanyInfoViewAdm',
+    'DeeplTranslateFileView',
+    'DeeplTranslateTextView',
+    'OpenAIConversationViewSet',
+    'OpenAISendMessageView',
+    'OpenAISendAssistantMessageView',
+    'ExtractContentView',
+    'QuickDocGenerateView'
+]

@@ -1,0 +1,26 @@
+name: Remove old artifacts
+on:
+  schedule:
+    - cron: "0 1 * * *"
+  # push:
+  #   branches:
+  #     - main
+  # pull_request:
+  #   branches:
+  #     - main
+jobs:
+  remove-old-artifacts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    permissions:
+      actions: write
+
+    steps:
+      - name: Remove old artifacts
+        uses: c-hive/gha-remove-artifacts@v1
+        with:
+          age: "2 days" # '<number> <unit>', e.g. 5 days, 2 years, 90    seconds, parsed by Moment.js
+          # Optional inputs
+          # skip-tags: true
+          skip-recent: 3

@@ -1,0 +1,6 @@
+{
+    "navigationFallback": {
+      "rewrite": "/index.html",
+      "exclude": ["/audio/*", "/image/*", "/favicon.svg", "/logo_login_simple.png", "/logo_login.png", "/public.md", "/api/*"]
+    }
+}

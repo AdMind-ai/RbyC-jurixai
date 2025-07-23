@@ -1,0 +1,19 @@
+.markdown-body {
+    font-size: 14px;  
+  }
+  
+  .markdown-body h1 {
+    font-size: 1.5em; 
+  }
+  
+  .markdown-body h2 {
+    font-size: 1.3em;
+  }
+  
+  .markdown-body h3 {
+    font-size: 1.1em;
+  }
+  
+  .markdown-body p {
+    margin: 0.5em 0;
+  }
