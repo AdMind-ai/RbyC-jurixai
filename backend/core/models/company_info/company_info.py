@@ -4,7 +4,7 @@ from django.db import models
 class CompanyInfo(models.Model):
     long_name = models.CharField(max_length=255)
     short_name = models.CharField(max_length=255)
-    stock_symbol = models.CharField(max_length=32, unique=True)
+    # stock_symbol = models.CharField(max_length=32, unique=True)
     website = models.URLField(blank=True, null=True)
     description = models.TextField(blank=True)
     sector = models.CharField(max_length=128, blank=True)
@@ -14,6 +14,10 @@ class CompanyInfo(models.Model):
     address = models.CharField(max_length=255, blank=True)
     phone = models.CharField(max_length=64, blank=True)
     email = models.EmailField(blank=True)
+
+    class Meta:
+        verbose_name = "Company - Info"
+        verbose_name_plural = "Companies - Info"
 
     def __str__(self):
         return self.long_name

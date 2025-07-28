@@ -1,67 +1,50 @@
 import React, { useEffect, useState, useMemo } from "react";
+import { api } from '../api/api';
 import {
   Box, Typography, Avatar, Button,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText, TextField,
   IconButton, Link, Tooltip, TableSortLabel, TableFooter, TablePagination, 
-  InputAdornment, Select, MenuItem
+  InputAdornment
 } from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import CloseIcon from '@mui/icons-material/Close';
 import SearchIcon from '@mui/icons-material/Search';
 import Layout from '../layouts/Layout';
+import { toast } from "react-toastify";
 
-// Atualize o tipo do Member
 export interface Member {
   id: number;
   name: string;
   email: string;
-  role: string;
   avatar: string;
-  password: string;
+  createdAt: string;    
+  modifiedAt: string;   
+  is_company_admin?: boolean; 
+}
+
+export interface MemberApi {
+  id: number;
+  username: string; 
+  email: string;
+  is_company_admin?: boolean;
   createdAt: string;    
   modifiedAt: string;   
 }
 
-// Função para gerar data/hora do momento
-function nowIso() {
-  return new Date().toISOString();
-}
 
-// Função simulando fetch
-function mockFetchMembers(): Promise<Member[]> {
-  const now = Date.now();
-  const firstNames = [
-    "Luca", "Giulia", "Marco", "Anna", "Simone", "Sara", "Matteo", "Alice",
-    "Francesco", "Elena", "Davide", "Martina", "Andrea", "Chiara", "Gabriele",
-    "Valentina", "Alessio", "Federica", "Stefano", "Roberta", "Paolo",
-    "Giorgia", "Alessandra", "Emanuele", "Serena", "Cristian", "Camilla",
-    "Filippo", "Silvia", "Edoardo"
-  ];
-  const lastNames = [
-    "Bianchi", "Rossi", "Verdi", "Neri", "Russo", "Ferrari", "Romano",
-    "Gallo", "Costa", "Fontana", "Conti", "Esposito", "Ricci", "Marino",
-    "Greco", "Bruno", "Galli", "Moretti", "De Luca", "Barbieri", "Rizzo",
-    "Lombardi", "Martini", "Leone", "Longo", "Gentile", "Martinelli",
-    "Vitale", "Bianco", "Lorenzi"
-  ];
-  const roles = ['Admin', 'Editor', 'Viewer'];
-  
-  const members: Member[] = Array.from({length: 30}, (_, i) => {
-    const gender = i % 2 === 0 ? "men" : "women";
-    return {
-      id: i + 1,
-      name: `${firstNames[i]} ${lastNames[i]}`,
-      email: `${firstNames[i].toLowerCase()}.${lastNames[i].toLowerCase()}@email.com`,
-      role: roles[i % roles.length],
-      avatar: `https://randomuser.me/api/portraits/${gender}/${10+(i%80)}.jpg`,
-      password: "",
-      createdAt: new Date(now - 1000*60*60*24*(Math.floor(Math.random()*30+1))).toISOString(),
-      modifiedAt: new Date(now - 1000*60*60*24*(Math.floor(Math.random()*10+1))).toISOString(),
-    };
-  });
-  return Promise.resolve(members);
+function getColorFromName(name: string) {
+  // Gera uma cor "aleatória" mas sempre igual para o mesmo nome
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  let color = '#';
+  for (let i = 0; i < 3; i++) {
+    color += ('00' + ((hash >> (i * 8)) & 0xff).toString(16)).slice(-2);
+  }
+  return color;
 }
 
 // Funções auxiliares
@@ -85,16 +68,40 @@ const columns: {
     key: "name", label: "Nome e cognome", sortable: true,
     render: (m: Member) => (
       <Box sx={{display:'flex',alignItems:'center',gap:2}}>
-        <Avatar src={m.avatar} alt={m.name} />
+        <Avatar
+          sx={{
+            bgcolor: getColorFromName(m.name),
+            color: "#fff",
+            width: 40,
+            height: 40,
+            fontWeight: 700,
+            fontSize: '1.3rem'
+          }}
+          src={undefined} 
+        >
+          {m.name ? m.name[0].toUpperCase() : '?'}
+        </Avatar>
         <span style={{fontSize: '16px'}}>{m.name}</span>
       </Box>
     )
   },
   {
-    key: "email", label: "Email", sortable: true,
+    key: "is_company_admin", label: "Tipo", sortable: false, align: "center",
+      render: (m: Member) => (
+        <span style={{
+            padding: '3px 8px',
+            borderRadius: '12px',
+            fontWeight: 'bold',
+            background: m.is_company_admin ? '#EDF7ED' : '#F6F7FB',
+            color: m.is_company_admin ? '#2BA52B' : '#606B75',
+            fontSize: 14
+          }}>
+          {m.is_company_admin ? "Admin" : "Standard"}
+        </span>
+      )
   },
   {
-    key: "role", label: "Ruolo", sortable: true,
+    key: "email", label: "Email", sortable: true,
   },
   {
     key: "createdAt", label: "Creato il", sortable: true,
@@ -108,10 +115,12 @@ const columns: {
   }
 ];
 
+
+// Main component
 const TeamManagement: React.FC = () => {
   // Data
   const [members, setMembers] = useState<Member[]>([]);
-  const rolesArray = ['Admin', 'Editor', 'Viewer'];
+  const [isAdmin, setIsAdmin] = useState(false);
   // Sorting
   const [orderBy, setOrderBy] = useState<ColumnKey>("name");
   const [order, setOrder] = useState<Order>("asc");
@@ -126,16 +135,43 @@ const TeamManagement: React.FC = () => {
   const [passwordMember, setPasswordMember] = useState<Member | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [deleteMember, setDeleteMember] = useState<Member | null>(null);
+  const [deleteMemberId, setDeleteMemberId] = useState<number | null>(null);
+  const [deleteMemberName, setDeleteMemberName] = useState<string | null>(null);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [newUser, setNewUser] = useState({
-    name:'', email:'', role:'', avatar:'', password:''
+    name:'', email:'', avatar:'', password:''
   });
 
+
+  // Fetch members and admin status
   useEffect(() => {
-    // fetch members from mock API
-    mockFetchMembers().then(list => setMembers(list));
+    fetchMembers();
+
+    api.get('/auth/users/me/')
+      .then(res => setIsAdmin(res.data.is_company_admin === true));
   }, []);
+
+  // Fetch members
+  function fetchMembers() {
+    api.get('/auth/users/')
+      .then(res => {
+        const mappedMembers = res.data.map((user: MemberApi) => ({
+          id: user.id,
+          name: user.username,
+          email: user.email,
+          avatar: "", 
+          createdAt: user.createdAt,
+          modifiedAt: user.modifiedAt,
+          is_company_admin: user.is_company_admin || false,
+        }));
+        setMembers(mappedMembers);
+      })
+      .catch((err) => {
+      alert(err); 
+      setMembers([])
+      });
+  }
+
 
   // Sorting handlers
   function handleSort(column: ColumnKey) {
@@ -150,16 +186,20 @@ const TeamManagement: React.FC = () => {
     arr.sort((a, b) => {
       const valA = a[orderBy];
       const valB = b[orderBy];
+      // Proteção contra undefined:
+      if (valA === undefined && valB === undefined) return 0;
+      if (valA === undefined) return 1;
+      if (valB === undefined) return -1;
+
       if (orderBy === "createdAt" || orderBy === "modifiedAt") {
-        // Sort by date
-        return (order==="asc" ? 1 : -1) * (valA > valB ? 1 : -1);
+        return (order === "asc" ? 1 : -1) * (valA > valB ? 1 : -1);
       }
       if (typeof valA === "string" && typeof valB === "string") {
-        return (order==="asc" ? 1 : -1) * valA.localeCompare(valB);
+        return (order === "asc" ? 1 : -1) * valA.localeCompare(valB);
       }
       // fallback:
       if (valA === valB) return 0;
-      return (order==="asc" ? 1 : -1) * (valA > valB ? 1 : -1);
+      return (order === "asc" ? 1 : -1) * (valA > valB ? 1 : -1);
     });
     return arr;
   }, [members, orderBy, order]);
@@ -176,7 +216,8 @@ const TeamManagement: React.FC = () => {
   const paginatedData = useMemo(()=>filteredData.slice(page*rowsPerPage, page*rowsPerPage+rowsPerPage), [filteredData, page, rowsPerPage]);
 
   // ------ Table Actions -----
-
+  
+  // Password reset modal handlers
   function openPasswordModal(member: Member) {
     setPasswordMember(member);
     setNewPassword('');
@@ -184,50 +225,78 @@ const TeamManagement: React.FC = () => {
   }
   function closePasswordModal() {
     setPasswordModalOpen(false);
+    setPasswordMember(null);
   }
   function handlePasswordChange() {
     if (!passwordMember) return;
-    setMembers(prev =>
-      prev.map(m =>
-        m.id === passwordMember.id
-          ? { ...m, password: newPassword, modifiedAt: nowIso() }
-          : m
-      )
-    );
-    closePasswordModal();
+    api.post(`/auth/users/${passwordMember.id}/set_password/`, {
+      password: newPassword
+    })
+    .then(() => {
+      closePasswordModal();
+      setPasswordMember(null);
+      toast.success(`Password di ${passwordMember.name} aggiornata con successo!`);
+      fetchMembers();
+    })
+    .catch((err) => {
+      alert(err);
+      closePasswordModal();
+    });
   }
 
+  // Delete member modal handlers
   function openDeleteModal(member: Member) {
-    setDeleteMember(member);
+    setDeleteMemberId(member.id);
+    setDeleteMemberName(member.name);
     setDeleteModalOpen(true);
   }
   function cancelDelete() {
     setDeleteModalOpen(false);
+    setDeleteMemberId(null);
+    setDeleteMemberName(null);
   }
   function confirmDelete() {
-    setMembers(prev => prev.filter(m => m.id !== deleteMember?.id));
-    setDeleteModalOpen(false);
+    if (!deleteMemberId) return;
+    api.delete(`/auth/users/${deleteMemberId}/`)
+      .then(() => {
+        fetchMembers();
+        setDeleteModalOpen(false);
+        setDeleteMemberId(null);
+        setDeleteMemberName(null);
+        toast.success(`Utente ${deleteMemberName} eliminato con successo!`);
+      })
+      .catch((err) => {
+        alert(err);
+      });
+    
   }
 
+  // Add user modal handlers
   function openAddModal() {
     setAddModalOpen(true);
-    setNewUser({name:'', email:'', role:'', avatar:'', password:''});
+    setNewUser({name:'', email:'', avatar:'', password:''});
   }
   function closeAddModal() { setAddModalOpen(false); }
   function handleAddUser() {
-    const now = nowIso();
-    setMembers(prev => [
-      ...prev,
-      {
-        id: Date.now()+Math.floor(Math.random()*1000),
-        ...newUser,
-        avatar: newUser.avatar || `https://randomuser.me/api/portraits/lego/${Math.floor(Math.random()*10)}.jpg`,
-        createdAt: now,
-        modifiedAt: now,
-      }
-    ]);
-    setAddModalOpen(false);
+    api.post("/auth/users/", {
+      username: newUser.name, 
+      email: newUser.email,
+      password: newUser.password
+    })
+      .then(() => {
+        toast.success(`Utente ${newUser.name} aggiunto con successo!`);
+        fetchMembers();
+        setAddModalOpen(false);
+      })
+      .catch(err => {
+        // Isso mostra a mensagem do backend DRF
+        alert(JSON.stringify(err.response.data))
+        // ou console.log(err.response?.data)
+      })
+
+    
   }
+  
 
   // Pagination handlers
   function handleChangePage(
@@ -262,16 +331,18 @@ const TeamManagement: React.FC = () => {
           mx: '1vw',
         }}>
           <Typography variant="h2">
-            Accessi
+            Membri e accesso
           </Typography>
-          <Button
-            variant="outlined"
-            color="secondary"
-            sx={{ width: '190px' }}
-            onClick={openAddModal}
-          >
-            + Aggiungi membro
-          </Button>
+          {isAdmin && (
+            <Button
+              variant="outlined"
+              color="secondary"
+              sx={{ width: '190px' }}
+              onClick={openAddModal}
+            >
+              + Aggiungi membro
+            </Button>
+          )}
         </Box>
         {/* Searcher */}
         <Box sx={{ width: '95%', mx:"auto", mb:2.5 }}>
@@ -341,22 +412,38 @@ const TeamManagement: React.FC = () => {
                       </TableCell>
                     ))}
                     <TableCell align="right">
-                      <Link 
-                        sx={{ cursor: 'pointer', fontSize: '16px', color:'grey', marginRight:2 }}
-                        component="button"
-                        onClick={()=>openPasswordModal(member)}
-                        underline="hover"
-                      >
-                        Reimposta password
-                      </Link>
-                      <Tooltip title="Elimina membro">
-                        <IconButton
-                          color="error"
-                          onClick={()=>openDeleteModal(member)}
+                      {isAdmin && (
+                        <Link 
+                          sx={{ cursor: 'pointer', fontSize: '16px', color:'grey', marginRight:2 }}
+                          component="button"
+                          onClick={()=>openPasswordModal(member)}
+                          underline="hover"
                         >
-                          <DeleteOutlineIcon sx={{fontSize:25}}/>
-                        </IconButton>
-                      </Tooltip>
+                          Reimposta password
+                        </Link>
+                      )}
+                      {isAdmin && (
+                        <Tooltip title={member.is_company_admin ? "Impossibile eliminare admin" : "Elimina membro"}>
+                          <span>
+                            <IconButton
+                              color="error"
+                              onClick={member.is_company_admin
+                                ? undefined
+                                : () => openDeleteModal(member)}
+                              disabled={member.is_company_admin}
+                              sx={{
+                                color: member.is_company_admin ? '#aaa' : '#d32f2f',
+                                cursor: member.is_company_admin ? 'not-allowed' : 'pointer'
+                              }}
+                            >
+                              <DeleteOutlineIcon sx={{
+                                fontSize: 25,
+                                color: member.is_company_admin ? '#aaa' : undefined
+                              }}/>
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -455,7 +542,7 @@ const TeamManagement: React.FC = () => {
           </DialogTitle>
           <DialogContent>
             <DialogContentText sx={{ color: 'black', textAlign: 'center', fontSize:'20px', my:0.5, mx:1 }}>
-              Vuoi davvero eliminare l’utente <strong>{deleteMember?.name}</strong>?
+              Vuoi davvero eliminare l’utente <strong>{deleteMemberName}</strong>?
               <br /> Una volta eliminato, non sarà possibile recuperarlo.
             </DialogContentText>
           </DialogContent>
@@ -497,33 +584,6 @@ const TeamManagement: React.FC = () => {
                     },
                   }}
               />
-              <Select
-                value={newUser.role}
-                onChange={e=>setNewUser({...newUser, role: e.target.value as string})}
-                displayEmpty
-                fullWidth
-                size="small"
-                sx={{
-                  fontSize: 14,
-                  '& .MuiSelect-select': { fontSize: 14 },
-                  '& .MuiInputLabel-root': { fontSize: 14 }
-                }}
-                renderValue={(selected) => selected ? selected : "Seleziona ruolo"}
-                MenuProps={{
-                  PaperProps: {
-                    sx: {
-                      fontSize: 14, 
-                      '& .MuiMenuItem-root': {
-                        fontSize: 14  
-                      }
-                    }
-                  }
-                }}
-              >
-                {rolesArray.map(role =>
-                  <MenuItem key={role} value={role}>{role}</MenuItem>
-                )}
-              </Select>
               <TextField label="Password" type="password" value={newUser.password} onChange={e=>setNewUser({...newUser, password: e.target.value})} 
                 size="small"
                 sx={{
@@ -535,7 +595,7 @@ const TeamManagement: React.FC = () => {
                     },
                   }}
               />
-              <TextField label="URL Avatar (opzionale)" value={newUser.avatar} onChange={e=>setNewUser({...newUser, avatar: e.target.value})} 
+              {/* <TextField label="URL Avatar (opzionale)" value={newUser.avatar} onChange={e=>setNewUser({...newUser, avatar: e.target.value})} 
                 size="small"
                 sx={{
                     '& .MuiInputBase-input': {
@@ -545,7 +605,7 @@ const TeamManagement: React.FC = () => {
                       fontSize: 16,
                     },
                   }}
-              />
+              /> */}
             </Box>
           </DialogContent>
           <DialogActions sx={{justifyContent:'center', pb:2}}>
@@ -553,7 +613,7 @@ const TeamManagement: React.FC = () => {
               variant="contained"
               color="secondary"
               onClick={handleAddUser}
-              disabled={!newUser.name || !newUser.email || !newUser.role || !newUser.password}
+              disabled={!newUser.name || !newUser.email || !newUser.password}
             >
               Aggiungi
             </Button>

@@ -7,12 +7,12 @@ import { useTheme } from '@mui/material/styles'
 // Importação dos ícones
 import HomeIcon from '../assets/icons/sidebar/home-icon.svg'
 import HomeIconActive from '../assets/icons/sidebar/home-icon-active.svg'
-import TranslatorIcon from '../assets/icons/sidebar/translator-icon.svg'
-import TranslatorIconActive from '../assets/icons/sidebar/translator-icon-active.svg'
+// import TranslatorIcon from '../assets/icons/sidebar/translator-icon.svg'
+// import TranslatorIconActive from '../assets/icons/sidebar/translator-icon-active.svg'
 import ComplianceIcon from '../assets/icons/sidebar/compliance-icon.svg'
 import ComplianceIconActive from '../assets/icons/sidebar/compliance-icon-active.svg'
-import DraftIcon from '../assets/icons/sidebar/draft-icon.svg'
-import DraftIconActive from '../assets/icons/sidebar/draft-icon-active.svg'
+// import DraftIcon from '../assets/icons/sidebar/draft-icon.svg'
+// import DraftIconActive from '../assets/icons/sidebar/draft-icon-active.svg'
 import SearchIcon from '../assets/icons/sidebar/search-icon.svg'
 import SearchIconActive from '../assets/icons/sidebar/search-icon-active.svg'
 import ConsultantIcon from '../assets/icons/sidebar/consultant-icon.svg'
@@ -23,25 +23,25 @@ import AccessIcon from '../assets/icons/sidebar/access-icon.svg'
 import AccessIconActive from '../assets/icons/sidebar/access-icon-active.svg'
 
 // Logos
-import InvestorLogo from '../assets/logo.svg'
+import Logo from '../assets/logo.png'
 
 // Menu links
 const lawOptions = [
   { title: 'Law References', path: 'Law References' },
-  { title: 'Answer Generation', path: 'Answer Generation' },
-  { title: 'Evaluator', path: 'Evaluator' },
-  { title: 'Rerank', path: 'Rerank' },
-  { title: 'Filter Prompt', path: 'Filter Prompt' },
+  // { title: 'Answer Generation', path: 'Answer Generation' },
+  // { title: 'Evaluator', path: 'Evaluator' },
+  // { title: 'Rerank', path: 'Rerank' },
+  // { title: 'Filter Prompt', path: 'Filter Prompt' },
 ]
 
 const menuItems = [
   { title: 'Home', path: '/', icon: HomeIcon, activeIcon: HomeIconActive },
-  {
-    title: 'Draft documenti',
-    path: '/doc-draft',
-    icon: DraftIcon,
-    activeIcon: DraftIconActive,
-  },
+  // {
+  //   title: 'Draft documenti',
+  //   path: '/doc-draft',
+  //   icon: DraftIcon,
+  //   activeIcon: DraftIconActive,
+  // },
   {
     title: 'Ricerca documentale',
     path: '/doc-search',
@@ -53,13 +53,14 @@ const menuItems = [
     path: '/check-compliance',
     icon: ComplianceIcon,
     activeIcon: ComplianceIconActive,
+    disabled: true,
   },
-  {
-    title: 'Traduttore documenti',
-    path: '/doc-translator',
-    icon: TranslatorIcon,
-    activeIcon: TranslatorIconActive,
-  },
+  // {
+  //   title: 'Traduttore documenti',
+  //   path: '/doc-translator',
+  //   icon: TranslatorIcon,
+  //   activeIcon: TranslatorIconActive,
+  // },
   {
     title: 'Law consultant',
     path: '/law-consultant',
@@ -103,10 +104,13 @@ const Sidebar: React.FC = () => {
   
 
   const handleMenuClick = (item: typeof menuItems[0]) => {
+    if (item.disabled) return;
+    
     if (item.options) {
       setActivePath(item.path)
       navigate(item.path)
-      setSelectedLawTab(null)
+      setSelectedLawTab('Law References')
+      // setSelectedLawTab(null)
     } else {
       setActivePath(item.path)
       navigate(item.path)
@@ -164,11 +168,11 @@ const Sidebar: React.FC = () => {
         {/* Logo Icon */}
         <Box
           component="img"
-          src={InvestorLogo}
+          src={Logo}
           alt="Investor Logo"
           sx={{
-            width: "19vh",
-            height: "19vh",
+            // width: "10vh",
+            height: "7.5vh",
             marginLeft: 'calc(6.5vw)',
             marginTop: 'calc(2.5vh)',
           }}
@@ -207,13 +211,18 @@ const Sidebar: React.FC = () => {
                     alignItems: 'center',
                     width: 'calc(9vw)',
                     height: 'calc(3vw)',
-                    cursor: 'pointer',
+                    cursor: item.disabled ? 'not-allowed' : 'pointer',
                     backgroundColor: isActive
                       ? theme.palette.primary.main
                       : 'transparent',
                     borderRadius: 'calc(0.5vw)',
+                    pointerEvents: item.disabled ? 'none' : 'auto',
                     '&:hover': {
-                      backgroundColor: isActive ? theme.palette.primary.main : 'rgba(0, 0, 0, 0.1)',
+                      backgroundColor: item.disabled
+                        ? 'transparent'
+                        : isActive
+                          ? theme.palette.primary.main
+                          : 'rgba(0, 0, 0, 0.1)',
                       borderRadius: 'calc(0.5vw)',
                     },
                   }}
@@ -251,7 +260,7 @@ const Sidebar: React.FC = () => {
                   </ListItemIcon>
                 </ListItem>
                 {/* Submenu expandido */}
-                {item.options && (
+                {/* {item.options && (
                   <Collapse in={openMenu === item.title} timeout="auto" unmountOnExit>
                     <Box sx={{ width: '100%', mt: 1 }}>
                       {item.options.map(opt => (
@@ -291,7 +300,7 @@ const Sidebar: React.FC = () => {
                       ))}
                     </Box>
                   </Collapse>
-                )}
+                )} */}
               </Box>
             )
           })}

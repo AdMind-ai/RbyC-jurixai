@@ -1,11 +1,5 @@
 from rest_framework import serializers
-from core.models.company_info import CompanyInfo, CompetitorInfo, CEO
-
-
-class CompetitorSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = CompetitorInfo
-        fields = ['name', 'stock_symbol', 'sector', 'website']
+from core.models.company_info import CompanyInfo, CEO
 
 
 class CEOSerializer(serializers.ModelSerializer):
@@ -15,7 +9,6 @@ class CEOSerializer(serializers.ModelSerializer):
 
 
 class CompanySerializer(serializers.ModelSerializer):
-    competitors = CompetitorSerializer(many=True, source='competitors_of')
     ceos = CEOSerializer(many=True)
 
     class Meta:
@@ -23,7 +16,6 @@ class CompanySerializer(serializers.ModelSerializer):
         fields = [
             'long_name',
             'short_name',
-            'stock_symbol',
             'website',
             'description',
             'sector',
@@ -33,6 +25,5 @@ class CompanySerializer(serializers.ModelSerializer):
             'address',
             'phone',
             'email',
-            'competitors',
             'ceos',
         ]

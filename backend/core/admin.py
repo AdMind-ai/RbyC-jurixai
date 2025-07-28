@@ -1,6 +1,6 @@
 from django.contrib import admin
 from core.models.openai_chat_models import ChatConversation, ChatMessage
-from core.models.company_info import CompanyInfo, CEO, CompetitorInfo
+from core.models.company_info import CompanyInfo, CEO
 # Register your models here.
 
 
@@ -23,9 +23,6 @@ class ChatMessageAdmin(admin.ModelAdmin):
     search_fields = ('content',)
 
 
-class CompetitorInline(admin.TabularInline):
-    model = CompetitorInfo
-    extra = 0
 
 
 class CEOInline(admin.TabularInline):
@@ -35,5 +32,10 @@ class CEOInline(admin.TabularInline):
 
 @admin.register(CompanyInfo)
 class CompanyAdmin(admin.ModelAdmin):
-    list_display = ('long_name', 'stock_symbol', 'sector', 'country')
-    inlines = [CompetitorInline, CEOInline]
+    list_display = ('long_name', 'sector', 'country')
+    inlines = [CEOInline]
+
+
+@admin.register(CEO)
+class CEOAdmin(admin.ModelAdmin):
+    list_display = ('name', 'role', 'company')

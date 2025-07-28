@@ -4,20 +4,20 @@ import Layout from '../layouts/Layout'
 import HomeCard from '../components/cards/HomeCard'
 
 // Importação dos ícones
-import TranslatorIcon from '../assets/icons/sidebar/translator-icon.svg'
+// import TranslatorIcon from '../assets/icons/sidebar/translator-icon.svg'
 import ComplianceIcon from '../assets/icons/sidebar/compliance-icon.svg'
-import DraftIcon from '../assets/icons/sidebar/draft-icon.svg'
+// import DraftIcon from '../assets/icons/sidebar/draft-icon.svg'
 import SearchIcon from '../assets/icons/sidebar/search-icon.svg'
 import ConsultantIcon from '../assets/icons/sidebar/consultant-icon.svg'
 
 const cards = [
-  {
-    title: 'Draft documenti',
-    description:
-    'Conduce ricerche e analisi sul mercato di riferimento dei principali competitors e sui peers quotati sui capital markets internazionali.',
-    icon: DraftIcon,
-    path: '/doc-draft',
-  },
+  // {
+  //   title: 'Draft documenti',
+  //   description:
+  //   'Conduce ricerche e analisi sul mercato di riferimento dei principali competitors e sui peers quotati sui capital markets internazionali.',
+  //   icon: DraftIcon,
+  //   path: '/doc-draft',
+  // },
   {
     title: 'Ricerca documentale',
     description:
@@ -25,20 +25,20 @@ const cards = [
     icon: SearchIcon,
     path: '/doc-search',
   },
-  {
-    title: 'Check compliance',
-    description:
-    'Monitora e analizza la percezione online del CEO e dei key manager aziendali attraverso la potenza dell’AI.',
-    icon: ComplianceIcon,
-    path: '/check-compliance',
-  },
-  {
-    title: 'Traduttore documenti',
-    description:
-      'Assistente virtuale rapido, sicuro e totalmente privato per ottenere risposte immediatamente anche su informazioni price sensitive non ancora pubbliche.',
-    icon: TranslatorIcon,
-    path: '/doc-translator',
-  },
+  // {
+  //   title: 'Check compliance',
+  //   description:
+  //   'Monitora e analizza la percezione online del CEO e dei key manager aziendali attraverso la potenza dell’AI.',
+  //   icon: ComplianceIcon,
+  //   path: '/check-compliance',
+  // },
+  // {
+  //   title: 'Traduttore documenti',
+  //   description:
+  //     'Assistente virtuale rapido, sicuro e totalmente privato per ottenere risposte immediatamente anche su informazioni price sensitive non ancora pubbliche.',
+  //   icon: TranslatorIcon,
+  //   path: '/doc-translator',
+  // },
   {
     title: 'Law consultant',
     description:

@@ -33,8 +33,8 @@ const DocSearch: React.FC = () => {
     searchWebEnabled,
     selectedChat,
     setSelectedChat,
-    selectedCategory,
-    setSelectedCategory,
+    // selectedCategory,
+    // setSelectedCategory,
     chats,
     openSaveModal,
     setOpenSaveModal,
@@ -228,7 +228,7 @@ const DocSearch: React.FC = () => {
               }}
             />
           ) : null}
-          <LinedDropdown
+          {/* <LinedDropdown
             isMultipleOptions
             title="Seleziona categoria"
             options={[
@@ -240,7 +240,7 @@ const DocSearch: React.FC = () => {
             value={selectedCategory}
             onChange={setSelectedCategory}
             width={200}
-          />
+          /> */}
           <LinedDropdown
             title="Ricerche salvate"
             options={chats.slice().reverse().map((chat) => chat.name)}
