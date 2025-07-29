@@ -38,8 +38,11 @@ class APIRootView(APIView):
                     "text": request.build_absolute_uri(reverse("translate-text")),
                 },
                 "openai": {
-                    "chat-conversation": request.build_absolute_uri(reverse("openai-chat-conversation-list")),
                     "chat-send-message": request.build_absolute_uri(reverse("openai-chat-send-message")),
+                    "chat-conversation": request.build_absolute_uri(reverse("openai-chat-conversation-list")),
+                    "thread": request.build_absolute_uri(reverse("openai-chat-assistant-thread")),
+                    "assistant-send-message": request.build_absolute_uri(reverse("openai-chat-assistant-send-message")),
+                    "chat-save": request.build_absolute_uri(reverse("openai-chat-assistant-save-conversation")),
                 },
             }
         })

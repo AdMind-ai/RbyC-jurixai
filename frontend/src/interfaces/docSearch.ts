@@ -1,22 +1,20 @@
 export interface Message {
   sender: 'user' | 'ai';
   content: string;
-  citations?: string[];
 }
 
 export interface ApiMessage {
   id: number;
   conversation: string;
   content: string;
-  file: string | null;
   created_at: string;
   is_user: boolean;
-  citations?: string[]; 
 }
 
 export interface Chat {
   id: number | string;
   name: string;
+  thread_id?: string | null;
 }
 
 export interface ApiChatResponse {
@@ -25,4 +23,6 @@ export interface ApiChatResponse {
   user: number;
   created_at: string;
   messages: ApiMessage[];
+  threads: { thread_id: string; created_at: string; active: boolean }[]; 
+  thread_id?: string | null;
 }

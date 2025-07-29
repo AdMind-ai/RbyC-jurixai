@@ -15,13 +15,18 @@ urlpatterns = [
     # Chat
     path('openai/chat/send-message/', OpenAISendMessageView.as_view(),
          name='openai-chat-send-message'),
-    path('openai/assistant/send-message/', OpenAISendAssistantMessageView.as_view(),
-         name='openai-assistant-send-message'),
+    # QuickDoc
     path('extract-content/file/', ExtractContentView.as_view(),
          name='extract-file-content'),
     path('quickdoc/generate/', QuickDocGenerateView.as_view(),
          name='quickdoc-generate'),
-
+    # Chat with assistant
+    path('openai/chat/assistant/send-message',
+         AssistantStreamingView.as_view(), name='openai-chat-assistant-send-message'),
+    path('openai/chat/assistant/thread', ThreadsView.as_view(),
+         name='openai-chat-assistant-thread'),
+    path('openai/chat/assistant/save-conversation', SaveConversationView.as_view(),
+         name='openai-chat-assistant-save-conversation')
 ]
 
 urlpatterns += router.urls

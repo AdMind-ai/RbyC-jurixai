@@ -6,11 +6,13 @@ from .company_info import CompanyInfoView as CompanyInfoViewAdm
 from .deepl import DeeplTranslateFileView
 from .deepl import DeeplTranslateTextView
 
-from .openai import OpenAIConversationViewSet, OpenAISendMessageView
-from .openai import OpenAISendAssistantMessageView
+from .openai import (OpenAIConversationViewSet,
+                     OpenAISendMessageView,
+                     AssistantStreamingView,
+                     ThreadsView,
+                     SaveConversationView)
 
 from .extract_content_view import ExtractContentView
-
 from .quickdoc_view import QuickDocGenerateView
 
 __all__ = [
@@ -19,7 +21,9 @@ __all__ = [
     'DeeplTranslateTextView',
     'OpenAIConversationViewSet',
     'OpenAISendMessageView',
-    'OpenAISendAssistantMessageView',
     'ExtractContentView',
-    'QuickDocGenerateView'
+    'QuickDocGenerateView',
+    'AssistantStreamingView',
+    'ThreadsView',
+    'SaveConversationView'
 ]

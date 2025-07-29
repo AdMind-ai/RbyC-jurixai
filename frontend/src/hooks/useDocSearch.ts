@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { toast } from "react-toastify";
 import { api } from "../api/api";
 import {
@@ -8,117 +8,90 @@ import {
   ApiChatResponse,
 } from "../interfaces/docSearch";
 
+import { fetchWithAuth } from '../api/fetchWithAuth'
+
 export function useDocSearch() {
-  const [selectedModel, setSelectedModel] = useState("GPT-4.1");
+  const [threadId, setThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
-  const [isOverview, setIsOverview] = useState(false);
-  const [citations, setCitations] = useState<string[]>([]);
-  const [searchWebEnabled, setSearchWebEnabled] = useState(false);
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<string[] | string>([]);
-
   const [chats, setChats] = useState<Chat[]>([]);
   const [openSaveModal, setOpenSaveModal] = useState(false);
   const [openDeleteModal, setOpenDeleteModal] = useState(false);
-  const [newChatName, setNewChatName] = useState("");
 
-  // fetch chats on mount
+  // Thread creation: StrictMode-proof
+  const threadCreatedRef = useRef(false);
+
   useEffect(() => {
+    if (!threadCreatedRef.current) {
+      threadCreatedRef.current = true;
+      createThread();
+    }
     fetchChatConversations();
-    // eslint-disable-next-line
   }, []);
 
-  useEffect(() => {
-    if (searchWebEnabled) setSelectedModel("GPT-4o");
-  }, [searchWebEnabled]);
+  // 1. CRIAR NOVA THREAD
+  const createThread = async () => {
+    try {
+      const res = await api.post<{ threadId: string }>("/openai/chat/assistant/thread");
+      setThreadId(res.data.threadId);
+    } catch (err) {
+      toast.error("Thread non inizializzata!"); 
+    }
+  };
 
+  // 2. BUSCAR TODAS AS CONVERSAS
   const fetchChatConversations = async () => {
     try {
-      const response = await api.get("/openai/chat/");
-      const chatList: Chat[] = response.data.map((conversation: ApiChatResponse) => ({
+      const response = await api.get<ApiChatResponse[]>("/openai/chat/?only_saved=true");
+      const chatList: Chat[] = response.data.map((conversation) => ({
         id: conversation.id,
         name: conversation.name,
+        thread_id: conversation.thread_id
       }));
-
       setChats(chatList);
-
-      // remove chats "New Chat"
-      const chatsToRemove = chatList.filter((chat) => chat.name === "New Chat");
-      for (const chat of chatsToRemove) {
-        await removeChat(chat.id);
-      }
+      return chatList;         
     } catch (error) {
       console.error("Error fetching conversations:", error);
+      return [];
     }
   };
 
-  const removeChat = async (chatId: string | number) => {
-    const response = await api.delete(`/openai/chat/${chatId}/`);
-    if (response.status === 204 || response.status === 200) {
-      setChats((prevChats) => prevChats.filter((chat) => chat.id !== chatId));
-      setSelectedChat(null);
-      handleChatSelect(null, null);
-    } else {
-      console.error(`Erro ao excluir chat ${chatId}:`, response.statusText);
-    }
-  };
-
-  const handleSaveClick = () => setOpenSaveModal(true);
-
-  const handleDeleteClick = (chat: Chat | null) => {
-    setSelectedChat(chat);
-    setOpenDeleteModal(true);
-  };
-
-  const handleSaveChat = async () => {
-    if (!newChatName.trim() || chats.some((chat) => chat.name === newChatName)) {
-      alert("Nome inválido ou já existe. Escolha outro.");
+  // 3. SALVAR CHAT (threadId correto sempre!)
+  const handleSaveChat = async (chatName: string) => {
+    if (!threadId) {
+      toast.error("Thread non inizializzata!");
       return;
     }
-
-    if (selectedChat) {
-      const oldChat = selectedChat;
-      const newChat = { id: selectedChat.id, name: newChatName };
-
-      try {
-        await api.put(`/openai/chat/${selectedChat.id}/`, {
-          name: newChatName,
-        });
-
-        setChats(chats.map((chat) => (chat.id === selectedChat.id ? newChat : chat)));
-        setSelectedChat(newChat);
-        handleChatSelect(newChat.id, newChat.name);
-        toast.success(`Chat ${oldChat.name} aggiornato al nome "${newChat.name}"`);
-      } catch (error) {
-        console.error("Erro ao salvar o chat:", error);
-      }
-    } else {
-      try {
-        const response = await api.post("/openai/chat/", {
-          name: newChatName,
-          messages: messages.map((msg) => ({
-            content: msg.content,
-            is_user: msg.sender === "user",
-            file: null,
-          })),
-        });
-        const newChat: Chat = { id: response.data.id, name: response.data.name };
-
-        setChats([...chats, newChat]);
-        setSelectedChat(newChat);
-        handleChatSelect(newChat.id, newChat.name);
-
-        toast.success(`Nuova chat "${newChatName}" creata con successo.`);
-      } catch (error) {
-        console.error("Erro ao criar nova chat:", error);
-      }
+    if (!chatName.trim() || chats.some((chat) => chat.name === chatName)) {
+      alert("Nome non valido o già esistente. Scegli un altro nome.");
+      return;
     }
+    try {
+      // Salva conversa/renomeia
+      await api.post("/openai/chat/assistant/save-conversation", {
+        thread_id: threadId,
+        name: chatName,
+      });
+      toast.success(`Chat "${chatName}" salvata con successo!`);
 
-    setOpenSaveModal(false);
-    setNewChatName("");
+      const updatedChats = await fetchChatConversations();
+
+      const updatedChat = updatedChats.find(
+        (c) => (c.thread_id ?? undefined) === threadId
+      );
+      if (updatedChat) {
+        setSelectedChat(updatedChat);
+        handleChatSelect(updatedChat.id, updatedChat.name, updatedChat.thread_id ?? undefined);
+      }
+      setOpenSaveModal(false);
+    } catch (e) {
+      toast.error("Errore nel salvataggio della chat.");
+      console.error(e);
+    }
   };
 
+  // 4. DELETAR CHAT
   const handleDeleteChat = async () => {
     if (selectedChat) {
       try {
@@ -136,24 +109,30 @@ export function useDocSearch() {
     }
   };
 
+  // 5. SELECIONAR CHAT - 🚩 ATUALIZA TAMBÉM O THREAD_ID
   const handleDropdownSelect = (name: string | string[]) => {
     const chat = chats.find((chat) => chat.name === name);
-    if (chat && handleChatSelect) {
-      handleChatSelect(chat.id, chat.name);
-      setSelectedChat({ id: chat.id, name: chat.name });
+    if (chat) {
+      handleChatSelect(chat.id, chat.name, chat.thread_id ?? undefined);
+      setSelectedChat({ id: chat.id, name: chat.name, thread_id: chat.thread_id });
     }
   };
 
-  const handleChatSelect = async (id: number | string | null, name: string | null) => {
+  // 6. AO TROCAR DE CHAT, SINCRONIZE O threadId!
+  const handleChatSelect = async (
+    id: number | string | null,
+    name: string | null,
+    chatThreadId?: string  
+  ) => {
     if (id && name) {
-      setSelectedChat({ id, name });
+      setSelectedChat({ id, name, thread_id: chatThreadId });
+      setThreadId(chatThreadId ?? null); 
       try {
-        const response = await api.get(`/openai/chat/${id}`);
-        const messages = response.data.messages.map(
-          (message: ApiMessage & { citations?: string[] }) => ({
+        const response = await api.get<ApiChatResponse>(`/openai/chat/${id}`);
+        const messages: Message[] = response.data.messages.map(
+          (message: ApiMessage) => ({
             sender: message.is_user ? "user" : "ai",
             content: message.content,
-            citations: message.citations || [],
           })
         );
         setMessages(messages);
@@ -162,66 +141,78 @@ export function useDocSearch() {
       }
     } else {
       setSelectedChat(null);
+      setThreadId(null);
       setMessages([]);
     }
   };
 
-  const handleSendMessage = (
-    message: string,
-    sender: "user" | "ai",
-    isStream: boolean = false
-  ) => {
-    if (!isStream) {
-      setIsOverview(false);
-      if (sender === "user")
-        setMessages((messages) => [...messages, { sender, content: message }]);
-    } else {
-      setMessages((messages) => {
-        const lastMessage = messages[messages.length - 1];
-        if (sender === "ai" && lastMessage?.sender === "ai") {
-          return [
-            ...messages.slice(0, -1),
-            { sender: "ai", content: lastMessage.content + message },
-          ];
-        } else {
-          return [...messages, { sender, content: message }];
-        }
-      });
+  const handleSendMessage = async (message: string) => {
+    if (!threadId) {
+      toast.error("Thread non inizializzata!");     
+      return;
     }
+
+    setIsTyping(true);
+    setMessages((msgs) => [...msgs, { sender: "user", content: message }]);
+
+    try {
+      const res = await fetchWithAuth("/openai/chat/assistant/send-message", {
+        method: "POST",
+        body: JSON.stringify({ thread_id: threadId, content: message }),
+        // Content-Type definido auto pra JSON
+      });
+      if (!res.body) throw new Error("Nessuna risposta dal server!");
+      setIsTyping(false);
+      const reader = res.body.getReader();
+      let done, value;
+      while (true) {
+        ({ done, value } = await reader.read());
+        if (done) break;
+        const chunk = new TextDecoder().decode(value);
+        setMessages((msgs) => {
+          if (msgs.length && msgs[msgs.length - 1].sender === "ai") {
+            return [
+              ...msgs.slice(0, -1),
+              { sender: "ai", content: msgs[msgs.length - 1].content + chunk },
+            ];
+          } else {
+            return [...msgs, { sender: "ai", content: chunk }];
+          }
+        });
+      }
+    } catch (e) {
+      toast.error("Errore nell'invio del messaggio."); 
+    }
+    setIsTyping(false);
+  };
+  
+  const handleDeleteClick = (chat: Chat | null) => {
+    setSelectedChat(chat);
+    setOpenDeleteModal(true);
   };
 
-
   return {
-    selectedModel,
-    setSelectedModel,
     messages,
     setMessages,
     isTyping,
     setIsTyping,
-    isOverview,
-    setIsOverview,
-    citations,
-    setCitations,
-    searchWebEnabled,
-    setSearchWebEnabled,
+    threadId,
+    setThreadId,
     selectedChat,
     setSelectedChat,
-    selectedCategory,
-    setSelectedCategory,
     chats,
     setChats,
     openSaveModal,
     setOpenSaveModal,
     openDeleteModal,
     setOpenDeleteModal,
-    newChatName,
-    setNewChatName,
-    handleSaveClick,
+    handleSaveClick: () => setOpenSaveModal(true),
     handleDeleteClick,
     handleSaveChat,
     handleDeleteChat,
     handleDropdownSelect,
     handleChatSelect,
     handleSendMessage,
+    createThread,
   };
 }

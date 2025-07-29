@@ -23,14 +23,10 @@ import CloseIcon from "@mui/icons-material/Close";
 const DocSearch: React.FC = () => {
   const navigate = useNavigate();
   const {
-    selectedModel,
     messages,
     setMessages,
     isTyping,
     setIsTyping,
-    isOverview,
-    setIsOverview,
-    searchWebEnabled,
     selectedChat,
     setSelectedChat,
     // selectedCategory,
@@ -40,15 +36,13 @@ const DocSearch: React.FC = () => {
     setOpenSaveModal,
     openDeleteModal,
     setOpenDeleteModal,
-    newChatName,
-    setNewChatName,
     handleSaveClick,
     handleDeleteClick,
     handleSaveChat,
     handleDeleteChat,
-    handleDropdownSelect,
     handleChatSelect,
-    handleSendMessage
+    handleSendMessage,
+    createThread
   } = useDocSearch();
 
   return (
@@ -79,44 +73,17 @@ const DocSearch: React.FC = () => {
 
           {/* Modal para salvar chat */}
           <Dialog open={openSaveModal} onClose={() => setOpenSaveModal(false)}>
-            <DialogTitle
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                fontWeight: "bold",
-                justifyContent: "center",
-                mt: 2,
-                fontSize: "26px",
-                borderRadius: "16px",
-              }}
-            >
-              <Box sx={{ display: "flex", alignItems: "center" }}>
-                Salva Chat
-              </Box>
-              <IconButton
-                onClick={() => setOpenSaveModal(false)}
-                sx={{ position: "absolute", top: 10, right: 10 }}
-              >
-                <CloseIcon sx={{ color: "#000" }} />
-              </IconButton>
-            </DialogTitle>
-            <DialogContent sx={{ borderRadius: "16px" }}>
-              <DialogContentText
-                sx={{
-                  color: "black",
-                  textAlign: "center",
-                  fontSize: "20px",
-                  my: 0.5,
-                  mx: 1,
-                }}
-              >
+            <DialogTitle>Salva Chat</DialogTitle>
+            <DialogContent>
+              <DialogContentText>
                 Scegli un nome per il chat:
               </DialogContentText>
               <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
                 <input
                   type="text"
-                  value={newChatName}
-                  onChange={(e) => setNewChatName(e.target.value)}
+                  id="save-chat-input"
+                  // value={newChatName}
+                  // onChange={(e) => setNewChatName(e.target.value)}
                   style={{
                     width: "80%",
                     padding: "8px",
@@ -126,18 +93,13 @@ const DocSearch: React.FC = () => {
                 />
               </Box>
             </DialogContent>
-            <DialogActions
-              sx={{
-                justifyContent: "center",
-                pb: 2.5,
-                mb: 2,
-                borderRadius: "16px",
-              }}
-            >
+            <DialogActions>
               <Button
                 variant="contained"
-                onClick={handleSaveChat}
-                sx={{ py: 2.6, borderRadius: "10px" }}
+                onClick={() => {
+                  const chatName = (document.getElementById("save-chat-input") as HTMLInputElement)?.value || "";
+                  handleSaveChat(chatName);
+                }}
               >
                 Salva
               </Button>
@@ -225,6 +187,7 @@ const DocSearch: React.FC = () => {
                 handleChatSelect(null, null);
                 setMessages([]);
                 navigate("/doc-search");
+                createThread();
               }}
             />
           ) : null}
@@ -245,7 +208,14 @@ const DocSearch: React.FC = () => {
             title="Ricerche salvate"
             options={chats.slice().reverse().map((chat) => chat.name)}
             value={selectedChat ? selectedChat.name : ""}
-            onChange={handleDropdownSelect}
+            onChange={(value: string | string[]) => {
+              const name = Array.isArray(value) ? value[0] : value;
+              const chat = chats.find((c) => c.name === name);
+              if (chat) {
+                handleChatSelect(chat.id, chat.name, chat.thread_id ?? undefined);
+                setSelectedChat(chat);
+              }
+            }}
             width={200}
             isDeleteItems
             onDeleteItem={(name) => {
@@ -269,27 +239,20 @@ const DocSearch: React.FC = () => {
           <DocSearchMessageList
             messages={messages}
             isTyping={isTyping}
-            isOverview={isOverview}
           />
           {/* Messages Container */}
           {(selectedChat || messages.length !== 0) ? (
             <DocSearchInputArea
-              onSend={handleSendMessage}
-              selectedModel={selectedModel}
-              selectedChat={selectedChat}
-              searchWebEnabled={searchWebEnabled}
-              isEmptyMessages={false}
-              setIsOverview={setIsOverview}
+              onSendMessage={handleSendMessage}
+              isEmptyMessages={messages.length === 0}
+              isTyping={isTyping}
               setIsTyping={setIsTyping}
             />
           ) : (
             <DocSearchInputArea
-              onSend={handleSendMessage}
-              selectedModel={selectedModel}
-              selectedChat={selectedChat}
-              searchWebEnabled={searchWebEnabled}
-              isEmptyMessages={true}
-              setIsOverview={setIsOverview}
+              onSendMessage={handleSendMessage}
+              isEmptyMessages={messages.length === 0}
+              isTyping={isTyping}
               setIsTyping={setIsTyping}
             />
           )}

@@ -31,11 +31,14 @@ AZURE_ACCOUNT_KEY = os.environ['AZURE_ACCOUNT_KEY']
 AZURE_CONNECTION_STRING = os.environ['AZURE_CONNECTION_STRING']
 AZURE_OVERWRITE_FILES = False
 
+OPENAI_ASSISTANT_ID_RBYC = os.environ.get('OPENAI_ASSISTANT_ID_RBYC')
+
 keys = [
     'OPENAI_KEY',
     'PERPLEXITY_KEY',
     'DEEPL_KEY',
     'AZURE_ACCOUNT_KEY',
+    'OPENAI_ASSISTANT_ID_RBYC',
 ]
 
 missing_keys = [key for key in keys if not os.getenv(key)]

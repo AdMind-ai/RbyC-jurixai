@@ -19,7 +19,13 @@ class OpenAIConversationViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        return ChatConversation.objects.filter(user=user)
+        only_saved = self.request.query_params.get(
+            "only_saved", "true").lower() == "true"
+        # Por padrão só retorna conversas salvas (is_new=False)
+        queryset = ChatConversation.objects.filter(user=user)
+        if only_saved:
+            queryset = queryset.filter(is_new=False)
+        return queryset
 
     def create(self, request, *args, **kwargs):
         user = request.user
@@ -37,8 +43,8 @@ class OpenAIConversationViewSet(viewsets.ModelViewSet):
             ChatMessage.objects.create(
                 conversation=conversation,
                 content=message['content'],
-                citations=message.get('citations', []),
-                file=None,
+                # citations=message.get('citations', []),
+                # file=None,
                 is_user=message['is_user']
             )
 

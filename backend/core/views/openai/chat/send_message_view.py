@@ -123,7 +123,7 @@ class OpenAISendMessageView(APIView):
         chat_message = ChatMessage.objects.create(
             conversation=conversation,
             content=content,
-            file=None,
+            # file=None,
             # file=file if file else None,
             # file_url= chat_message.file.url,
             is_user=True
