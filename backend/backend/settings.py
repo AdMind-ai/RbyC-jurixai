@@ -24,11 +24,11 @@ OPENAI_KEY = os.environ['OPENAI_KEY']
 DEEPL_KEY = os.environ['DEEPL_KEY']
 
 # Azure Storage
-# AZURE_ACCOUNT_NAME = "jurixaistorage"
-# AZURE_CONTAINER_NAME = 'jurixai-storage'
-# AZURE_ACCOUNT_KEY = os.environ['AZURE_ACCOUNT_KEY']
-# AZURE_CONNECTION_STRING = os.environ['AZURE_CONNECTION_STRING']
-# AZURE_OVERWRITE_FILES = False
+AZURE_ACCOUNT_NAME = "jurixaistorage"
+AZURE_CONTAINER_NAME = 'jurixai-storage'
+AZURE_ACCOUNT_KEY = os.environ['AZURE_ACCOUNT_KEY']
+AZURE_CONNECTION_STRING = os.environ['AZURE_CONNECTION_STRING']
+AZURE_OVERWRITE_FILES = False
 
 OPENAI_ASSISTANT_ID_RBYC = os.environ.get('OPENAI_ASSISTANT_ID_RBYC')
 
@@ -231,7 +231,7 @@ STATIC_URL = 'staticfiles/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 
-# Storage configuration for handling static and media files
+# # Storage configuration for handling static and media files
 STORAGES = {
     "default": {
         "BACKEND": "storages.backends.azure_storage.AzureStorage",
@@ -240,3 +240,14 @@ STORAGES = {
         "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
     }
 }
+
+
+# LOCAL
+# STORAGES = {
+#     "default": {
+#         "BACKEND": "django.core.files.storage.FileSystemStorage",
+#     },
+#     "staticfiles": {
+#         "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
+#     }
+# }
