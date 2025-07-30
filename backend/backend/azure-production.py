@@ -9,7 +9,7 @@ CSRF_TRUSTED_ORIGINS = ['https://*.azurecontainerapps.io']
 # List of allowed origins for CORS (Cross-Origin Resource Sharing)
 # CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOWED_ORIGINS = [
-    "https://brave-sand-009d90510.6.azurestaticapps.net",
+    "https://agreeable-stone-0bd82ae10.1.azurestaticapps.net",
 ]
 CORS_ALLOW_CREDENTIALS = True
 

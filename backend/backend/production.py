@@ -14,7 +14,7 @@ CSRF_TRUSTED_ORIGINS = ['https://' + os.environ['WEBSITE_HOSTNAME']]
 # List of allowed origins for CORS (Cross-Origin Resource Sharing)
 # CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = [
-    "https://app.investorai.it",
+    "https://agreeable-stone-0bd82ae10.1.azurestaticapps.net",
 ]
 
 

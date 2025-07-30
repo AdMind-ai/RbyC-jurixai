@@ -6,7 +6,7 @@ on:
       - main
 
 env:
-  IMAGE_NAME: legalai-backend
+  IMAGE_NAME: legalai-rbyc-backend
 
 jobs:
   build-and-push:

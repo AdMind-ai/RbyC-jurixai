@@ -21,23 +21,20 @@ load_dotenv()
 
 # Environment Keys
 OPENAI_KEY = os.environ['OPENAI_KEY']
-PERPLEXITY_KEY = os.environ['PERPLEXITY_KEY']
 DEEPL_KEY = os.environ['DEEPL_KEY']
 
 # Azure Storage
-AZURE_ACCOUNT_NAME = "jurixaistorage"
-AZURE_CONTAINER_NAME = 'jurixai-storage'
-AZURE_ACCOUNT_KEY = os.environ['AZURE_ACCOUNT_KEY']
-AZURE_CONNECTION_STRING = os.environ['AZURE_CONNECTION_STRING']
-AZURE_OVERWRITE_FILES = False
+# AZURE_ACCOUNT_NAME = "jurixaistorage"
+# AZURE_CONTAINER_NAME = 'jurixai-storage'
+# AZURE_ACCOUNT_KEY = os.environ['AZURE_ACCOUNT_KEY']
+# AZURE_CONNECTION_STRING = os.environ['AZURE_CONNECTION_STRING']
+# AZURE_OVERWRITE_FILES = False
 
 OPENAI_ASSISTANT_ID_RBYC = os.environ.get('OPENAI_ASSISTANT_ID_RBYC')
 
 keys = [
     'OPENAI_KEY',
-    'PERPLEXITY_KEY',
     'DEEPL_KEY',
-    'AZURE_ACCOUNT_KEY',
     'OPENAI_ASSISTANT_ID_RBYC',
 ]
 
