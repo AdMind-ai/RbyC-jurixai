@@ -37,6 +37,7 @@ export function useDocSearch() {
       setThreadId(res.data.threadId);
     } catch (err) {
       toast.error("Thread non inizializzata!"); 
+      console.log(err)
     }
   };
 
@@ -182,6 +183,7 @@ export function useDocSearch() {
       }
     } catch (e) {
       toast.error("Errore nell'invio del messaggio."); 
+      console.log(e)
     }
     setIsTyping(false);
   };

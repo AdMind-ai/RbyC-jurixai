@@ -96,7 +96,7 @@ const Login: React.FC = () => {
     <div style={styles.container}>
       <div style={styles.loginContainer}>
         <img
-          src={`/logo.svg`} 
+          src={`/logo.png`} 
           alt="Login Logo"
           style={styles.loginLogo}
         />
