@@ -21,7 +21,7 @@ const Login: React.FC = () => {
       if (auth) {
         const success = await auth.login(username, password);
         if (success) {
-          navigate("/home");
+          navigate("/");
         } else {
           navigate("/login");
         }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Box, List, ListItem, ListItemIcon, Divider, Typography, Collapse } from '@mui/material'
+import { Box, List, ListItem, ListItemIcon, Divider, Typography } from '@mui/material'
 import { useGlobal } from '../context/GlobalContext';
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTheme } from '@mui/material/styles'

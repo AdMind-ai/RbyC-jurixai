@@ -16,6 +16,9 @@ interface DocSearchMessageListProps {
   isTyping: boolean
 }
 
+function removeCitations(text: string): string {
+  return text.replace(/【[^【†】]*†[^【†】]*】/g, '');
+}
 
 const DocSearchMessageList: React.FC<DocSearchMessageListProps> = ({ messages, isTyping }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -48,7 +51,7 @@ const DocSearchMessageList: React.FC<DocSearchMessageListProps> = ({ messages, i
           // const { thinkText, content: originalContent  } = parseThinkTag(msg.content)
           // const content = fixExcessiveLineBreaks(originalContent);
           // const contentWithCitations = citeLinks(originalContent, citations);
-          const content = msg.content;
+          const content = removeCitations(msg.content);
           return (
             <Box key={idx} display="flex" justifyContent={msg.sender === 'user' ? 'flex-end' : 'flex-start'} mb={0.5}>
               <Paper 

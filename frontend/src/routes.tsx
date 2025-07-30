@@ -23,7 +23,6 @@ const AppRoutes = () => {
           {/* Rotas privadas */}
           <Route element={<PrivateRoute />}>
             <Route path="/" element={<Home />} />
-            <Route path="/home" element={<Home />} />
             <Route path="/doc-draft" element={<DocDraft />} />
             <Route path="/doc-search" element={<DocSearch />} />
             <Route path="/check-compliance" element={<CheckCompliance />} />
@@ -31,7 +30,7 @@ const AppRoutes = () => {
             <Route path="/law-consultant" element={<LawConsultant />} />
             <Route path="/usage" element={<Usage />} />
             <Route path="/access" element={<TeamManagement />} />
-            <Route path="*" element={<Home />} />
+            {/* <Route path="*" element={<Home />} /> */}
           </Route>
         </Routes>
       </AuthProvider>

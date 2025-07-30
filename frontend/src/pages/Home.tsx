@@ -25,13 +25,13 @@ const cards = [
     icon: SearchIcon,
     path: '/doc-search',
   },
-  // {
-  //   title: 'Check compliance',
-  //   description:
-  //   'Monitora e analizza la percezione online del CEO e dei key manager aziendali attraverso la potenza dell’AI.',
-  //   icon: ComplianceIcon,
-  //   path: '/check-compliance',
-  // },
+  {
+    title: 'Check compliance',
+    description:
+    'Monitora e analizza la percezione online del CEO e dei key manager aziendali attraverso la potenza dell’AI.',
+    icon: ComplianceIcon,
+    path: '/',
+  },
   // {
   //   title: 'Traduttore documenti',
   //   description:
