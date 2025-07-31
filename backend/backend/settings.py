@@ -36,6 +36,8 @@ keys = [
     'OPENAI_KEY',
     'DEEPL_KEY',
     'OPENAI_ASSISTANT_ID_RBYC',
+    'AZURE_ACCOUNT_KEY',
+    'AZURE_CONNECTION_STRING'
 ]
 
 missing_keys = [key for key in keys if not os.getenv(key)]
