@@ -23,7 +23,7 @@ const HomeCard: React.FC<CardProps> = ({ title, description, icon, path }) => {
       sx={{
         flexDirection: 'column',
         justifyContent: 'space-between',
-        aspectRatio: '1.8 / 1',
+        aspectRatio: '1.2 / 1',
       }}
     >
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -42,15 +42,18 @@ const HomeCard: React.FC<CardProps> = ({ title, description, icon, path }) => {
 
         {/* Título */}
         <Typography variant="h4">{title}</Typography>
+
+        {/* Botão */}
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 5 }}>
+          <Button variant="contained" sx={{ fontSize: '12px', width: '165px', height: '32px', backgroundColor: '#21148E' }} onClick={() => handleNavigation(path)}>
+            VAI ALLA FUNZIONE
+          </Button>
+        </Box>
       </Box>
 
       {/* Descrição */}
       <Typography variant="subtitle1">{description}</Typography>
 
-      {/* Botão */}
-      <Button variant="contained" sx={{fontSize: '12px', width:'165px', height:'32px', backgroundColor:'#21148E'}} onClick={() => handleNavigation(path)}>
-        VAI ALLA FUNZIONE
-      </Button>
     </Card>
   )
 }

@@ -223,3 +223,50 @@ class AssistantStreamingView(APIView):
             )
 
         return StreamingHttpResponse(openai_stream(), content_type="text/plain")
+
+
+class AssistantLawConsultantView(APIView):
+    """
+    Endpoint para consultas jurídicas com o assistente.
+    """
+    serializer_class = AssistantMessageSerializer
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        prompt = serializer.validated_data["content"]
+        thread_id = serializer.validated_data["thread_id"]
+
+        if not thread_id:
+            return Response({"error": "thread_id is required"}, status=400)
+
+        cancel_active_run_if_exists(thread_id)
+        
+        def openai_stream():
+            _ = client.beta.threads.messages.create(
+                thread_id=thread_id,
+                role="user",
+                content=prompt,
+            )
+            handler = DjangoStreamingEventHandler()
+            # São yields que serão enviados p/ StreamingHttpResponse
+            
+            with client.beta.threads.runs.stream(
+                thread_id=thread_id,
+                assistant_id=settings.OPENAI_ASSISTANT_ID_RBYC_LAW_CONSULTANT,
+                event_handler=handler,
+            ) as stream:
+                print("Stream started", flush=True)
+                for _ in stream:
+                    for chunk in handler.pop_buffer():
+                        print(chunk, end="", flush=True)
+                        yield chunk
+                for chunk in handler.pop_buffer():
+                    yield chunk
+                stream.until_done()
+                print("Stream ended", flush=True)
+                
+        print("Starting streaming response for law consultant", flush=True)
+
+        return StreamingHttpResponse(openai_stream(), content_type="text/plain")

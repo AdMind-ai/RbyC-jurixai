@@ -21,14 +21,14 @@ const cards = [
   {
     title: 'Ricerca documentale',
     description:
-    'Traduce in molteplici lingue investor presentation, trascrive webcast, prepara investor speech e crea contenuti social rapidamente grazie all’AI.',
+    '',
     icon: SearchIcon,
     path: '/doc-search',
   },
   {
     title: 'Check compliance',
     description:
-    'Monitora e analizza la percezione online del CEO e dei key manager aziendali attraverso la potenza dell’AI.',
+    '',
     icon: ComplianceIcon,
     path: '/',
   },
@@ -42,7 +42,7 @@ const cards = [
   {
     title: 'Law consultant',
     description:
-      'Offre una selezione delle notizie più rilevanti in ambito ESG, organizzate in diverse categorie, per garantire aggiornamenti costantei e puntuali.',
+      '',
     icon: ConsultantIcon,
     path: '/law-consultant',
   },
