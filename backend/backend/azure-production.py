@@ -39,26 +39,25 @@ MIDDLEWARE = [
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 
 
-# Descomentar quando tiver DB setado
-# # Retrieve database connection string from environment variables
-# CONNECTION = os.environ['AZURE_POSTGRESQL_CONNECTIONSTRING']
-# # Convert connection string into a dictionary
-# CONNECTION_STR = {pair.split('=')[0]: pair.split('=')[1]
-#                   for pair in CONNECTION.split(' ')}
+# Retrieve database connection string from environment variables
+CONNECTION = os.environ['AZURE_POSTGRESQL_CONNECTIONSTRING']
+# Convert connection string into a dictionary
+CONNECTION_STR = {pair.split('=')[0]: pair.split('=')[1]
+                  for pair in CONNECTION.split(' ')}
 
-# # Database configuration for PostgreSQL
-# DATABASES = {
-#     "default": {
-#         # Use PostgreSQL as the database backend
-#         "ENGINE": "django.db.backends.postgresql",
-#         # Database name from connection string
-#         "NAME": CONNECTION_STR['dbname'],
-#         "HOST": CONNECTION_STR['host'],  # Database host from connection string
-#         "USER": CONNECTION_STR['user'],  # Database user from connection string
-#         # Database password from connection string
-#         "PASSWORD": CONNECTION_STR['password'],
-#     }
-# }
+# Database configuration for PostgreSQL
+DATABASES = {
+    "default": {
+        # Use PostgreSQL as the database backend
+        "ENGINE": "django.db.backends.postgresql",
+        # Database name from connection string
+        "NAME": CONNECTION_STR['dbname'],
+        "HOST": CONNECTION_STR['host'],  # Database host from connection string
+        "USER": CONNECTION_STR['user'],  # Database user from connection string
+        # Database password from connection string
+        "PASSWORD": CONNECTION_STR['password'],
+    }
+}
 
 
 STORAGES["staticfiles"] = {
