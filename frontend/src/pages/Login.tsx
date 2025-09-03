@@ -7,7 +7,8 @@ import { CSSProperties } from "react";
 import { CircularProgress } from "@mui/material";
 
 const Login: React.FC = () => {
-  const [username, setUsername] = useState("");
+  // const [username, setUsername] = useState("");
+  const [email, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const auth = useContext(AuthContext);
@@ -19,7 +20,7 @@ const Login: React.FC = () => {
     setLoading(true);
     try {
       if (auth) {
-        const success = await auth.login(username, password);
+        const success = await auth.login(email, password);
         if (success) {
           navigate("/");
         } else {
@@ -101,7 +102,7 @@ const Login: React.FC = () => {
           style={styles.loginLogo}
         />
         <form style={styles.form} onSubmit={handleSubmit}>
-          <label style={styles.label}>Username</label>
+          <label style={styles.label}>Email</label>
           <input
             style={styles.input}
             type="text"

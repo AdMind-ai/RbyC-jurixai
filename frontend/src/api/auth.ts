@@ -6,8 +6,8 @@ interface LoginResponse {
   refresh: string;
 }
 
-export const login = async (username: string, password: string): Promise<LoginResponse> => {
-  const response = await api.post("/auth/login/", { username, password });
+export const login = async (email: string, password: string): Promise<LoginResponse> => {
+  const response = await api.post("/auth/login/", { email, password });
 
   // Salve tokens no localStorage para uso do Interceptor
   localStorage.setItem("access", response.data.access);
@@ -17,7 +17,8 @@ export const login = async (username: string, password: string): Promise<LoginRe
 };
 
 export const fetchUserData = async () => {
-  const response = await api.get("/auth/me/");
+  const response = await api.get("/auth/users/me/");
+  console.log("User data fetched:", response.data);
   return response.data;
 };
 

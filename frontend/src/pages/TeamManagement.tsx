@@ -5,7 +5,9 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
   Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText, TextField,
   IconButton, Link, Tooltip, TableSortLabel, TableFooter, TablePagination, 
-  InputAdornment
+  InputAdornment,
+  MenuItem,
+  Select
 } from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
@@ -65,7 +67,7 @@ const columns: {
   align?: "left" | "right" | "center";
 }[] = [
   {
-    key: "name", label: "Nome e cognome", sortable: true,
+    key: "name", label: "Nome", sortable: true,
     render: (m: Member) => (
       <Box sx={{display:'flex',alignItems:'center',gap:2}}>
         <Avatar
@@ -86,7 +88,7 @@ const columns: {
     )
   },
   {
-    key: "is_company_admin", label: "Tipo", sortable: false, align: "center",
+    key: "is_company_admin", label: "Ruolo", sortable: false, align: "center",
       render: (m: Member) => (
         <span style={{
             padding: '3px 8px',
@@ -121,6 +123,7 @@ const TeamManagement: React.FC = () => {
   // Data
   const [members, setMembers] = useState<Member[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
+  const rolesArray = ['Admin', 'Standard'];
   // Sorting
   const [orderBy, setOrderBy] = useState<ColumnKey>("name");
   const [order, setOrder] = useState<Order>("asc");
@@ -139,7 +142,7 @@ const TeamManagement: React.FC = () => {
   const [deleteMemberName, setDeleteMemberName] = useState<string | null>(null);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [newUser, setNewUser] = useState({
-    name:'', email:'', avatar:'', password:''
+    name:'', email:'', avatar:'', password:'', role: ''
   });
 
 
@@ -155,6 +158,7 @@ const TeamManagement: React.FC = () => {
   function fetchMembers() {
     api.get('/auth/users/')
       .then(res => {
+        console.log(res.data);
         const mappedMembers = res.data.map((user: MemberApi) => ({
           id: user.id,
           name: user.username,
@@ -274,14 +278,15 @@ const TeamManagement: React.FC = () => {
   // Add user modal handlers
   function openAddModal() {
     setAddModalOpen(true);
-    setNewUser({name:'', email:'', avatar:'', password:''});
+    setNewUser({name:'', email:'', avatar:'', password:'', role: ''});
   }
   function closeAddModal() { setAddModalOpen(false); }
   function handleAddUser() {
     api.post("/auth/users/", {
       username: newUser.name, 
       email: newUser.email,
-      password: newUser.password
+      password: newUser.password,
+      is_company_admin: newUser.role === 'Admin' ? true : false,
     })
       .then(() => {
         toast.success(`Utente ${newUser.name} aggiunto con successo!`);
@@ -595,6 +600,33 @@ const TeamManagement: React.FC = () => {
                     },
                   }}
               />
+              <Select
+                value={newUser.role}
+                onChange={e => setNewUser({ ...newUser, role: e.target.value as string })}
+                displayEmpty
+                fullWidth
+                size="small"
+                sx={{
+                  fontSize: 14,
+                  '& .MuiSelect-select': { fontSize: 14 },
+                  '& .MuiInputLabel-root': { fontSize: 14 }
+                }}
+                renderValue={(selected) => selected ? selected : "Seleziona ruolo"}
+                MenuProps={{
+                  PaperProps: {
+                    sx: {
+                      fontSize: 14,
+                      '& .MuiMenuItem-root': {
+                        fontSize: 14
+                      }
+                    }
+                  }
+                }}
+              >
+                {rolesArray.map(role =>
+                  <MenuItem key={role} value={role}>{role}</MenuItem>
+                )}
+              </Select>
               {/* <TextField label="URL Avatar (opzionale)" value={newUser.avatar} onChange={e=>setNewUser({...newUser, avatar: e.target.value})} 
                 size="small"
                 sx={{

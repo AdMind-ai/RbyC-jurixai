@@ -31,18 +31,15 @@ class UserViewSet(viewsets.ModelViewSet):
             return PasswordSerializer
         return CustomUserSerializer
 
-    def perform_create(self, serializer):
-        company = self.request.user.company
-        serializer.context['company'] = self.request.user.company
-        print(f"Company: {company}")
-        serializer.save(company=company)
-
     def get_queryset(self):
         user = self.request.user
-        return User.objects.filter(company=user.company)
+        qs = User.objects.all()
+        if not user.is_staff:
+            qs = qs.filter(is_staff=False)
+        return qs
 
     def get_permissions(self):
-        if self.action in ['create', 'destroy', 'update']:
+        if self.action in ['create', 'destroy', 'update', 'partial_update']:
             return [IsCompanyAdmin()]
         return [IsAuthenticated()]
 

@@ -21,16 +21,17 @@ const cards = [
   {
     title: 'Ricerca documentale',
     description:
-    '',
+      '',
     icon: SearchIcon,
     path: '/doc-search',
   },
   {
     title: 'Check compliance',
     description:
-    '',
+      '',
     icon: ComplianceIcon,
     path: '/',
+    disable: true
   },
   // {
   //   title: 'Traduttore documenti',
@@ -44,7 +45,8 @@ const cards = [
     description:
       '',
     icon: ConsultantIcon,
-    path: '/law-consultant',
+    path: '/',
+    disable: true
   },
 ]
 
@@ -52,17 +54,17 @@ const Home: React.FC = () => {
   return (
     <Layout>
       <Box
-      sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        alignItems: 'center',
-        overflow: 'auto',
-        height: '100%',
-        width: '100%',
-      }}
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          overflow: 'auto',
+          height: '100%',
+          width: '100%',
+        }}
       >
-        <Typography variant="h3" sx={{textAlign: 'center', padding:'0px 0px', paddingTop:'4vh'}}>
+        <Typography variant="h3" sx={{ textAlign: 'center', padding: '0px 0px', paddingTop: '4vh' }}>
           Cosa vuoi fare oggi?
         </Typography>
         <Box
@@ -75,17 +77,18 @@ const Home: React.FC = () => {
             height: '84%',
             width: '100%',
             // backgroundColor: 'blue',
-            gap:0.5,
+            gap: 0.5,
           }}
-          >
+        >
           {cards.map((card, index) => (
-            <Box key={index} sx={{padding:'15px 15px'}}>
+            <Box key={index} sx={{ padding: '15px 15px' }}>
               <HomeCard
                 title={card.title}
                 description={card.description}
                 icon={card.icon}
                 path={card.path}
-                />
+                isDisabled={card.disable ? card.disable : false}
+              />
             </Box>
           ))}
         </Box>

@@ -8,8 +8,6 @@ router.register(r'openai/chat', OpenAIConversationViewSet,
                 basename='openai-chat-conversation')
 
 urlpatterns = [
-    path('company-info/',
-         CompanyInfoViewAdm.as_view(), name='company-info-adm'),
     path('deepl/file/', DeeplTranslateFileView.as_view(), name='translate-file'),
     path('deepl/text/', DeeplTranslateTextView.as_view(), name='translate-text'),
     # Chat

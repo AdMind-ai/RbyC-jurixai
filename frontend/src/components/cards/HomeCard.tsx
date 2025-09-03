@@ -8,9 +8,10 @@ interface CardProps {
   description: string
   icon: string
   path: string
+  isDisabled?: boolean
 }
 
-const HomeCard: React.FC<CardProps> = ({ title, description, icon, path }) => {
+const HomeCard: React.FC<CardProps> = ({ title, description, icon, path, isDisabled }) => {
   const theme = useTheme()
   const navigate = useNavigate()
 
@@ -45,9 +46,25 @@ const HomeCard: React.FC<CardProps> = ({ title, description, icon, path }) => {
 
         {/* Botão */}
         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 5 }}>
-          <Button variant="contained" sx={{ fontSize: '12px', width: '165px', height: '32px', backgroundColor: '#21148E' }} onClick={() => handleNavigation(path)}>
+          <Button
+            variant="contained"
+            disabled={isDisabled}
+            sx={{
+              fontSize: '12px',
+              width: '165px',
+              height: '32px',
+              backgroundColor: '#21148E',
+              "&.Mui-disabled": {
+                backgroundColor: "#21148E",
+                color: "#fff", // garante que o texto também fique visível
+                opacity: 1,    // remove o efeito esmaecido padrão
+              },
+            }}
+            onClick={() => handleNavigation(path)}
+          >
             VAI ALLA FUNZIONE
           </Button>
+
         </Box>
       </Box>
 

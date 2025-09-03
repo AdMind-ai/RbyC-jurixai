@@ -1,7 +1,6 @@
 from django.contrib import admin
 from core.models.openai_chat_models import ChatConversation, ChatMessage
 from core.models.assistant_thread_model import AssistantThread
-from core.models.company_info import CompanyInfo, CEO
 # Register your models here.
 
 
@@ -35,19 +34,3 @@ class AssistantThreadAdmin(admin.ModelAdmin):
     list_display = ("thread_id", "conversation", "created_at", "active")
     list_filter = ("active", "created_at")
     search_fields = ("thread_id",)
-
-
-class CEOInline(admin.TabularInline):
-    model = CEO
-    extra = 0
-
-
-@admin.register(CompanyInfo)
-class CompanyAdmin(admin.ModelAdmin):
-    list_display = ('long_name', 'sector', 'country')
-    inlines = [CEOInline]
-
-
-@admin.register(CEO)
-class CEOAdmin(admin.ModelAdmin):
-    list_display = ('name', 'role', 'company')

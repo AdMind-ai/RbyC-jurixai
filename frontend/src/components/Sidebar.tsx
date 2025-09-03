@@ -17,8 +17,8 @@ import SearchIcon from '../assets/icons/sidebar/search-icon.svg'
 import SearchIconActive from '../assets/icons/sidebar/search-icon-active.svg'
 import ConsultantIcon from '../assets/icons/sidebar/consultant-icon.svg'
 import ConsultantIconActive from '../assets/icons/sidebar/consultant-icon-active.svg'
-import UsageIcon from '../assets/icons/sidebar/usage-icon.svg'
-import UsageIconActive from '../assets/icons/sidebar/usage-icon-active.svg'
+// import UsageIcon from '../assets/icons/sidebar/usage-icon.svg'
+// import UsageIconActive from '../assets/icons/sidebar/usage-icon-active.svg'
 import AccessIcon from '../assets/icons/sidebar/access-icon.svg'
 import AccessIconActive from '../assets/icons/sidebar/access-icon-active.svg'
 
@@ -67,13 +67,14 @@ const menuItems = [
     icon: ConsultantIcon,
     activeIcon: ConsultantIconActive,
     options: lawOptions,
+    disabled: true,
   },
 ]
 
 
 
 const admItems = [
-  { title: 'Consumo AI', path: '/usage', icon: UsageIcon, activeIcon: UsageIconActive },
+  // { title: 'Consumo AI', path: '/usage', icon: UsageIcon, activeIcon: UsageIconActive },
   { title: 'Accessi', path: '/access', icon: AccessIcon, activeIcon: AccessIconActive },
 ]
 

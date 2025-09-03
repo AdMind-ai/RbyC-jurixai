@@ -1,32 +1,45 @@
 // src/context/AuthContext.tsx
 import { createContext, useState, useEffect } from "react";
-import { login as loginService, logout as logoutService } from "../api/auth";
-import { useNavigate } from "react-router-dom";
+import { login as loginService, logout as logoutService, fetchUserData } from "../api/auth";
+import { useNavigate, useLocation } from "react-router-dom";
+import { toast } from "react-toastify";
 
 interface User {
+  email: string;
   name: string;
+  is_admin: boolean;
 }
 
 interface AuthContextType {
   token: string | null;
   user: User | null;
-  login: (username: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<User | null>;
   logout: () => void;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [token, setToken] = useState<string | null>(localStorage.getItem("access"));
-  const [user, setUser] = useState<User | null>(null);
+  const storedToken = localStorage.getItem("access");
+  const storedUser = localStorage.getItem("user");
+
+  const [token, setToken] = useState<string | null>(storedToken);
+  const [user, setUser] = useState<User | null>(storedUser ? JSON.parse(storedUser) : null);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem("user");
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
+    setInitialized(true);
   }, []);
+
+  // useEffect(() => {
+  //   const storedUser = localStorage.getItem("user");
+  //   if (storedUser) {
+  //     setUser(JSON.parse(storedUser));
+  //   }
+  // }, []);
 
   // Função logout centralizada
   const logout = () => {
@@ -39,51 +52,44 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     navigate("/login"); 
   };
 
-  const login = async (username: string, password: string): Promise<boolean> => {
+  const login = async (email: string, password: string): Promise<User | null> => {
     try {
-      const data = await loginService(username, password);
+      const data = await loginService(email, password);
+
       if (data?.access) {
         setToken(data.access);
         localStorage.setItem("access", data.access);
         localStorage.setItem("refresh", data.refresh);
-        const userData: User = { name: username };
-        setUser(userData);
-        localStorage.setItem("user", JSON.stringify(userData));
-        return true; 
+
+        const userData = await fetchUserData();
+
+        const formattedUser = { email: userData.email, name: userData.username, is_admin: !!userData.is_company_admin };
+
+        setUser(formattedUser);
+
+        localStorage.setItem("user", JSON.stringify(formattedUser));
+
+        return formattedUser; 
       } else {
-        return false; 
+        return null; 
       }
     } catch (error) {
       console.log("error: ",error);
-      return false; 
+      return null; 
     }
   };
 
-  // Verifica se há tokens presentes em cada navegação dentro do componente AuthProvider
   useEffect(() => {
-    const handleCheckTokens = () => {
-      const currentAccess = localStorage.getItem("access");
-      const currentRefresh = localStorage.getItem("refresh");
+    if (!initialized) return;
 
-      if (!currentAccess || !currentRefresh) {
-        console.warn("Nenhum token encontrado, fazendo logout automático.");
-        logout(); // Logout automático centralizado do context
-      }
-    };
+    const PUBLIC_PATHS = ["/login"];
+    const isPublicPath = PUBLIC_PATHS.includes(location.pathname);
 
-    // Verificação inicial imediata no carregamento
-    handleCheckTokens();
-
-    // Adiciona listeners para detectar eventos de clique ou interação no app
-    window.addEventListener('click', handleCheckTokens);
-    window.addEventListener('focus', handleCheckTokens);
-
-    return () => {
-      // Limpa listeners quando componente desmonta
-      window.removeEventListener('click', handleCheckTokens);
-      window.removeEventListener('focus', handleCheckTokens);      
-    };
-  }, [navigate]);
+    if (!isPublicPath && !token) {
+      toast.warning("effettuare l'accesso");
+      logout();
+    }
+  }, [initialized, location.pathname, token]);
 
   return (
     <AuthContext.Provider value={{ token, user, login, logout }}>

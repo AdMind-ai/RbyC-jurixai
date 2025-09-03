@@ -4,10 +4,10 @@ import Home from './pages/Home'
 import Login from './pages/Login'
 import DocDraft from './pages/DocDraft'
 import DocSearch from './pages/DocSearch'
-import CheckCompliance from './pages/CheckCompliance'
+// import CheckCompliance from './pages/CheckCompliance'
 import DocTranslator from './pages/DocTranslator'
-import LawConsultant from './pages/LawConsultant'
-import Usage from './pages/Usage'
+// import LawConsultant from './pages/LawConsultant'
+// import Usage from './pages/Usage'
 import TeamManagement from './pages/TeamManagement'
 import { AuthProvider } from './context/AuthContext'
 import PrivateRoute from './components/PrivateRoute'
@@ -25,10 +25,10 @@ const AppRoutes = () => {
             <Route path="/" element={<Home />} />
             <Route path="/doc-draft" element={<DocDraft />} />
             <Route path="/doc-search" element={<DocSearch />} />
-            <Route path="/check-compliance" element={<CheckCompliance />} />
+            {/* <Route path="/check-compliance" element={<CheckCompliance />} /> */}
             <Route path="/doc-translator" element={<DocTranslator />} />
-            <Route path="/law-consultant" element={<LawConsultant />} />
-            <Route path="/usage" element={<Usage />} />
+            {/* <Route path="/law-consultant" element={<LawConsultant />} /> */}
+            {/* <Route path="/usage" element={<Usage />} /> */}
             <Route path="/access" element={<TeamManagement />} />
             {/* <Route path="*" element={<Home />} /> */}
           </Route>
