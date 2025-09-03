@@ -42,7 +42,7 @@ const DocSearch: React.FC = () => {
     handleDeleteChat,
     handleChatSelect,
     handleSendMessage,
-    createThread
+    // createThread
   } = useDocSearch();
 
   return (
@@ -187,7 +187,7 @@ const DocSearch: React.FC = () => {
                 handleChatSelect(null, null);
                 setMessages([]);
                 navigate("/doc-search");
-                createThread();
+                // createThread();
               }}
             />
           ) : null}

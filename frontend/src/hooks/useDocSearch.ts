@@ -20,26 +20,26 @@ export function useDocSearch() {
   const [openDeleteModal, setOpenDeleteModal] = useState(false);
 
   // Thread creation: StrictMode-proof
-  const threadCreatedRef = useRef(false);
+  // const threadCreatedRef = useRef(false);
 
   useEffect(() => {
-    if (!threadCreatedRef.current) {
-      threadCreatedRef.current = true;
-      createThread();
-    }
+    // if (!threadCreatedRef.current) {
+    //   threadCreatedRef.current = true;
+    //   createThread();
+    // }
     fetchChatConversations();
   }, []);
 
   // 1. CRIAR NOVA THREAD
-  const createThread = async () => {
-    try {
-      const res = await api.post<{ threadId: string }>("/openai/chat/assistant/thread");
-      setThreadId(res.data.threadId);
-    } catch (err) {
-      toast.error("Thread non inizializzata!"); 
-      console.log(err)
-    }
-  };
+  // const createThread = async () => {
+  //   try {
+  //     const res = await api.post<{ threadId: string }>("/openai/chat/assistant/thread");
+  //     setThreadId(res.data.threadId);
+  //   } catch (err) {
+  //     toast.error("Thread non inizializzata!"); 
+  //     console.log(err)
+  //   }
+  // };
 
   // 2. BUSCAR TODAS AS CONVERSAS
   const fetchChatConversations = async () => {
@@ -51,7 +51,7 @@ export function useDocSearch() {
         thread_id: conversation.thread_id
       }));
       setChats(chatList);
-      return chatList;         
+      return chatList;
     } catch (error) {
       console.error("Error fetching conversations:", error);
       return [];
@@ -123,11 +123,11 @@ export function useDocSearch() {
   const handleChatSelect = async (
     id: number | string | null,
     name: string | null,
-    chatThreadId?: string  
+    chatThreadId?: string
   ) => {
     if (id && name) {
       setSelectedChat({ id, name, thread_id: chatThreadId });
-      setThreadId(chatThreadId ?? null); 
+      setThreadId(chatThreadId ?? null);
       try {
         const response = await api.get<ApiChatResponse>(`/openai/chat/${id}`);
         const messages: Message[] = response.data.messages.map(
@@ -148,10 +148,6 @@ export function useDocSearch() {
   };
 
   const handleSendMessage = async (message: string) => {
-    if (!threadId) {
-      toast.error("Thread non inizializzata!");     
-      return;
-    }
 
     setIsTyping(true);
     setMessages((msgs) => [...msgs, { sender: "user", content: message }]);
@@ -182,12 +178,28 @@ export function useDocSearch() {
         });
       }
     } catch (e) {
-      toast.error("Errore nell'invio del messaggio."); 
+      toast.error("Errore nell'invio del messaggio.");
       console.log(e)
+    }
+
+    if (!threadId) {
+      try {
+        const res = await api.get("/openai/chat/assistant/thread");
+        const threads = res.data;
+        if (threads.length > 0) {
+          setThreadId(threads[0].thread_id);
+        } else {
+          toast.error("Nenhuma thread encontrada!");
+        }
+      } catch (err) {
+        toast.error("Thread non inizializzata!");
+        console.log(err)
+      }
+      return;
     }
     setIsTyping(false);
   };
-  
+
   const handleDeleteClick = (chat: Chat | null) => {
     setSelectedChat(chat);
     setOpenDeleteModal(true);
@@ -215,6 +227,6 @@ export function useDocSearch() {
     handleDropdownSelect,
     handleChatSelect,
     handleSendMessage,
-    createThread,
+    // createThread,
   };
 }

@@ -32,7 +32,7 @@ def cancel_active_run_if_exists(thread_id):
 
 
 class AssistantMessageSerializer(serializers.Serializer):
-    thread_id = serializers.CharField(required=True)
+    thread_id = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     content = serializers.CharField(required=True, allow_blank=False)
 
 
@@ -139,83 +139,83 @@ class AssistantStreamingView(APIView):
         prompt = serializer.validated_data["content"]
         thread_id = serializer.validated_data["thread_id"]
 
-        if not thread_id:
-            return Response({"error": "thread_id is required"}, status=400)
-
         with transaction.atomic():
-            assistant_thread = AssistantThread.objects.filter(
-                thread_id=thread_id).first()
-            conversation = None
+            assistant_thread = None
 
+            if thread_id:
+                assistant_thread = AssistantThread.objects.filter(thread_id=thread_id).first()
+                if not assistant_thread:
+                    # thread_id inválido → criar novo registro
+                    conversation_openai = client.conversations.create()
+                    print(conversation_openai)
+                    assistant_thread = AssistantThread.objects.create(thread_id=conversation_openai.id, active=True)
+            else:
+                # cria thread local, id será preenchido depois
+                conversation_openai = client.conversations.create()
+                print(conversation_openai)
+                assistant_thread = AssistantThread.objects.create(thread_id=conversation_openai.id, active=True)
+
+            # cria ou reaproveita conversa local (ChatConversation)
             if assistant_thread and assistant_thread.conversation:
                 conversation = assistant_thread.conversation
-                if not assistant_thread.active:
-                    assistant_thread.active = True
-                    assistant_thread.save()
             else:
-                # Apaga conversas novas (is_new=True) do usuário (se autenticado)
+                # cria nova conversa local
                 user = request.user
-                if user:
-                    ChatConversation.objects.filter(
-                        user=user, is_new=True).delete()
-                # Cria conversa nova
+                ChatConversation.objects.filter(user=user, is_new=True).delete()
                 conversation = ChatConversation.objects.create(
                     user=user,
                     name="New Chat",
                     is_new=True
                 )
-                # Associa à thread
-                if assistant_thread:
-                    assistant_thread.conversation = conversation
-                    assistant_thread.active = True
-                    assistant_thread.save()
-                else:
-                    # Se a thread não existia, cria também
-                    assistant_thread = AssistantThread.objects.create(
-                        thread_id=thread_id,
-                        active=True,
-                        conversation=conversation
-                    )
+                assistant_thread.conversation = conversation
+                assistant_thread.save(update_fields=["conversation"])
 
-            AssistantThread.objects.filter(
-                conversation__isnull=True, active=False).delete()
-
-        # Aqui cria a mensagem do usuário já na conversa correta
-        chat_message = ChatMessage.objects.create(
+        # salva a mensagem do usuário
+        ChatMessage.objects.create(
             conversation=conversation,
             content=prompt,
             is_user=True
         )
 
-        cancel_active_run_if_exists(thread_id)
+        # cancel_active_run_if_exists(thread_id)
 
         def openai_stream():
             full_ai_message = ""
-            citations = []
-            _ = client.beta.threads.messages.create(
-                thread_id=thread_id,
-                role="user",
-                content=prompt,
-            )
-            handler = DjangoStreamingEventHandler()
-            # São yields que serão enviados p/ StreamingHttpResponse
-            with client.beta.threads.runs.stream(
-                thread_id=thread_id,
-                assistant_id=settings.OPENAI_ASSISTANT_ID_RBYC,
-                event_handler=handler,
+
+            with client.responses.create(
+                model="gpt-5",
+                prompt = { "id": settings.OPENAI_PROMPT_ID_RBYC },
+                input=[
+                    {
+                        "role": "user",
+                        "content": [{"type": "input_text", "text": prompt}]
+                    }
+                ],
+                conversation=assistant_thread.thread_id,
+                tools=[
+                    {
+                        "type": "file_search",
+                        "vector_store_ids": [settings.VECTOR_STORE_ID_RBYC]
+                    }
+                ],
+                store=True,
+                stream=True,
+                include=["reasoning.encrypted_content", "web_search_call.action.sources"],
+                timeout=600,
             ) as stream:
+                handler = DjangoStreamingEventHandler()
                 print("Stream started", flush=True)
-                for _ in stream:
-                    for chunk in handler.pop_buffer():
+                for event in stream:
+                    if event.type == "response.output_text.delta":
+                        chunk = event.delta
                         full_ai_message += chunk
-                        print(chunk, end="", flush=True)
                         yield chunk
-                for chunk in handler.pop_buffer():
-                    full_ai_message += chunk
-                    yield chunk
-                stream.until_done()
+                    # elif event.type == "response.completed":
+                    #     new_conversation_id = event.response.conversation
+                # stream.until_done()
                 print("Stream ended", flush=True)
 
+            # salva a resposta da IA
             ChatMessage.objects.create(
                 conversation=conversation,
                 content=full_ai_message,
