@@ -45,7 +45,7 @@ const cards = [
     description:
       '',
     icon: ConsultantIcon,
-    path: '/',
+    path: '/chat-assistant',
   },
 ]
 
