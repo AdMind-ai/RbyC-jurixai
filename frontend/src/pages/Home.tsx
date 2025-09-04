@@ -41,12 +41,11 @@ const cards = [
   //   path: '/doc-translator',
   // },
   {
-    title: 'Law consultant',
+    title: 'Chat Assistant',
     description:
       '',
     icon: ConsultantIcon,
     path: '/',
-    disable: true
   },
 ]
 

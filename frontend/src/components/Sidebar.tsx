@@ -62,7 +62,7 @@ const menuItems = [
   //   activeIcon: TranslatorIconActive,
   // },
   {
-    title: 'Chat',
+    title: 'Chat Assistant',
     path: '/chat-assistant',
     icon: ChatIcon,
     activeIcon: ChatIconActive,
