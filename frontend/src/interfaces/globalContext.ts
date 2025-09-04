@@ -1,7 +1,7 @@
-import { CompanyInfoAdm } from './companyInfoInterface';
+// import { CompanyInfoAdm } from './companyInfoInterface';
 
 export interface GlobalContextType {
-  companyInfoAdm: CompanyInfoAdm | null;
+  // companyInfoAdm: CompanyInfoAdm | null;
   awaitingDeepResponse: AwaitingDeepResponseType | null;
   setAwaitingDeepResponse: React.Dispatch<React.SetStateAction<AwaitingDeepResponseType | null>>;
   selectedLawTab: string | null;

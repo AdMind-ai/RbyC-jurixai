@@ -11,6 +11,7 @@ import DocTranslator from './pages/DocTranslator'
 import TeamManagement from './pages/TeamManagement'
 import { AuthProvider } from './context/AuthContext'
 import PrivateRoute from './components/PrivateRoute'
+import Chat from './pages/Chat'
 
 const AppRoutes = () => {
   return (
@@ -27,7 +28,7 @@ const AppRoutes = () => {
             <Route path="/doc-search" element={<DocSearch />} />
             {/* <Route path="/check-compliance" element={<CheckCompliance />} /> */}
             <Route path="/doc-translator" element={<DocTranslator />} />
-            {/* <Route path="/law-consultant" element={<LawConsultant />} /> */}
+            <Route path="/chat-assistant" element={<Chat />} />
             {/* <Route path="/usage" element={<Usage />} /> */}
             <Route path="/access" element={<TeamManagement />} />
             {/* <Route path="*" element={<Home />} /> */}

@@ -15,8 +15,8 @@ import ComplianceIconActive from '../assets/icons/sidebar/compliance-icon-active
 // import DraftIconActive from '../assets/icons/sidebar/draft-icon-active.svg'
 import SearchIcon from '../assets/icons/sidebar/search-icon.svg'
 import SearchIconActive from '../assets/icons/sidebar/search-icon-active.svg'
-import ConsultantIcon from '../assets/icons/sidebar/consultant-icon.svg'
-import ConsultantIconActive from '../assets/icons/sidebar/consultant-icon-active.svg'
+import ChatIcon from '../assets/icons/sidebar/chat-icon.svg'
+import ChatIconActive from '../assets/icons/sidebar/chat-icon-active.svg'
 // import UsageIcon from '../assets/icons/sidebar/usage-icon.svg'
 // import UsageIconActive from '../assets/icons/sidebar/usage-icon-active.svg'
 import AccessIcon from '../assets/icons/sidebar/access-icon.svg'
@@ -62,12 +62,10 @@ const menuItems = [
   //   activeIcon: TranslatorIconActive,
   // },
   {
-    title: 'Law consultant',
-    path: '/law-consultant',
-    icon: ConsultantIcon,
-    activeIcon: ConsultantIconActive,
-    options: lawOptions,
-    disabled: true,
+    title: 'Chat',
+    path: '/chat-assistant',
+    icon: ChatIcon,
+    activeIcon: ChatIconActive,
   },
 ]
 
@@ -102,39 +100,17 @@ const Sidebar: React.FC = () => {
       setOpenMenu(null);
     }
   }, [selectedLawTab])
-  
+
 
   const handleMenuClick = (item: typeof menuItems[0]) => {
     if (item.disabled) return;
-    
-    if (item.options) {
-      setActivePath(item.path)
-      navigate(item.path)
-      setSelectedLawTab('Law References')
-      // setSelectedLawTab(null)
-    } else {
-      setActivePath(item.path)
-      navigate(item.path)
-      setOpenMenu(null)
-      setSelectedLawTab(null)
-    }
+
+    setActivePath(item.path)
+    navigate(item.path)
+    setOpenMenu(null)
+    setSelectedLawTab(null)
+
   }
-
-
-  useEffect(() => {
-    const withOptions = menuItems.find(i => i.options)
-    if (
-      withOptions &&
-      (
-        activePath === withOptions.path || 
-        (withOptions.options && withOptions.options.some(opt => activePath.startsWith(opt.path)))
-      )
-    ) {
-      if (openMenu !== withOptions.title) {
-        setOpenMenu(withOptions.title)
-      }
-    }
-  }, [activePath, openMenu])
 
   return (
     <Box
@@ -199,8 +175,7 @@ const Sidebar: React.FC = () => {
           }}
         >
           {menuItems.map((item) => {
-            const isActive = activePath === item.path ||
-              (item.options && item.options.some(opt => activePath === opt.path))
+            const isActive = activePath === item.path ? true : false
 
             return (
               <Box key={item.title} sx={{ width: '100%' }}>
@@ -362,7 +337,7 @@ const Sidebar: React.FC = () => {
                     width: '100%',
                     minWidth: '10px',
                     maxWidth: '400px',
-                    px:1.5,
+                    px: 1.5,
                   }}
                 >
                   <img
