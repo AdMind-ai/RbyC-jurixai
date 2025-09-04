@@ -26,8 +26,8 @@ urlpatterns = [
     path('openai/chat/assistant/save-conversation', SaveConversationView.as_view(),
          name='openai-chat-assistant-save-conversation'),
     # Law consultant
-    path('openai/chat/assistant/law-consultant', AssistantLawConsultantView.as_view(),
-         name='openai-chat-assistant-law-consultant')
+#     path('openai/chat/assistant/law-consultant', AssistantLawConsultantView.as_view(),
+#          name='openai-chat-assistant-law-consultant')
 ]
 
 urlpatterns += router.urls

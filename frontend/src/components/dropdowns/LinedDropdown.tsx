@@ -9,7 +9,7 @@ export interface LinedDropdownProps {
   options: string[];
   value: string | string[] | undefined;
   onChange: (value: string | string[]) => void;
-  width?: number;
+  width?: number | string;
   isMultipleOptions?: boolean;
   isDeleteItems?: boolean;
   onDeleteItem?: (itemName: string) => void;

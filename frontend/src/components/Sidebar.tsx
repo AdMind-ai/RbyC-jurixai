@@ -11,8 +11,8 @@ import HomeIconActive from '../assets/icons/sidebar/home-icon-active.svg'
 // import TranslatorIconActive from '../assets/icons/sidebar/translator-icon-active.svg'
 import ComplianceIcon from '../assets/icons/sidebar/compliance-icon.svg'
 import ComplianceIconActive from '../assets/icons/sidebar/compliance-icon-active.svg'
-// import DraftIcon from '../assets/icons/sidebar/draft-icon.svg'
-// import DraftIconActive from '../assets/icons/sidebar/draft-icon-active.svg'
+import DraftIcon from '../assets/icons/sidebar/draft-icon.svg'
+import DraftIconActive from '../assets/icons/sidebar/draft-icon-active.svg'
 import SearchIcon from '../assets/icons/sidebar/search-icon.svg'
 import SearchIconActive from '../assets/icons/sidebar/search-icon-active.svg'
 import ChatIcon from '../assets/icons/sidebar/chat-icon.svg'
@@ -36,12 +36,6 @@ const lawOptions = [
 
 const menuItems = [
   { title: 'Home', path: '/', icon: HomeIcon, activeIcon: HomeIconActive },
-  // {
-  //   title: 'Draft documenti',
-  //   path: '/doc-draft',
-  //   icon: DraftIcon,
-  //   activeIcon: DraftIconActive,
-  // },
   {
     title: 'Ricerca documentale',
     path: '/doc-search',
@@ -67,6 +61,12 @@ const menuItems = [
     icon: ChatIcon,
     activeIcon: ChatIconActive,
   },
+  {
+    title: 'Draft documenti',
+    path: '/doc-draft',
+    icon: DraftIcon,
+    activeIcon: DraftIconActive,
+  }
 ]
 
 
@@ -82,7 +82,7 @@ const Sidebar: React.FC = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const [activePath, setActivePath] = useState(location.pathname)
-  const [openMenu, setOpenMenu] = useState<string | null>(null)
+  // const [openMenu, setOpenMenu] = useState<string | null>(null)
 
   useEffect(() => {
     if (selectedLawTab && selectedLawTab.trim() !== '') {
@@ -97,7 +97,7 @@ const Sidebar: React.FC = () => {
     if (selectedLawTab == '') {
       setActivePath('/law-consultant');
       setSelectedLawTab(null)
-      setOpenMenu(null);
+      // setOpenMenu(null);
     }
   }, [selectedLawTab])
 
@@ -107,7 +107,7 @@ const Sidebar: React.FC = () => {
 
     setActivePath(item.path)
     navigate(item.path)
-    setOpenMenu(null)
+    // setOpenMenu(null)
     setSelectedLawTab(null)
 
   }

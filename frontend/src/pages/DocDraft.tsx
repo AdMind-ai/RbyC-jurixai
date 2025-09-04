@@ -81,36 +81,29 @@ const DocDraft: React.FC = () => {
     <Layout>
       <Box
         sx={{
-          display: "flex",
-          flexDirection: "column",
-          px: 2,
-          pt: 1,
-          overflow: "auto",
-          height: "100%",
-          width: "100%",
+          display: 'flex',
+          flexDirection: 'column',
+          padding: '2.2vh 3vh',
+          overflow: 'auto',
+          height: '100%',
+          width: '100%',
         }}
       >
         {/* Header */}
         <Box
           sx={{
-            display: "flex",
-            justifyContent: "space-between",
-            marginBottom: "0.2vw",
+            display: 'flex',
+            justifyContent: 'space-between',
+            marginBottom: '0.2vw',
           }}
         >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 3 }}>
-            <Typography
-              variant="h2"
-              sx={{
-                fontWeight: 700,
-                marginLeft: "1vw",
-              }}
-            >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+            <Typography variant="h2" sx={{ marginLeft: '1vw' }}>
               Draft documenti
             </Typography>
           </Box>
 
-          {isGenerated && <SaveCleanButtons onClean={() => handleNewExtract()}></SaveCleanButtons>}
+          {isGenerated && <SaveCleanButtons onClean={() => handleNewExtract()} disguise_save={true}></SaveCleanButtons>}
 
         </Box>
         <Divider />
@@ -128,14 +121,7 @@ const DocDraft: React.FC = () => {
               title="Format del documento"
               options={[
                 "Report",
-                "Memo",
-                "Invoice",
-                "Contract",
-                "Letter",
-                "Notice",
-                "Press Release",
-                "Preventivo",
-                "Contratto"
+                "Memo"
               ]}
               value={documentFormat}
               onChange={setDocumentFormat}

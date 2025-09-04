@@ -1,7 +1,7 @@
 # core/views/openai/chat/__init__.py
 from .conversation_view import OpenAIConversationViewSet
 from .send_message_view import OpenAISendMessageView
-from .assistant import AssistantStreamingView, ThreadsView, SaveConversationView, AssistantLawConsultantView
+from .assistant import AssistantStreamingView, ThreadsView, SaveConversationView
 
 
 __all__ = [
@@ -10,5 +10,5 @@ __all__ = [
     'AssistantStreamingView',
     'ThreadsView',
     'SaveConversationView',
-    'AssistantLawConsultantView'
+    # 'AssistantLawConsultantView'
 ]

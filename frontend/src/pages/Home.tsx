@@ -6,29 +6,23 @@ import HomeCard from '../components/cards/HomeCard'
 // Importação dos ícones
 // import TranslatorIcon from '../assets/icons/sidebar/translator-icon.svg'
 import ComplianceIcon from '../assets/icons/sidebar/compliance-icon.svg'
-// import DraftIcon from '../assets/icons/sidebar/draft-icon.svg'
+import DraftIcon from '../assets/icons/sidebar/draft-icon.svg'
 import SearchIcon from '../assets/icons/sidebar/search-icon.svg'
 import ConsultantIcon from '../assets/icons/sidebar/consultant-icon.svg'
 
+
 const cards = [
-  // {
-  //   title: 'Draft documenti',
-  //   description:
-  //   'Conduce ricerche e analisi sul mercato di riferimento dei principali competitors e sui peers quotati sui capital markets internazionali.',
-  //   icon: DraftIcon,
-  //   path: '/doc-draft',
-  // },
   {
     title: 'Ricerca documentale',
     description:
       '',
-    icon: SearchIcon,
+      icon: SearchIcon,
     path: '/doc-search',
   },
   {
     title: 'Check compliance',
     description:
-      '',
+    '',
     icon: ComplianceIcon,
     path: '/',
     disable: true
@@ -43,9 +37,16 @@ const cards = [
   {
     title: 'Chat Assistant',
     description:
-      '',
+    '',
     icon: ConsultantIcon,
     path: '/chat-assistant',
+  },
+  {
+    title: 'Draft documenti',
+    description:
+    '',
+    icon: DraftIcon,
+    path: '/doc-draft',
   },
 ]
 

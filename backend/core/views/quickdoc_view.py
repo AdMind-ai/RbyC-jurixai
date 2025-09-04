@@ -31,8 +31,8 @@ class QuickDocGenerateView(APIView):
             generated_text, title)
         
         # Enviar PDF ao Blob Storage
-        pdf_url = upload_to_blob_storage(pdf_data.getvalue(), f"{nome_arquivo}.pdf")
-        word_url = upload_to_blob_storage(word_data.getvalue(), f"{nome_arquivo}.docx")
+        pdf_url = upload_to_blob_storage(pdf_data.getvalue(), f"quickdoc/{nome_arquivo}.pdf")
+        word_url = upload_to_blob_storage(word_data.getvalue(), f"quickdoc/{nome_arquivo}.docx")
 
         # Salvar no banco
         doc = GeneratedDocument.objects.create(
