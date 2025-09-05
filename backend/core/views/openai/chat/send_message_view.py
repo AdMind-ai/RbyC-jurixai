@@ -30,18 +30,14 @@ class OpenAISendMessageView(APIView):
 
         content = serializer.validated_data.get('content', '')
         file = serializer.validated_data.get('file', None)
-        model = request.data.get('model', 'gpt-4o')
+        model = request.data.get('model', 'gpt-5')
         is_user = True
 
         logger.debug(
             f"Received data - Content: {content}, Model: {model}, User: {user}, conversation_id: {conversation_id}, file: {file}")
 
         model_config_map = {
-            'gpt-4o': ('o200k_base', 128000, 16000),
-            'gpt-4o-mini': ('o200k_base', 128000, 16000),
-            'gpt-4.5-preview': ('o200k_base', 128000, 16000),
-            'gpt-4o-search-preview': ('o200k_base', 128000, 16000),
-            'o3-mini': ('cl100k_base', 200000, 100000),
+            'gpt-5': ('o200k_base', 300000, 100000),
         }
 
         encoding_name, context_window, max_output_tokens = model_config_map.get(
@@ -120,7 +116,7 @@ class OpenAISendMessageView(APIView):
         history, current_tokens = manage_history_tokens(
             messages, content, encoding_name, max_input_tokens)
 
-        chat_message = ChatMessage.objects.create(
+        ChatMessage.objects.create(
             conversation=conversation,
             content=content,
             # file=None,

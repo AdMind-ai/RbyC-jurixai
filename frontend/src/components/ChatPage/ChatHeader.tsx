@@ -1,9 +1,9 @@
 import React, {useState, useEffect} from 'react'
 import { useNavigate } from 'react-router-dom';
-import SimpleDropdown from '../../dropdowns/SimpleDropdown'
-import SaveCleanButtons from '../../buttons/SaveCleanButtons'
+import SimpleDropdown from '../dropdowns/SimpleDropdown'
+import SaveCleanButtons from '../buttons/SaveCleanButtons'
 import { useTheme } from '@mui/material/styles'
-import { api } from '../../../api/api';
+import { api } from '../../api/api';
 import { toast } from 'react-toastify'
 import {
   Box,
@@ -61,25 +61,14 @@ interface ChatHeaderProps {
 }
 
 const modelDescriptions: Record<string, { name: string, desc: string }> = { 
-  "GPT-4.1": { 
-    name: "GPT-4.1",
-    desc: "Il modello più avanzato, ottimo per affrontare compiti complessi e ottenere risposte dettagliate e affidabili sulle richieste più difficili."
-  }, 
-  "GPT o3 mini": { 
-    name: "OpenAI o3-mini",
-    desc: "Assistente ideale per risolvere problemi, fare calcoli e rispondere a domande di scienza. Perfetto per lavorare con testi molto lunghi in modo semplice e chiaro."
-  }, 
-  "GPT-4.1 mini": {
-    name: "GPT-4.1 mini",
-    desc: "Un modello che unisce velocità e precisione, perfetto per risposte veloci su attività quotidiane o domande non troppo complesse."
-  }  
-  // ...new models
+  "GPT-5": { 
+    name: "GPT-5:",
+    desc: "Il modello lastet."
+  }
 }
 
 export const modelMapping: Record<string, string> = {
-  "GPT-4.1": "gpt-4.1",
-  "GPT o3 mini": "o3-mini",
-  "GPT-4.1 mini": "gpt-4.1-mini",
+  "GPT-5": "gpt-5"
 };
 
 const ChatHeader: React.FC<ChatHeaderProps> = ({ 
@@ -112,8 +101,16 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
   };
 
   const handleSaveChat = async () => {
-    if (!newChatName.trim() || chats.some(chat => chat.name === newChatName)) {
-      alert("Nome inválido ou já existe. Escolha outro.");
+    if (!newChatName.trim()) {
+      toast.warning("Il nome del chat è obbligatorio.");
+      return;
+    }
+    if (newChatName.trim().toLowerCase() === "new chat") {
+      toast.warning('Non puoi usare "New Chat" come nome di chat.');
+      return;
+    }
+    if (chats.some(chat => chat.name === newChatName.trim())) {
+      toast.warning("Il nome del chat esiste già. Scegline un altro.");
       return;
     }
   
@@ -207,7 +204,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
         setChats(chatList);
 
         // Filtrar chats com o nome 'New Chat'
-        const chatsToRemove = chatList.filter((chat) => chat.name === 'New Chat');
+        const chatsToRemove = chatList.filter((chat) => chat.name.trim().toLowerCase() === "new chat");
 
         // Remover esses chats do backend
         for (const chat of chatsToRemove) {
@@ -339,7 +336,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
             setSelectedChat(null);
             onChatSelect(null, null);
             setMessages([]);
-            navigate('/law-consultant');
+            navigate('/chat-assistant');
           }}
         />
       ) : null}

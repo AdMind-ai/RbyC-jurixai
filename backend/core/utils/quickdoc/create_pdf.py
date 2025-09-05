@@ -8,29 +8,29 @@ from io import BytesIO
 
 
 def create_pdf_with_header_footer(text, title):
-    logo_path = Path(settings.STATIC_ROOT) / "quickdoc" / "logo-admind.png"
+    logo_path = Path(settings.STATIC_ROOT) / "quickdoc" / "logo-rbyc.jpg"
     pdf_buffer = BytesIO(); 
     
     c = canvas.Canvas(pdf_buffer, pagesize=A4)
     width, height = A4
 
-    header_height = height - 80
-    title_height = header_height - 20
+    header_height = height - 125
+    title_height = header_height - 5
     body_top = title_height - 30
 
     def draw_header():
         if logo_path.exists():
-            c.drawImage(str(logo_path), (width-150)/2, header_height,
-                        width=150, mask='auto', preserveAspectRatio=True)
+            c.drawImage(str(logo_path), (width-100)/2, header_height,
+                        width=97, mask='auto', preserveAspectRatio=True)
 
     def draw_footer():
         c.setFont("Helvetica-Bold", 9)
-        c.setFillColor(colors.HexColor("#7030A0"))
-        c.drawCentredString(width/2, 37, "AdMind Srl")
+        # c.setFillColor(colors.HexColor("#7030A0"))
+        c.drawCentredString(width/2, 37, "RbyC s.r.l.")
         c.setFont("Helvetica", 8)
-        c.drawCentredString(width/2, 28, "www.admind.ai – admind@admind.ai")
-        c.drawCentredString(width/2, 19,
-                            "Sede legale e operativa: Via Mazzini 9, 20123 Milano – C.F. e P.IVA 12694200960")
+        c.drawCentredString(width/2, 27, "www.rbyc.eu")
+        c.drawCentredString(width/2, 17,
+                            "Sede legale e operativa: Piazza Giuseppe Missori 2, 20122 Milano – C.F. e P.IVA 09233650960")
 
     draw_header()
     draw_footer()

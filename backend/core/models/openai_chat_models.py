@@ -7,13 +7,17 @@ class ChatConversation(models.Model):
     id = models.CharField(max_length=40, primary_key=True, default=uuid.uuid4)
     user = models.ForeignKey(settings.AUTH_USER_MODEL,
                              on_delete=models.CASCADE)
+    # Não tem nome único, NÀO ALTERAR!
     name = models.CharField(max_length=100, default="New Chat", unique=False)
     created_at = models.DateTimeField(auto_now_add=True)
-    is_new = models.BooleanField(default=True)
 
     class Meta:
         verbose_name = "Chat - Conversation"
         verbose_name_plural = "Chat - Conversations"
+        # constraints = [
+        #     models.UniqueConstraint(
+        #         fields=['name'], name='unique_conversation_name')
+        # ]
 
     def save(self, *args, **kwargs):
         if not self.name:
@@ -28,11 +32,11 @@ class ChatMessage(models.Model):
     conversation = models.ForeignKey(
         ChatConversation, related_name='messages', on_delete=models.CASCADE)
     content = models.TextField(blank=True)
-    # citations = models.JSONField(null=True, blank=True, default=list)
+    citations = models.JSONField(null=True, blank=True, default=list)
     is_user = models.BooleanField(default=True)
 
     # If saving files
-    # file = models.FileField(upload_to="chat/", blank=True, null=True)
+    file = models.FileField(upload_to="chat/", blank=True, null=True)
     # file_url = models.URLField(max_length=200, blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)

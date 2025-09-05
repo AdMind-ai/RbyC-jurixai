@@ -11,12 +11,12 @@ import HomeIconActive from '../assets/icons/sidebar/home-icon-active.svg'
 // import TranslatorIconActive from '../assets/icons/sidebar/translator-icon-active.svg'
 import ComplianceIcon from '../assets/icons/sidebar/compliance-icon.svg'
 import ComplianceIconActive from '../assets/icons/sidebar/compliance-icon-active.svg'
-// import DraftIcon from '../assets/icons/sidebar/draft-icon.svg'
-// import DraftIconActive from '../assets/icons/sidebar/draft-icon-active.svg'
+import DocIcon from '../assets/icons/sidebar/doc-icon.svg'
+import DocIconActive from '../assets/icons/sidebar/doc-icon-active.svg'
 import SearchIcon from '../assets/icons/sidebar/search-icon.svg'
 import SearchIconActive from '../assets/icons/sidebar/search-icon-active.svg'
-import ConsultantIcon from '../assets/icons/sidebar/consultant-icon.svg'
-import ConsultantIconActive from '../assets/icons/sidebar/consultant-icon-active.svg'
+import ChatIcon from '../assets/icons/sidebar/chat-icon.svg'
+import ChatIconActive from '../assets/icons/sidebar/chat-icon-active.svg'
 // import UsageIcon from '../assets/icons/sidebar/usage-icon.svg'
 // import UsageIconActive from '../assets/icons/sidebar/usage-icon-active.svg'
 import AccessIcon from '../assets/icons/sidebar/access-icon.svg'
@@ -36,12 +36,6 @@ const lawOptions = [
 
 const menuItems = [
   { title: 'Home', path: '/', icon: HomeIcon, activeIcon: HomeIconActive },
-  // {
-  //   title: 'Draft documenti',
-  //   path: '/doc-draft',
-  //   icon: DraftIcon,
-  //   activeIcon: DraftIconActive,
-  // },
   {
     title: 'Ricerca documentale',
     path: '/doc-search',
@@ -62,13 +56,17 @@ const menuItems = [
   //   activeIcon: TranslatorIconActive,
   // },
   {
-    title: 'Law consultant',
-    path: '/law-consultant',
-    icon: ConsultantIcon,
-    activeIcon: ConsultantIconActive,
-    options: lawOptions,
-    disabled: true,
+    title: 'Chat Assistant',
+    path: '/chat-assistant',
+    icon: ChatIcon,
+    activeIcon: ChatIconActive,
   },
+  {
+    title: 'QuickDoc Creator',
+    path: '/quick-doc',
+    icon: DocIcon,
+    activeIcon: DocIconActive,
+  }
 ]
 
 
@@ -84,7 +82,7 @@ const Sidebar: React.FC = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const [activePath, setActivePath] = useState(location.pathname)
-  const [openMenu, setOpenMenu] = useState<string | null>(null)
+  // const [openMenu, setOpenMenu] = useState<string | null>(null)
 
   useEffect(() => {
     if (selectedLawTab && selectedLawTab.trim() !== '') {
@@ -99,42 +97,20 @@ const Sidebar: React.FC = () => {
     if (selectedLawTab == '') {
       setActivePath('/law-consultant');
       setSelectedLawTab(null)
-      setOpenMenu(null);
+      // setOpenMenu(null);
     }
   }, [selectedLawTab])
-  
+
 
   const handleMenuClick = (item: typeof menuItems[0]) => {
     if (item.disabled) return;
-    
-    if (item.options) {
-      setActivePath(item.path)
-      navigate(item.path)
-      setSelectedLawTab('Law References')
-      // setSelectedLawTab(null)
-    } else {
-      setActivePath(item.path)
-      navigate(item.path)
-      setOpenMenu(null)
-      setSelectedLawTab(null)
-    }
+
+    setActivePath(item.path)
+    navigate(item.path)
+    // setOpenMenu(null)
+    setSelectedLawTab(null)
+
   }
-
-
-  useEffect(() => {
-    const withOptions = menuItems.find(i => i.options)
-    if (
-      withOptions &&
-      (
-        activePath === withOptions.path || 
-        (withOptions.options && withOptions.options.some(opt => activePath.startsWith(opt.path)))
-      )
-    ) {
-      if (openMenu !== withOptions.title) {
-        setOpenMenu(withOptions.title)
-      }
-    }
-  }, [activePath, openMenu])
 
   return (
     <Box
@@ -199,8 +175,7 @@ const Sidebar: React.FC = () => {
           }}
         >
           {menuItems.map((item) => {
-            const isActive = activePath === item.path ||
-              (item.options && item.options.some(opt => activePath === opt.path))
+            const isActive = activePath === item.path ? true : false
 
             return (
               <Box key={item.title} sx={{ width: '100%' }}>
@@ -362,7 +337,7 @@ const Sidebar: React.FC = () => {
                     width: '100%',
                     minWidth: '10px',
                     maxWidth: '400px',
-                    px:1.5,
+                    px: 1.5,
                   }}
                 >
                   <img

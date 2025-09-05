@@ -1,11 +1,11 @@
 // GlobalContext.tsx
-import React, { createContext, useContext, useEffect, useState  } from "react";
+import React, { createContext, useContext, useState  } from "react";
 
 // API
-import { fetchCompanyInfo } from "../api/companyInfo"; 
+// import { fetchCompanyInfo } from "../api/companyInfo"; 
 
 // Interfaces
-import type { CompanyInfoAdm } from "../interfaces/companyInfoInterface";
+// import type { CompanyInfoAdm } from "../interfaces/companyInfoInterface";
 import { GlobalContextType, AwaitingDeepResponseType } from "../interfaces/globalContext";
 
 // Hooks
@@ -14,20 +14,20 @@ import { useDeepPolling } from "../hooks/useDeepPolling";
 const GlobalContext = createContext<GlobalContextType | undefined>(undefined);
 
 export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [companyInfoAdm, setCompanyInfoAdm] = useState<CompanyInfoAdm | null>(null);
+  // const [companyInfoAdm, setCompanyInfoAdm] = useState<CompanyInfoAdm | null>(null);
   const [awaitingDeepResponse, setAwaitingDeepResponse] = useState<AwaitingDeepResponseType | null>(null);
   const [selectedLawTab, setSelectedLawTab] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchCompanyInfo().then(setCompanyInfoAdm);
-  }, []);
+  // useEffect(() => {
+  //   fetchCompanyInfo().then(setCompanyInfoAdm);
+  // }, []);
 
   // Polling para Deep Research
   useDeepPolling(awaitingDeepResponse, setAwaitingDeepResponse);
 
   return (
     <GlobalContext.Provider value={{
-      companyInfoAdm, 
+      // companyInfoAdm, 
       awaitingDeepResponse, 
       setAwaitingDeepResponse,
       selectedLawTab,

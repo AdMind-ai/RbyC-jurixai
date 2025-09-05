@@ -6,8 +6,7 @@ from .openai import (OpenAIConversationViewSet,
                      OpenAISendMessageView,
                      AssistantStreamingView,
                      ThreadsView,
-                     SaveConversationView,
-                     AssistantLawConsultantView)
+                     SaveConversationView)
 
 from .extract_content_view import ExtractContentView
 from .quickdoc_view import QuickDocGenerateView
@@ -22,5 +21,5 @@ __all__ = [
     'AssistantStreamingView',
     'ThreadsView',
     'SaveConversationView',
-    'AssistantLawConsultantView'
+    # 'AssistantLawConsultantView'
 ]
