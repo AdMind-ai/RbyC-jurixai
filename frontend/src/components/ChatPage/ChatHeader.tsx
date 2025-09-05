@@ -63,7 +63,7 @@ interface ChatHeaderProps {
 const modelDescriptions: Record<string, { name: string, desc: string }> = { 
   "GPT-5": { 
     name: "GPT-5:",
-    desc: "Il modello lastet."
+    desc: "GPT-5 is the leading model for encoding, reasoning, and agency tasks across all domains."
   }
 }
 
