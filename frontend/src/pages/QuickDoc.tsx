@@ -19,7 +19,7 @@ import { api } from '../api/api';
 import { toast } from 'react-toastify';
 
 
-const DocDraft: React.FC = () => {
+const QuickDoc: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
@@ -99,7 +99,7 @@ const DocDraft: React.FC = () => {
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
             <Typography variant="h2" sx={{ marginLeft: '1vw' }}>
-              Draft documenti
+              QuickDoc Creator
             </Typography>
           </Box>
 
@@ -227,4 +227,4 @@ const DocDraft: React.FC = () => {
   );
 };
 
-export default DocDraft;
+export default QuickDoc;

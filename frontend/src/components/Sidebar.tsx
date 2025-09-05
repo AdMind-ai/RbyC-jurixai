@@ -11,8 +11,8 @@ import HomeIconActive from '../assets/icons/sidebar/home-icon-active.svg'
 // import TranslatorIconActive from '../assets/icons/sidebar/translator-icon-active.svg'
 import ComplianceIcon from '../assets/icons/sidebar/compliance-icon.svg'
 import ComplianceIconActive from '../assets/icons/sidebar/compliance-icon-active.svg'
-import DraftIcon from '../assets/icons/sidebar/draft-icon.svg'
-import DraftIconActive from '../assets/icons/sidebar/draft-icon-active.svg'
+import DocIcon from '../assets/icons/sidebar/doc-icon.svg'
+import DocIconActive from '../assets/icons/sidebar/doc-icon-active.svg'
 import SearchIcon from '../assets/icons/sidebar/search-icon.svg'
 import SearchIconActive from '../assets/icons/sidebar/search-icon-active.svg'
 import ChatIcon from '../assets/icons/sidebar/chat-icon.svg'
@@ -62,10 +62,10 @@ const menuItems = [
     activeIcon: ChatIconActive,
   },
   {
-    title: 'Draft documenti',
-    path: '/doc-draft',
-    icon: DraftIcon,
-    activeIcon: DraftIconActive,
+    title: 'QuickDoc Creator',
+    path: '/quick-doc',
+    icon: DocIcon,
+    activeIcon: DocIconActive,
   }
 ]
 

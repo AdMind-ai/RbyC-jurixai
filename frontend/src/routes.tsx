@@ -2,7 +2,7 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import Home from './pages/Home'
 import Login from './pages/Login'
-import DocDraft from './pages/DocDraft'
+import QuickDoc from './pages/QuickDoc'
 import DocSearch from './pages/DocSearch'
 // import CheckCompliance from './pages/CheckCompliance'
 import DocTranslator from './pages/DocTranslator'
@@ -23,7 +23,7 @@ const AppRoutes = () => {
           {/* Rotas privadas */}
           <Route element={<PrivateRoute />}>
             <Route path="/" element={<Home />} />
-            <Route path="/doc-draft" element={<DocDraft />} />
+            <Route path="/quick-doc" element={<QuickDoc />} />
             <Route path="/doc-search" element={<DocSearch />} />
             {/* <Route path="/check-compliance" element={<CheckCompliance />} /> */}
             <Route path="/doc-translator" element={<DocTranslator />} />

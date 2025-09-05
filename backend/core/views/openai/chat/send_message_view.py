@@ -37,7 +37,7 @@ class OpenAISendMessageView(APIView):
             f"Received data - Content: {content}, Model: {model}, User: {user}, conversation_id: {conversation_id}, file: {file}")
 
         model_config_map = {
-            'gpt-5': ('o200k_base', 200000, 16000),
+            'gpt-5': ('o200k_base', 300000, 100000),
         }
 
         encoding_name, context_window, max_output_tokens = model_config_map.get(

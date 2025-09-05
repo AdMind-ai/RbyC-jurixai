@@ -6,7 +6,7 @@ import HomeCard from '../components/cards/HomeCard'
 // Importação dos ícones
 // import TranslatorIcon from '../assets/icons/sidebar/translator-icon.svg'
 import ComplianceIcon from '../assets/icons/sidebar/compliance-icon.svg'
-import DraftIcon from '../assets/icons/sidebar/draft-icon.svg'
+import DocIcon from '../assets/icons/sidebar/doc-icon.svg'
 import SearchIcon from '../assets/icons/sidebar/search-icon.svg'
 import ConsultantIcon from '../assets/icons/sidebar/consultant-icon.svg'
 
@@ -42,11 +42,11 @@ const cards = [
     path: '/chat-assistant',
   },
   {
-    title: 'Draft documenti',
+    title: 'QuickDoc Creator',
     description:
     '',
-    icon: DraftIcon,
-    path: '/doc-draft',
+    icon: DocIcon,
+    path: '/quick-doc',
   },
 ]
 
