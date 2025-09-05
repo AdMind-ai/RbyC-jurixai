@@ -52,15 +52,16 @@ def create_pdf_with_header_footer(text, title):
 
         splitted = simpleSplit(line.strip(), "Helvetica", 11, max_width)
         for l in splitted:
-            c.drawString(x, y, l)
-            y -= line_height
-            if y < 60:
+            if y < 60:  # checa antes de imprimir
                 c.showPage()
                 draw_header()
                 draw_footer()
                 c.setFillColor(colors.black)
                 c.setFont("Helvetica", 11)
                 y = body_top
+
+            c.drawString(x, y, l)
+            y -= line_height
 
         # Espaço extra após parágrafo
         if idx + 1 < len(lines) and lines[idx + 1].strip() == "":
