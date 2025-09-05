@@ -10,6 +10,7 @@ class ChatConversation(models.Model):
     # Não tem nome único, NÀO ALTERAR!
     name = models.CharField(max_length=100, default="New Chat", unique=False)
     created_at = models.DateTimeField(auto_now_add=True)
+    is_new = models.BooleanField(default=True)
 
     class Meta:
         verbose_name = "Chat - Conversation"
