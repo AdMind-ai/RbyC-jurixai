@@ -120,8 +120,8 @@ const QuickDoc: React.FC = () => {
             <LinedDropdown
               title="Format del documento"
               options={[
-                "Report",
-                "Memo"
+                "Verbale CdA",
+                "Convocazione"
               ]}
               value={documentFormat}
               onChange={setDocumentFormat}

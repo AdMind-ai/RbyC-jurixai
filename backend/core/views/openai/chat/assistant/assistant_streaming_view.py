@@ -144,15 +144,9 @@ class AssistantStreamingView(APIView):
 
             if thread_id:
                 assistant_thread = AssistantThread.objects.filter(thread_id=thread_id).first()
-                if not assistant_thread:
-                    # thread_id inválido → criar novo registro
-                    conversation_openai = client.conversations.create()
-                    print(conversation_openai)
-                    assistant_thread = AssistantThread.objects.create(thread_id=conversation_openai.id, active=True)
             else:
                 # cria thread local, id será preenchido depois
                 conversation_openai = client.conversations.create()
-                print(conversation_openai)
                 assistant_thread = AssistantThread.objects.create(thread_id=conversation_openai.id, active=True)
 
             # cria ou reaproveita conversa local (ChatConversation)
@@ -211,7 +205,7 @@ class AssistantStreamingView(APIView):
                         full_ai_message += chunk
                         yield chunk
                     # elif event.type == "response.completed":
-                    #     new_conversation_id = event.response.conversation
+                        # new_conversation_id = event.response.conversation
                 # stream.until_done()
                 print("Stream ended", flush=True)
 

@@ -9,7 +9,6 @@ from rest_framework.parsers import FormParser, MultiPartParser, JSONParser
 from core.models.openai_chat_models import ChatConversation, ChatMessage
 from core.serializers.openai_chat_serializers import ConversationSerializer
 
-
 class OpenAIConversationViewSet(viewsets.ModelViewSet):
     queryset = ChatConversation.objects.all()
     serializer_class = ConversationSerializer
@@ -19,7 +18,13 @@ class OpenAIConversationViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        return ChatConversation.objects.filter(user=user)
+        only_saved = self.request.query_params.get(
+            "only_saved", "true").lower() == "true"
+        # Por padrão só retorna conversas salvas (is_new=False)
+        queryset = ChatConversation.objects.filter(user=user)
+        if only_saved:
+            queryset = queryset.filter(is_new=False)
+        return queryset
 
     def create(self, request, *args, **kwargs):
         user = request.user
