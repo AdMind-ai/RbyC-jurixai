@@ -22,11 +22,17 @@ class MessageSerializer(serializers.ModelSerializer):
 
 class ConversationSerializer(serializers.ModelSerializer):
     messages = MessageSerializer(many=True, read_only=True)
+    thread_id = serializers.SerializerMethodField()
 
     class Meta:
         model = ChatConversation
-        fields = ['id', 'name', 'created_at', 'messages']
+        fields = ['id', 'thread_id', 'name', 'created_at', 'messages',]
         read_only_fields = ['id', 'created_at']
+
+    def get_thread_id(self, obj):
+        # Pega o primeiro AssistantThread ativo vinculado
+        thread = obj.threads.filter(active=True).first()
+        return thread.thread_id if thread else None
 
     def validate_name(self, value):
         if not value.strip():
@@ -36,11 +42,9 @@ class ConversationSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         messages_data = validated_data.pop('messages', [])
         conversation = ChatConversation.objects.create(**validated_data)
-        print("Serializer: ", message_data, conversation)
 
         for message_data in messages_data:
-            ChatMessage.objects.create(
-                conversation=conversation, **message_data)
+            ChatMessage.objects.create(conversation=conversation, **message_data)
 
         return conversation
 

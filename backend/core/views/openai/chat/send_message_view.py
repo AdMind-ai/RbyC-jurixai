@@ -134,6 +134,7 @@ class OpenAISendMessageView(APIView):
                 if file:
                     response = client.responses.create(
                         model=model,
+                        conversation=conversation_id,
                         input=[
                             {
                                 "role": "user",

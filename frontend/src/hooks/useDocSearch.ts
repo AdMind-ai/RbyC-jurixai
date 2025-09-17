@@ -11,7 +11,7 @@ import {
 import { fetchWithAuth } from '../api/fetchWithAuth'
 
 export function useDocSearch() {
-  const [threadId, setThreadId] = useState<string | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
@@ -60,7 +60,7 @@ export function useDocSearch() {
 
   // 3. SALVAR CHAT (threadId correto sempre!)
   const handleSaveChat = async (chatName: string) => {
-    if (!threadId) {
+    if (!conversationId) {
       toast.error("Thread non inizializzata!");
       return;
     }
@@ -71,7 +71,7 @@ export function useDocSearch() {
     try {
       // Salva conversa/renomeia
       await api.post("/openai/chat/assistant/save-conversation", {
-        thread_id: threadId,
+        thread_id: conversationId,
         name: chatName,
       });
       toast.success(`Chat "${chatName}" salvata con successo!`);
@@ -79,7 +79,7 @@ export function useDocSearch() {
       const updatedChats = await fetchChatConversations();
 
       const updatedChat = updatedChats.find(
-        (c) => (c.thread_id ?? undefined) === threadId
+        (c) => (c.thread_id ?? undefined) === conversationId
       );
       if (updatedChat) {
         setSelectedChat(updatedChat);
@@ -127,7 +127,7 @@ export function useDocSearch() {
   ) => {
     if (id && name) {
       setSelectedChat({ id, name, thread_id: chatThreadId });
-      setThreadId(chatThreadId ?? null);
+      setConversationId(chatThreadId ?? null);
       try {
         const response = await api.get<ApiChatResponse>(`/openai/chat/${id}`);
         const messages: Message[] = response.data.messages.map(
@@ -142,7 +142,7 @@ export function useDocSearch() {
       }
     } else {
       setSelectedChat(null);
-      setThreadId(null);
+      setConversationId(null);
       setMessages([]);
     }
   };
@@ -155,7 +155,7 @@ export function useDocSearch() {
     try {
       const res = await fetchWithAuth("/openai/chat/assistant/send-message", {
         method: "POST",
-        body: JSON.stringify({ thread_id: threadId, content: message }),
+        body: JSON.stringify({ thread_id: conversationId, content: message }),
         // Content-Type definido auto pra JSON
       });
       if (!res.body) throw new Error("Nessuna risposta dal server!");
@@ -182,12 +182,12 @@ export function useDocSearch() {
       console.log(e)
     }
 
-    if (!threadId) {
+    if (!conversationId) {
       try {
         const res = await api.get("/openai/chat/assistant/thread");
         const threads = res.data;
         if (threads.length > 0) {
-          setThreadId(threads[0].thread_id);
+          setConversationId(threads[0].thread_id);
         } else {
           toast.error("Nenhuma thread encontrada!");
         }
@@ -210,8 +210,8 @@ export function useDocSearch() {
     setMessages,
     isTyping,
     setIsTyping,
-    threadId,
-    setThreadId,
+    conversationId,
+    setConversationId,
     selectedChat,
     setSelectedChat,
     chats,
