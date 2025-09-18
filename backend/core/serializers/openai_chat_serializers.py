@@ -26,7 +26,7 @@ class ConversationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ChatConversation
-        fields = ['id', 'thread_id', 'name', 'created_at', 'messages',]
+        fields = ['id', 'thread_id', 'name', 'created_at', 'messages']
         read_only_fields = ['id', 'created_at']
 
     def get_thread_id(self, obj):
@@ -50,5 +50,9 @@ class ConversationSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         instance.name = validated_data.get('name', instance.name)
+        if instance.is_new:
+            instance.is_new = False
+        if 'is_chat_rag' in validated_data:
+            instance.is_chat_rag = validated_data.get('is_chat_rag')
         instance.save()
         return instance

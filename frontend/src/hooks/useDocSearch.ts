@@ -44,7 +44,7 @@ export function useDocSearch() {
   // 2. BUSCAR TODAS AS CONVERSAS
   const fetchChatConversations = async () => {
     try {
-      const response = await api.get<ApiChatResponse[]>("/openai/chat/?only_saved=true");
+      const response = await api.get<ApiChatResponse[]>("/openai/chat/?only_saved=true&is_chat_rag=true");
       const chatList: Chat[] = response.data.map((conversation) => ({
         id: conversation.id,
         name: conversation.name,
@@ -73,6 +73,7 @@ export function useDocSearch() {
       await api.post("/openai/chat/assistant/save-conversation", {
         thread_id: conversationId,
         name: chatName,
+        is_chat_rag: true
       });
       toast.success(`Chat "${chatName}" salvata con successo!`);
 

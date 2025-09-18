@@ -11,6 +11,7 @@ class ChatConversation(models.Model):
     name = models.CharField(max_length=100, default="New Chat", unique=False)
     created_at = models.DateTimeField(auto_now_add=True)
     is_new = models.BooleanField(default=True)
+    is_chat_rag = models.BooleanField(default=False)
 
     class Meta:
         verbose_name = "Chat - Conversation"
@@ -21,6 +22,9 @@ class ChatConversation(models.Model):
         # ]
 
     def save(self, *args, **kwargs):
+        if self.pk and self.is_new:
+            self.is_new = False
+            
         if not self.name:
             self.name = str(uuid.uuid4())[:30]
         super().save(*args, **kwargs)
