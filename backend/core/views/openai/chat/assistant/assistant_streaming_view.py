@@ -183,7 +183,7 @@ class AssistantStreamingView(APIView):
             full_ai_message = ""
 
             with client.responses.create(
-                model="gpt-5",
+                model="gpt-4o-mini",
                 prompt = { "id": settings.OPENAI_PROMPT_ID_RBYC },
                 input=[
                     {
@@ -200,7 +200,7 @@ class AssistantStreamingView(APIView):
                 ],
                 store=True,
                 stream=True,
-                include=["reasoning.encrypted_content", "web_search_call.action.sources"],
+                include=["web_search_call.action.sources"],
                 timeout=600,
             ) as stream:
                 handler = DjangoStreamingEventHandler()

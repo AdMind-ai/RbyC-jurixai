@@ -1,11 +1,13 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Box, Divider } from '@mui/material'
 import Layout from '../layouts/Layout'
 import ChatHeader from '../components/ChatPage/ChatHeader'
 import ChatMessageList from '../components/ChatPage/ChatMessageList'
 import ChatInputArea from '../components/ChatPage/ChatInputArea'
 
-import {api} from '../api/api'
+import { api } from '../api/api'
+import { fetchWithoutAuth } from '../api/fetchWithoutAuth'
+import { toast } from 'react-toastify'
 
 interface Message {
   sender: 'user' | 'ai'
@@ -37,25 +39,45 @@ const Chat: React.FC = () => {
   const [isOverview, setIsOverview] = useState(false);
   const [citations, setCitations] = useState<string[]>([])
   const [searchWebEnabled, setSearchWebEnabled] = useState(false)
-  const [selectedChat, setSelectedChat] = useState<{ id: number | string ; name: string } | null>(null);
+  const [selectedChat, setSelectedChat] = useState<{ id: number | string; name: string; thread_id: string | null} | null>(null);
+  const [conversationId, setConversationId] = useState<string>('');
 
-  const handleChatSelect = async (id: number | string | null , name: string | null ) => {
-    if (id && name) {
+  useEffect(() => {
+    const createConversation = async () => {
+      try {
+        const resp = await fetchWithoutAuth('/openai/chat/create-conversation/', {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          setConversationId(data.conversation_id);
+        }
+      } catch (err) {
+        console.error("Erro ao criar nova conversa:", err);
+        toast.error("Erro ao criar nova conversa:");
+      }
+    }
+    createConversation();
+  }, []);
+
+  const handleChatSelect = async (id: number | string | null, name: string | null, thread_id: string | null ) => {
+    if (id && name && thread_id) {
       console.log(`Selected Chat ID: ${id}, Name: ${name}`);
-      setSelectedChat({ id, name });
-      
+      setSelectedChat({ id, name, thread_id });
+
       try {
         const response = await api.get(`/openai/chat/${id}`);
-        console.log(response.data, citations); 
-    
+        console.log(response.data, citations);
+
         const messages = response.data.messages.map((message: ApiMessage & { citations?: string[] }) => ({
           sender: message.is_user ? 'user' : 'ai',
           content: message.content,
           citations: message.citations || []
         }));
-    
+
         setMessages(messages);
-    
+
       } catch (error) {
         console.error("Error fetching conversations:", error);
       }
@@ -63,18 +85,18 @@ const Chat: React.FC = () => {
       setSelectedChat(null);
       setMessages([])
     }
-  
+
   };
 
-  const handleSendMessage = (message: string, sender: 'user'|'ai', isStream: boolean = false) => {
+  const handleSendMessage = (message: string, sender: 'user' | 'ai', isStream: boolean = false) => {
     console.log('----------------------------')
     console.log('onsend:', message, '\n', sender, ' - ', isStream);
     if (!isStream) {
       setIsOverview(false);
-      if (sender === 'user') 
+      if (sender === 'user')
         setMessages(messages => [...messages, { sender, content: message }]);
     } else {
-      console.log('isOverview: ',isOverview, 'isTyping: ', isTyping)
+      console.log('isOverview: ', isOverview, 'isTyping: ', isTyping)
       setMessages(messages => {
         const lastMessage = messages[messages.length - 1];
         if (sender === 'ai' && lastMessage?.sender === 'ai') {
@@ -92,32 +114,33 @@ const Chat: React.FC = () => {
     <Layout>
       <Box
         sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        padding: '2.2vh 3vh',
-        overflow: 'auto',
-        height: '100%',
-        width: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          padding: '2.2vh 3vh',
+          overflow: 'auto',
+          height: '100%',
+          width: '100%',
         }}
-      >      
+      >
         {/* Header */}
-        <ChatHeader 
-          selectedModel={selectedModel} 
-          setSelectedModel={setSelectedModel} 
-          searchWebEnabled={searchWebEnabled} 
-          onChatSelect={handleChatSelect} 
-          selectedChat={selectedChat}  
+        <ChatHeader
+          conversationId={conversationId}
+          selectedModel={selectedModel}
+          setSelectedModel={setSelectedModel}
+          searchWebEnabled={searchWebEnabled}
+          onChatSelect={handleChatSelect}
+          selectedChat={selectedChat}
           setSelectedChat={setSelectedChat}
           saveCleanEnabled={messages.length > 0}
           messages={messages}
           setMessages={setMessages}
         />
-        
+
         <Divider />
 
-        <Box 
+        <Box
           sx={{
-            flex:1,
+            flex: 1,
             position: 'relative',
             overflow: 'hidden',
             display: 'flex',
@@ -126,17 +149,18 @@ const Chat: React.FC = () => {
             height: '100%',
           }}
         >
-          <ChatMessageList 
-            messages={messages} 
-            isTyping={isTyping} 
+          <ChatMessageList
+            messages={messages}
+            isTyping={isTyping}
             isOverview={isOverview}
           />
           {/* Messages Container */}
-          { selectedChat || messages.length != 0 ? (
+          {selectedChat || messages.length != 0 ? (
             <>
-              <ChatInputArea 
-                onSend={handleSendMessage} 
-                selectedModel={selectedModel} 
+              <ChatInputArea
+                conversationId={conversationId}
+                onSend={handleSendMessage}
+                selectedModel={selectedModel}
                 selectedChat={selectedChat}
                 setSelectedChat={setSelectedChat}
                 searchWebEnabled={searchWebEnabled}
@@ -148,9 +172,10 @@ const Chat: React.FC = () => {
               />
             </>
           ) : (
-            <ChatInputArea 
-              onSend={handleSendMessage} 
-              selectedModel={selectedModel} 
+            <ChatInputArea
+              conversationId={conversationId}
+              onSend={handleSendMessage}
+              selectedModel={selectedModel}
               selectedChat={selectedChat}
               setSelectedChat={setSelectedChat}
               searchWebEnabled={searchWebEnabled}

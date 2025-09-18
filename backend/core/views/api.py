@@ -44,6 +44,7 @@ class APIRootView(APIView):
                     "assistant-send-message": request.build_absolute_uri(reverse("openai-chat-assistant-send-message")),
                     "assistant-law-consultant": request.build_absolute_uri(reverse("openai-chat-assistant-law-consultant")),
                     "chat-save": request.build_absolute_uri(reverse("openai-chat-assistant-save-conversation")),
+                    "create-conversation": request.build_absolute_uri(reverse("openai-chat-create-conversation")),
                 },
             }
         })

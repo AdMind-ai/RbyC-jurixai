@@ -1,3 +1,4 @@
+from core.models.assistant_thread_model import AssistantThread
 from rest_framework.views import APIView
 from django.http import StreamingHttpResponse
 from rest_framework.response import Response
@@ -9,9 +10,9 @@ from core.models.openai_chat_models import ChatConversation, ChatMessage
 from core.serializers.openai_chat_serializers import MessageSerializer
 from core.utils.openai_client import client, logger
 import tiktoken
-import json
 import base64
 import mimetypes
+from django.db import transaction
 
 
 class OpenAISendMessageView(APIView):
@@ -25,65 +26,64 @@ class OpenAISendMessageView(APIView):
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        conversation_instance = serializer.validated_data.get('conversation')
         conversation_id = request.data.get('conversation_id')
 
         content = serializer.validated_data.get('content', '')
         file = serializer.validated_data.get('file', None)
         model = request.data.get('model', 'gpt-5')
-        is_user = True
 
-        logger.debug(
-            f"Received data - Content: {content}, Model: {model}, User: {user}, conversation_id: {conversation_id}, file: {file}")
+        # logger.debug(
+        #     f"Received data - Content: {content}, Model: {model}, User: {user}, conversation_id: {conversation_id}, file: {file}")
 
-        model_config_map = {
-            'gpt-5': ('o200k_base', 300000, 100000),
-        }
+        # model_config_map = {
+        #     'gpt-5': ('o200k_base', 300000, 100000),
+        # }
 
-        encoding_name, context_window, max_output_tokens = model_config_map.get(
-            model, ('o200k_base', 120000, 16000))
+        # encoding_name, context_window, max_output_tokens = model_config_map.get(
+        #     model, ('o200k_base', 120000, 16000))
 
-        max_input_tokens = context_window - max_output_tokens
+        # max_input_tokens = context_window - max_output_tokens
 
-        # Get or create a conversation for the user
-        conversation = None
-        if conversation_instance:
-            conversation = ChatConversation.objects.filter(
-                id=conversation_instance.id, user=user).first()
+        with transaction.atomic():
+            assistant_thread = None
 
-        elif conversation_id:
-            conversation, _ = ChatConversation.objects.get_or_create(
-                id=conversation_id,
-                user=user,
-                defaults={"name": "New Chat"}
-            )
-
-        if not conversation:
-            try:
-                newchat_old = ChatConversation.objects.filter(
-                    user=user, name="New Chat").first()
-                if newchat_old:
-                    newchat_old.delete()
-                    logger.debug(
-                        f'Removed old "New Chat" for user {user.id} before creating new one.'
-                    )
-
+            if conversation_id:
+                print(f'Debug 0 {conversation_id}')
+                assistant_thread = AssistantThread.objects.filter(thread_id=conversation_id).first()
+                if not assistant_thread:
+                    # thread_id inválido → criar novo registro
+                    assistant_thread = AssistantThread.objects.create(thread_id=conversation_id, active=True)
+                    print(f"Debug 2: {assistant_thread.thread_id}")
+            else:
+                # cria thread local, id será preenchido depois
+                conversation_openai = client.conversations.create()
+                print(conversation_openai)
+                assistant_thread = AssistantThread.objects.create(thread_id=conversation_openai.id, active=True)
+                print(f"Debug 3: {assistant_thread.thread_id}")
+            
+            # cria ou reaproveita conversa local (ChatConversation)
+            if assistant_thread and assistant_thread.conversation:
+                conversation = assistant_thread.conversation
+                print(f"Debug 4: {assistant_thread.thread_id}")
+            else:
+                # cria nova conversa local
+                user = request.user
+                ChatConversation.objects.filter(user=user, is_new=True).delete()
                 conversation = ChatConversation.objects.create(
-                    user=user, name="New Chat"
+                    user=user,
+                    name="New Chat",
+                    is_new=True
                 )
-                logger.debug(
-                    f"Created new conversation with ID: {conversation.id} ({conversation.name}) for user: {user.id}")
-            except Exception as e:
-                logger.error(
-                    f"Failed to create conversation for user {user.username}: {str(e)}"
-                )
-                raise ValidationError(
-                    "Unable to create a new conversation at this time."
-                )
+                assistant_thread.conversation = conversation
+                assistant_thread.save(update_fields=["conversation"])
+                print(f"Debug 5: {assistant_thread.thread_id}")
 
-        # Gathering messages history
-        messages = [{'role': 'user' if msg.is_user else 'assistant',
-                    'content': msg.content} for msg in conversation.messages.all()]
+        # salva a mensagem do usuário
+        ChatMessage.objects.create(
+            conversation=conversation,
+            content=content,
+            is_user=True
+        )
 
         user_message_content = [] if file else content
 
@@ -107,23 +107,23 @@ class OpenAISendMessageView(APIView):
                 )
 
         # Atualizando o histórico com a mensagem do usuário
-        history_entry = {
-            "role": "user",
-            "content": user_message_content
-        }
-        messages.append(history_entry)
+        # history_entry = {
+        #     "role": "user",
+        #     "content": user_message_content
+        # }
+        # messages.append(history_entry)
 
-        history, current_tokens = manage_history_tokens(
-            messages, content, encoding_name, max_input_tokens)
+        # history, current_tokens = manage_history_tokens(
+        #     messages, content, encoding_name, max_input_tokens)
 
-        ChatMessage.objects.create(
-            conversation=conversation,
-            content=content,
-            # file=None,
-            # file=file if file else None,
-            # file_url= chat_message.file.url,
-            is_user=True
-        )
+        # ChatMessage.objects.create(
+        #     conversation=conversation,
+        #     content=content,
+        #     file=None,
+        #     file=file if file else None,
+        #     file_url= chat_message.file.url,
+        #     is_user=True
+        # )
         # file_url = chat_message.file.url if chat_message.file else None
         # chat_message.file_url = file_url
         # chat_message.save()
@@ -131,40 +131,29 @@ class OpenAISendMessageView(APIView):
         def event_stream():
             full_ai_message = ""
             try:
-                if file:
-                    response = client.responses.create(
-                        model=model,
-                        conversation=conversation_id,
-                        input=[
-                            {
-                                "role": "user",
-                                "content": user_message_content
-                            },
-                        ],
-                        stream=True
-                    )
-                    # print(response.output_text, '\n')
-                    for event in response:
-                        if getattr(event, 'type', None) == 'response.output_text.delta':
-                            delta_content = event.delta
-                            if delta_content:
-                                full_ai_message += delta_content
-                                print(delta_content, end='')
-                                yield delta_content
-
-                else:
-                    response = client.chat.completions.create(
-                        model=model,
-                        messages=history,
-                        stream=True
-                    )
-
-                    for chunk in response:
-                        content = chunk.choices[0].delta.content
-                        if chunk.choices[0].delta.content:
-                            full_ai_message += content
-                            print(chunk.choices[0].delta.content, end='')
-                            yield content
+                print(f"Debug 6: {assistant_thread.thread_id}")
+                response = client.responses.create(
+                    model=model,
+                    input=[
+                        {
+                            "role": "user",
+                            "content": user_message_content
+                        },
+                    ],
+                    conversation=conversation_id,
+                    store=True,
+                    stream=True,
+                    include=["reasoning.encrypted_content", "web_search_call.action.sources"],
+                    timeout=600,
+                )
+                # print(response.output_text, '\n')
+                for event in response:
+                    if getattr(event, 'type', None) == 'response.output_text.delta':
+                        delta_content = event.delta
+                        if delta_content:
+                            full_ai_message += delta_content
+                            print(delta_content, end='')
+                            yield delta_content
 
             except Exception as e:
                 logger.error("Erro ao fazer streaming: %s", e)

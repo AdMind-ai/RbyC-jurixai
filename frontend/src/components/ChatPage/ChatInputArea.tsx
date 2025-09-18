@@ -15,14 +15,15 @@ import { toast } from "react-toastify";
 interface ChatInputAreaProps {
   onSend: (content: string, sender: 'user' | 'ai', isStream?: boolean) => void;
   selectedModel: string;
-  selectedChat: { id: number | string; name: string } | null;
-  setSelectedChat: React.Dispatch<React.SetStateAction<{ id: number | string; name: string } | null>>;
+  selectedChat: { id: number | string; name: string; thread_id: string | null} | null;
+  setSelectedChat: React.Dispatch<React.SetStateAction<{ id: number | string; name: string; thread_id: string | null} | null>>;
   searchWebEnabled: boolean;
   setSearchWebEnabled: (enabled: boolean) => void;
   isEmptyMessages: boolean;
   setCitations?: React.Dispatch<React.SetStateAction<string[]>>;
   setIsOverview: React.Dispatch<React.SetStateAction<boolean>>;
   setIsTyping: React.Dispatch<React.SetStateAction<boolean>>;
+  conversationId: string
 }
 
 const ChatInputArea: React.FC<ChatInputAreaProps> = ({
@@ -34,7 +35,8 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   isEmptyMessages,
   setCitations,
   setIsOverview,
-  setIsTyping
+  setIsTyping,
+  conversationId
 }) => {
   const theme = useTheme();
   const { setAwaitingDeepResponse } = useGlobal();
@@ -129,7 +131,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       });
       const resData = await response.json();
       if (response.ok && resData.conversation_id && resData.waiting_message_id) {
-        setSelectedChat({ id: resData.conversation_id, name: resData.conversation_name });
+        setSelectedChat({ id: resData.conversation_id, name: resData.conversation_name, thread_id: null });
         onSend("Starting Deep Research...", 'ai', true);
         setLoading(true);
         setAwaitingDeepResponse({
@@ -192,9 +194,14 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
       }
 
       if (selectedChat) {
-        formData.append('conversation_id', selectedChat.id.toString());
+        formData.append('conversation_id', selectedChat.thread_id as string);
+      }
+      else if (conversationId) {
+        console.log(conversationId)
+        formData.append('conversation_id', conversationId);
       }
 
+    
       const response = await fetchWithAuth('/openai/chat/send-message/', {
         method: 'POST',
         body: formData
