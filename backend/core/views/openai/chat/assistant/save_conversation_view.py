@@ -17,6 +17,8 @@ class SaveConversationView(APIView):
     def post(self, request):
         thread_id = request.data.get("thread_id")
         new_name = request.data.get("name")
+        is_chat_rag = request.data.get("is_chat_rag")
+
         if not thread_id or not new_name:
             return Response({"error": "thread_id and name required"}, status=status.HTTP_400_BAD_REQUEST)
         try:
@@ -27,6 +29,8 @@ class SaveConversationView(APIView):
 
             conversation.is_new = False
             conversation.name = new_name
+            if is_chat_rag:
+                conversation.is_chat_rag = True
             conversation.save()
             return Response({"success": True}, status=200)
         except AssistantThread.DoesNotExist:

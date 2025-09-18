@@ -196,6 +196,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
     const fetchChatConversations = async () => {
       try {
         const response = await api.get('/openai/chat/');
+        console.log(response)
         const chatList: Chat[] = response.data.map((conversation: ApiChatResponse) => ({
           id: conversation.id,
           name: conversation.name,
