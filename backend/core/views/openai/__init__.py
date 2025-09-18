@@ -7,5 +7,6 @@ __all__ = [
     'OpenAISendAssistantMessageView',
     'AssistantStreamingView',
     'ThreadsView',
-    'SaveConversationView'
+    'SaveConversationView',
+    'ConversationForChatView',
 ]

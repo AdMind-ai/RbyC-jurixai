@@ -23,6 +23,7 @@ interface ChatInputAreaProps {
   setCitations?: React.Dispatch<React.SetStateAction<string[]>>;
   setIsOverview: React.Dispatch<React.SetStateAction<boolean>>;
   setIsTyping: React.Dispatch<React.SetStateAction<boolean>>;
+  conversationId: string
 }
 
 const ChatInputArea: React.FC<ChatInputAreaProps> = ({
@@ -34,7 +35,8 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   isEmptyMessages,
   setCitations,
   setIsOverview,
-  setIsTyping
+  setIsTyping,
+  conversationId
 }) => {
   const theme = useTheme();
   const { setAwaitingDeepResponse } = useGlobal();
@@ -191,8 +193,9 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         formData.append('file', file);
       }
 
-      if (selectedChat) {
-        formData.append('conversation_id', selectedChat.id.toString());
+      if (conversationId) {
+        console.log(conversationId)
+        formData.append('conversation_id', conversationId);
       }
 
       const response = await fetchWithAuth('/openai/chat/send-message/', {

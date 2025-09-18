@@ -84,3 +84,20 @@ class OpenAIConversationViewSet(viewsets.ModelViewSet):
         serializer.save()
 
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+from openai import OpenAI
+from django.conf import settings
+client = OpenAI(api_key=settings.OPENAI_KEY)
+
+class ConversationForChatView(APIView):
+    
+    permission_classes = [permissions.AllowAny]
+    """ View que cria uma conversa para o chat """
+    
+    def post(self, request, *args, **kwargs):
+        # Cria uma conversa vazia
+        conversation = client.conversations.create()
+
+        return Response({
+            "conversation_id": conversation.id
+        }, status=201)

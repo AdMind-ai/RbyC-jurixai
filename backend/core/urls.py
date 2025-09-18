@@ -13,6 +13,8 @@ urlpatterns = [
     # Chat
     path('openai/chat/send-message/', OpenAISendMessageView.as_view(),
          name='openai-chat-send-message'),
+    path('openai/chat/create-conversation/', ConversationForChatView.as_view(),
+         name='openai-chat-create-conversation'),
     # QuickDoc
     path('extract-content/file/', ExtractContentView.as_view(),
          name='extract-file-content'),
