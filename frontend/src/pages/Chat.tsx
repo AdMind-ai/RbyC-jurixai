@@ -39,7 +39,7 @@ const Chat: React.FC = () => {
   const [isOverview, setIsOverview] = useState(false);
   const [citations, setCitations] = useState<string[]>([])
   const [searchWebEnabled, setSearchWebEnabled] = useState(false)
-  const [selectedChat, setSelectedChat] = useState<{ id: number | string; name: string } | null>(null);
+  const [selectedChat, setSelectedChat] = useState<{ id: number | string; name: string; thread_id: string | null} | null>(null);
   const [conversationId, setConversationId] = useState<string>('');
 
   useEffect(() => {
@@ -61,10 +61,10 @@ const Chat: React.FC = () => {
     createConversation();
   }, []);
 
-  const handleChatSelect = async (id: number | string | null, name: string | null) => {
-    if (id && name) {
+  const handleChatSelect = async (id: number | string | null, name: string | null, thread_id: string | null ) => {
+    if (id && name && thread_id) {
       console.log(`Selected Chat ID: ${id}, Name: ${name}`);
-      setSelectedChat({ id, name });
+      setSelectedChat({ id, name, thread_id });
 
       try {
         const response = await api.get(`/openai/chat/${id}`);
@@ -124,6 +124,7 @@ const Chat: React.FC = () => {
       >
         {/* Header */}
         <ChatHeader
+          conversationId={conversationId}
           selectedModel={selectedModel}
           setSelectedModel={setSelectedModel}
           searchWebEnabled={searchWebEnabled}

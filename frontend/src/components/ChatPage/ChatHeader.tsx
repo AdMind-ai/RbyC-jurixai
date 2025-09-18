@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom';
 import SimpleDropdown from '../dropdowns/SimpleDropdown'
 import SaveCleanButtons from '../buttons/SaveCleanButtons'
@@ -27,8 +27,9 @@ interface Message {
 }
 
 interface Chat {
-  id: number | string; 
+  id: number | string;
   name: string;
+  thread_id: string;
 }
 
 interface ApiMessage {
@@ -42,6 +43,7 @@ interface ApiMessage {
 
 interface ApiChatResponse {
   id: string;
+  thread_id: string;
   name: string;
   user: number;
   created_at: string;
@@ -51,17 +53,18 @@ interface ApiChatResponse {
 interface ChatHeaderProps {
   selectedModel: string;
   setSelectedModel: (model: string) => void;
-  searchWebEnabled : boolean;
-  onChatSelect: (id: number | string | null , name: string | null) => void;
+  searchWebEnabled: boolean;
+  onChatSelect: (id: number | string | null, name: string | null, thread_id: string | null) => void;
   selectedChat: { id: number | string; name: string } | null;
-  setSelectedChat: React.Dispatch<React.SetStateAction<{ id: number | string; name: string } | null>>;
-  saveCleanEnabled : boolean;
+  setSelectedChat: React.Dispatch<React.SetStateAction<{ id: number | string; name: string; thread_id: string | null } | null>>;
+  saveCleanEnabled: boolean;
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
+  conversationId: string;
 }
 
-const modelDescriptions: Record<string, { name: string, desc: string }> = { 
-  "GPT-5": { 
+const modelDescriptions: Record<string, { name: string, desc: string }> = {
+  "GPT-5": {
     name: "GPT-5:",
     desc: "GPT-5 is the leading model for encoding, reasoning, and agency tasks across all domains."
   }
@@ -71,100 +74,83 @@ export const modelMapping: Record<string, string> = {
   "GPT-5": "gpt-5"
 };
 
-const ChatHeader: React.FC<ChatHeaderProps> = ({ 
-  selectedModel, 
-  setSelectedModel, 
-  searchWebEnabled, 
+const ChatHeader: React.FC<ChatHeaderProps> = ({
+  selectedModel,
+  setSelectedModel,
+  searchWebEnabled,
   onChatSelect,
   selectedChat,
-  setSelectedChat, 
+  setSelectedChat,
   saveCleanEnabled,
-  messages,
   setMessages,
+  conversationId
 }) => {
   const navigate = useNavigate();
   const theme = useTheme()
-  const [chats, setChats] = useState<{ id: number | string; name: string; }[]>([]);
+  const [chats, setChats] = useState<{ id: number | string; name: string; thread_id: string }[]>([]);
   // const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
   const [openSaveModal, setOpenSaveModal] = useState(false);
   const [openDeleteModal, setOpenDeleteModal] = useState(false);
   const [newChatName, setNewChatName] = useState('');
   const [hoverModel, setHoverModel] = useState<string | null>(null);
-  
+
   const handleSaveClick = () => {
     setOpenSaveModal(true);
   };
 
-  const handleDeleteClick = (chat: { id: string | number; name: string; } | null) => {
+  const handleDeleteClick = (chat: { id: string | number; name: string; thread_id: string } | null) => {
     setSelectedChat(chat);
     setOpenDeleteModal(true);
   };
 
-  const handleSaveChat = async () => {
-    if (!newChatName.trim()) {
-      toast.warning("Il nome del chat è obbligatorio.");
+  const fetchChatConversations = async () => {
+    try {
+      const response = await api.get<ApiChatResponse[]>("/openai/chat/?only_saved=true");
+      console.log(response)
+      const chatList: Chat[] = response.data.map((conversation) => ({
+        id: conversation.id,
+        name: conversation.name,
+        thread_id: conversation.thread_id
+      }));
+      setChats(chatList);
+      return chatList;
+    } catch (error) {
+      console.error("Error fetching conversations:", error);
+      return [];
+    }
+  };
+
+  const handleSaveChat = async (chatName: string) => {
+    if (!conversationId) {
+      toast.error("Thread non inizializzata!");
       return;
     }
-    if (newChatName.trim().toLowerCase() === "new chat") {
-      toast.warning('Non puoi usare "New Chat" come nome di chat.');
+    if (!chatName.trim() || chats.some((chat) => chat.name === chatName)) {
+      alert("Nome non valido o già esistente. Scegli un altro nome.");
       return;
     }
-    if (chats.some(chat => chat.name === newChatName.trim())) {
-      toast.warning("Il nome del chat esiste già. Scegline un altro.");
-      return;
-    }
-  
-    if (selectedChat) {
-      console.log("=====>",selectedChat)
-      const oldChat = selectedChat
-      const newChat = { id: selectedChat.id, name: newChatName };
-      
-      try {
-        await api.put(`/openai/chat/${selectedChat.id}/`, {
-          name: newChatName,
-        });
-        
-        setChats(chats.map(chat => 
-          chat.id === selectedChat.id ? newChat : chat
-        ));
-        setSelectedChat(newChat); 
-        onChatSelect(newChat.id, newChat.name);
-        toast.success(`Chat ${oldChat.name} aggiornato al nome "${newChat.name}"`);
-      } catch (error) {
-        console.error('Erro ao salvar o chat:', error);
+    try {
+      // Salva conversa/renomeia
+      await api.post("/openai/chat/assistant/save-conversation", {
+        thread_id: conversationId,
+        name: chatName
+      });
+      toast.success(`Chat "${chatName}" salvata con successo!`);
+
+      const updatedChats = await fetchChatConversations();
+
+      const updatedChat = updatedChats.find(
+        (c) => (c.thread_id ?? undefined) === conversationId
+      );
+      if (updatedChat) {
+        setSelectedChat(updatedChat);
+        onChatSelect(updatedChat.id, updatedChat.name, updatedChat.thread_id ?? undefined);
       }
-    } else {
-      try {
-        // const messages_test=messages
-        // console.log('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-        // console.log("XXXXXXXXXXXXXXXXXXXXXXXXXXX",messages_test[0],"XXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
-  
-        // Criar a nova conversa
-        const response = await api.post('/openai/chat/', {
-          name: newChatName,
-          messages: messages.map((msg) => ({
-            content: msg.content,
-            is_user: msg.sender === 'user',
-            file: null,  
-          })),
-        });
-        console.log(response)
-  
-        const newChat: Chat = { id: response.data.id, name: response.data.name };
-  
-        setChats([...chats, newChat]);
-  
-        setSelectedChat(newChat);
-        onChatSelect(newChat.id, newChat.name);
-        
-        toast.success(`Nuova chat "${newChatName}" creata con successo.`);
-      } catch (error) {
-        console.error('Erro ao criar nova chat:', error);
-      }
+      setOpenSaveModal(false);
+    } catch (e) {
+      toast.error("Errore nel salvataggio della chat.");
+      console.error(e);
     }
-  
-    setOpenSaveModal(false);
-    setNewChatName('');
   };
 
   const handleDeleteChat = async () => {
@@ -175,7 +161,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
         setChats(chats.filter(chat => chat.id !== selectedChat.id));
         setOpenDeleteModal(false);
         setSelectedChat(null);
-        onChatSelect(null, null);
+        onChatSelect(null, null, null);
       } catch (error) {
         console.error('Erro ao deletar o chat:', error);
       }
@@ -187,30 +173,25 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
   const handleDropdownSelect = (name: string) => {
     const chat = chats.find(chat => chat.name === name);
     if (chat && onChatSelect) {
-      onChatSelect(chat.id, chat.name);
-      setSelectedChat({ id: chat.id, name: chat.name });
+      onChatSelect(chat.id, chat.name, chat.thread_id);
+      setSelectedChat({ id: chat.id, name: chat.name, thread_id: chat.thread_id});
     }
   };
 
   useEffect(() => {
-    const fetchChatConversations = async () => {
+    const handleFetchChatConversations = async () => {
       try {
-        const response = await api.get('/openai/chat/');
-        console.log(response)
-        const chatList: Chat[] = response.data.map((conversation: ApiChatResponse) => ({
-          id: conversation.id,
-          name: conversation.name,
-        }));
+        const chatList = await fetchChatConversations();
 
-        setChats(chatList);
-
-        // Filtrar chats com o nome 'New Chat'
-        const chatsToRemove = chatList.filter((chat) => chat.name.trim().toLowerCase() === "new chat");
-
-        // Remover esses chats do backend
-        for (const chat of chatsToRemove) {
-          await removeChat(chat.id);
+        if(chatList){
+          const chatsToRemove = chatList.filter((chat) => chat.name.trim().toLowerCase() === "new chat");
+  
+          // Remover esses chats do backend
+          for (const chat of chatsToRemove) {
+            await removeChat(chat.id);
+          }
         }
+        // Filtrar chats com o nome 'New Chat'
 
       } catch (error) {
         console.error('Error fetching conversations:', error);
@@ -224,22 +205,22 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
         console.log(`Chat ${chatId} excluído.`);
         setChats(prevChats => prevChats.filter(chat => chat.id !== chatId));
         setSelectedChat(null);
-        onChatSelect(null, null);
+        onChatSelect(null, null, null);
       } else {
         console.error(`Erro ao excluir chat ${chatId}:`, response.statusText);
       }
-        
+
     };
 
-    fetchChatConversations();
-  }, []); 
+    handleFetchChatConversations();
+  }, []);
 
-  return(
+  return (
     <Box
       sx={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          marginBottom: '0.2vw',
+        display: 'flex',
+        justifyContent: 'space-between',
+        marginBottom: '0.2vw',
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
@@ -260,22 +241,22 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
             value={selectedModel}
             exclusive
             onChange={(_, value) => {
-              if (!searchWebEnabled && value) setSelectedModel(value); 
+              if (!searchWebEnabled && value) setSelectedModel(value);
             }}
             aria-label="model selection"
             sx={{ gap: '4px', maxHeight: '4.1vh' }}
           >
             {Object.keys(modelMapping).map(model => (
               <Box key={model} sx={{ position: 'relative', display: 'inline-block' }}>
-                <ToggleButton 
-                  key={model} 
+                <ToggleButton
+                  key={model}
                   value={model}
                   onMouseEnter={() => setHoverModel(model)}
                   onMouseLeave={() => setHoverModel(null)}
                   sx={{
-                    mb:1,
+                    mb: 1,
                     textTransform: 'none',
-                    fontSize:'14px',
+                    fontSize: '14px',
                     maxHeight: '4.1vh',
                     fontWeight: 'regular',
                     color: theme.palette.text.primary,
@@ -330,62 +311,62 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
       </Box>
 
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-      {saveCleanEnabled ? (
-        <SaveCleanButtons
-          onSave={handleSaveClick}
-          onClean={() => {
-            setSelectedChat(null);
-            onChatSelect(null, null);
-            setMessages([]);
-            navigate('/chat-assistant');
-          }}
-        />
-      ) : null}
-        <SimpleDropdown 
+        {saveCleanEnabled ? (
+          <SaveCleanButtons
+            onSave={handleSaveClick}
+            onClean={() => {
+              setSelectedChat(null);
+              onChatSelect(null, null, null);
+              setMessages([]);
+              navigate('/chat-assistant');
+            }}
+          />
+        ) : null}
+        <SimpleDropdown
           // onClick={() => handleDeleteClick(selectedChat)}
-          title="Chat salvate" 
+          title="Chat salvate"
           options={chats.slice().reverse().map(chat => chat.name)}
-          onSelect={handleDropdownSelect} 
+          onSelect={handleDropdownSelect}
           selectedValue={selectedChat ? selectedChat.name : ''}
           isDeleteItems
           onDeleteItem={(name) => {
-              const chat = chats.find(c => c.name === name);
-              if (chat) handleDeleteClick(chat);
+            const chat = chats.find(c => c.name === name);
+            if (chat) handleDeleteClick(chat);
           }}
         />
       </Box>
 
       {/* Modal para salvar chat */}
       <Dialog open={openSaveModal} onClose={() => setOpenSaveModal(false)}>
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center', fontWeight: 'bold', justifyContent: 'center', mt:2, fontSize:'26px', borderRadius: '16px' }}>
-          <Box sx={{display: 'flex', alignItems: 'center'}}>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', fontWeight: 'bold', justifyContent: 'center', mt: 2, fontSize: '26px', borderRadius: '16px' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
             Salva Chat
           </Box>
           <IconButton
             onClick={() => setOpenSaveModal(false)}
-            sx={{ position: 'absolute', top:10, right:10 }}
+            sx={{ position: 'absolute', top: 10, right: 10 }}
           >
-            <CloseIcon sx={{color:'#000'}} />
+            <CloseIcon sx={{ color: '#000' }} />
           </IconButton>
         </DialogTitle>
         <DialogContent sx={{ borderRadius: '16px' }}>
-          <DialogContentText sx={{ color: 'black', textAlign: 'center', fontSize:'20px', my:0.5, mx:1 }}>
+          <DialogContentText sx={{ color: 'black', textAlign: 'center', fontSize: '20px', my: 0.5, mx: 1 }}>
             Scegli un nome per il chat:
           </DialogContentText>
           <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
-            <input 
-              type="text" 
-              value={newChatName} 
-              onChange={(e) => setNewChatName(e.target.value)} 
+            <input
+              type="text"
+              value={newChatName}
+              onChange={(e) => setNewChatName(e.target.value)}
               style={{ width: '80%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
             />
           </Box>
         </DialogContent>
-        <DialogActions sx={{justifyContent: 'center', pb:2.5, mb:2, borderRadius: '16px'}}>
-          <Button 
-            variant="contained" 
-            onClick={handleSaveChat} 
-            sx={{ py:2.6, borderRadius: '10px' }}
+        <DialogActions sx={{ justifyContent: 'center', pb: 2.5, mb: 2, borderRadius: '16px' }}>
+          <Button
+            variant="contained"
+            onClick={() => handleSaveChat(newChatName)}
+            sx={{ py: 2.6, borderRadius: '10px' }}
           >
             Salva
           </Button>
@@ -394,28 +375,28 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
 
       {/* Modal para deletar chat */}
       <Dialog open={openDeleteModal} onClose={() => setOpenDeleteModal(false)}>
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center', fontWeight: 'bold', justifyContent: 'center', mt:2, fontSize:'26px', borderRadius: '16px' }}>
-          <Box sx={{display: 'flex', alignItems: 'center'}}>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', fontWeight: 'bold', justifyContent: 'center', mt: 2, fontSize: '26px', borderRadius: '16px' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
             Conferma Eliminazione
           </Box>
           <IconButton
             onClick={() => setOpenDeleteModal(false)}
-            sx={{ position: 'absolute', top:10, right:10 }}
+            sx={{ position: 'absolute', top: 10, right: 10 }}
           >
-            <CloseIcon sx={{color:'#000'}} />
+            <CloseIcon sx={{ color: '#000' }} />
           </IconButton>
         </DialogTitle>
         <DialogContent sx={{ borderRadius: '16px' }}>
-          <DialogContentText sx={{ color: 'black', textAlign: 'center', fontSize:'20px', my:0.5, mx:1 }}>
+          <DialogContentText sx={{ color: 'black', textAlign: 'center', fontSize: '20px', my: 0.5, mx: 1 }}>
             Vuoi davvero eliminare il chat {selectedChat?.name}?<br />
             Una volta eliminato, non sarà possibile recuperarlo.
           </DialogContentText>
         </DialogContent>
-        <DialogActions sx={{justifyContent: 'center', pb:2.5, mb:2, borderRadius: '16px'}}>
-          <Button 
-            variant="contained" 
-            onClick={handleDeleteChat} 
-            sx={{ bgcolor: '#d32f2f', color: '#fff', py:2.6, borderRadius: '10px', '&:hover': {bgcolor: '#c62828'} }}
+        <DialogActions sx={{ justifyContent: 'center', pb: 2.5, mb: 2, borderRadius: '16px' }}>
+          <Button
+            variant="contained"
+            onClick={handleDeleteChat}
+            sx={{ bgcolor: '#d32f2f', color: '#fff', py: 2.6, borderRadius: '10px', '&:hover': { bgcolor: '#c62828' } }}
           >
             Elimina
           </Button>
