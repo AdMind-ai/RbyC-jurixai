@@ -183,7 +183,6 @@ class AssistantStreamingView(APIView):
             full_ai_message = ""
 
             with client.responses.create(
-                model="gpt-4o-mini",
                 prompt = { "id": settings.OPENAI_PROMPT_ID_RBYC },
                 input=[
                     {
@@ -198,7 +197,6 @@ class AssistantStreamingView(APIView):
                         "vector_store_ids": [settings.VECTOR_STORE_ID_RBYC]
                     }
                 ],
-                store=True,
                 stream=True,
                 include=["web_search_call.action.sources"],
                 timeout=600,
