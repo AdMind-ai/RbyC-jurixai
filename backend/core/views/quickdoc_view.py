@@ -4,7 +4,7 @@ from rest_framework import status
 from django.conf import settings
 from django.utils import timezone
 from core.models.quickdoc_model import GeneratedDocument
-from core.utils.quickdoc import generate_doc_with_assistant, create_pdf_with_header_footer, create_word_with_header_footer, upload_to_blob_storage
+from core.utils.quickdoc import generate_doc_with_assistant, create_pdf_with_template, create_pdf_for_verbale_cda, create_word_with_template, create_word_for_verbale_cda, upload_to_blob_storage
 
 class QuickDocGenerateView(APIView):
 
@@ -25,10 +25,21 @@ class QuickDocGenerateView(APIView):
         # - word_path = f"{settings.MEDIA_ROOT}/documents/{nome_arquivo}.docx"
             
         # Gerar PDF
-        pdf_data = create_pdf_with_header_footer(
+        if format.lower() == "verbale cda":
+            pdf_data = create_pdf_for_verbale_cda(
             generated_text, title)
-        word_data = create_word_with_header_footer(
+        else: 
+            pdf_data = create_pdf_with_template(
             generated_text, title)
+        
+        # Gerar Word
+        if format.lower() == "verbale cda":    
+            word_data = create_word_for_verbale_cda(
+                generated_text, title)
+        else: 
+            word_data = create_word_with_template(
+                generated_text, title)
+            
         
         # Enviar PDF ao Blob Storage
         pdf_url = upload_to_blob_storage(pdf_data.getvalue(), f"quickdoc/{nome_arquivo}.pdf")
