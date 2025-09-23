@@ -4,7 +4,7 @@ import Home from './pages/Home'
 import Login from './pages/Login'
 import QuickDoc from './pages/QuickDoc'
 import DocSearch from './pages/DocSearch'
-// import CheckCompliance from './pages/CheckCompliance'
+import CheckCompliance from './pages/CheckCompliance'
 import DocTranslator from './pages/DocTranslator'
 // import Usage from './pages/Usage'
 import TeamManagement from './pages/TeamManagement'
@@ -25,7 +25,7 @@ const AppRoutes = () => {
             <Route path="/" element={<Home />} />
             <Route path="/quick-doc" element={<QuickDoc />} />
             <Route path="/doc-search" element={<DocSearch />} />
-            {/* <Route path="/check-compliance" element={<CheckCompliance />} /> */}
+            <Route path="/check-compliance" element={<CheckCompliance />} />
             <Route path="/doc-translator" element={<DocTranslator />} />
             <Route path="/chat-assistant" element={<Chat />} />
             {/* <Route path="/usage" element={<Usage />} /> */}

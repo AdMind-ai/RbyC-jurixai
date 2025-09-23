@@ -1,8 +1,11 @@
+from pathlib import Path
 from openai import OpenAI
 import os
 from datetime import datetime
 import json
 import logging
+from django.conf import settings
+from core.utils.quickdoc.upload_to_blob_storage import generate_sas_token
 
 logging.basicConfig(level=logging.INFO)
 
@@ -10,7 +13,7 @@ def generate_doc_with_assistant(format, language, instructions):
     client = OpenAI(api_key=os.getenv("OPENAI_KEY"))
 
     # Prompt ID já salvo no Playground
-    prompt_id = "pmpt_68caada8d3208197babfa45be05ee86809583cf9bed523b8"  
+    prompt_id = "pmpt_68caada8d3208197babfa45be05ee86809583cf9bed523b8"
 
     # Reforça no input do usuário
     user_prompt = (
@@ -21,23 +24,38 @@ def generate_doc_with_assistant(format, language, instructions):
     )
     
     print(f"User prompt: {user_prompt}")
+    
+    input = [
+        {
+            "role": "user",
+            "content": [{"type": "input_text", "text": user_prompt}]
+        }
+    ]
+    
+    if format.lower() == "verbale cda":
+
+        sas_token = generate_sas_token("quickdoc/templates/template_verbale_Cda.pdf")
+
+        input = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_file",
+                        "file_url": f"https://jurixaistorage.blob.core.windows.net/jurixai-rbyc-storage/quickdoc/templates/template_verbale_Cda.pdf?{sas_token}",
+                    },
+                    {"type": "input_text", "text": user_prompt}
+                ]
+            }
+        ]
 
     # Usa Responses API com GPT-5 + prompt_id
     response = client.responses.create(
         model="gpt-5",
         prompt = { "id": prompt_id },
-        input=[
-            {
-                "role": "user",
-                "content": [{"type": "input_text", "text": user_prompt}]
-            }
-        ],
+        input=input,
         store=True,
-        include=[
-            "reasoning.encrypted_content",
-            "web_search_call.action.sources"
-        ],
-        timeout=600
+        timeout=900
     )
 
     response_content = response.output_text
