@@ -1,4 +1,3 @@
-import base64
 from pathlib import Path
 from openai import OpenAI
 import os
@@ -6,12 +5,9 @@ from datetime import datetime
 import json
 import logging
 from django.conf import settings
+from core.utils.quickdoc.upload_to_blob_storage import generate_sas_token
 
 logging.basicConfig(level=logging.INFO)
-
-def encode_image(image_path):
-    with open(image_path, "rb") as image_file:
-        return base64.b64encode(image_file.read()).decode("utf-8")
 
 def generate_doc_with_assistant(format, language, instructions):
     client = OpenAI(api_key=os.getenv("OPENAI_KEY"))
@@ -37,14 +33,8 @@ def generate_doc_with_assistant(format, language, instructions):
     ]
     
     if format.lower() == "verbale cda":
-        # caminho do documento modelo
-        model_path = Path(settings.STATIC_ROOT) / "quickdoc" / "Replica_SIM_prototipo_verbale.pdf"
 
-        # converte para base64
-        base64_string = encode_image(model_path)
-
-        # nome do arquivo (pode extrair direto do Path)
-        file_name = model_path.stem
+        sas_token = generate_sas_token("quickdoc/templates/template_verbale_Cda.pdf")
 
         input = [
             {
@@ -52,8 +42,7 @@ def generate_doc_with_assistant(format, language, instructions):
                 "content": [
                     {
                         "type": "input_file",
-                        "filename": f"{file_name}{model_path.suffix}",
-                        "file_data": f"data:application/pdf;base64,{base64_string}"
+                        "file_url": f"https://jurixaistorage.blob.core.windows.net/jurixai-rbyc-storage/quickdoc/templates/template_verbale_Cda.pdf?{sas_token}",
                     },
                     {"type": "input_text", "text": user_prompt}
                 ]
@@ -66,11 +55,7 @@ def generate_doc_with_assistant(format, language, instructions):
         prompt = { "id": prompt_id },
         input=input,
         store=True,
-        include=[
-            "reasoning.encrypted_content",
-            "web_search_call.action.sources"
-        ],
-        timeout=600
+        timeout=900
     )
 
     response_content = response.output_text
