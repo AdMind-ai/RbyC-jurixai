@@ -6,7 +6,7 @@ import {
 } from '@mui/material'
 import Layout from '../layouts/Layout'
 
-import Traduttore from '../components/DocTranslatorPage/Traduttore'
+// import Traduttore from '../components/DocTranslatorPage/Traduttore'
 
 const Earnings: React.FC = () => {
 
@@ -43,7 +43,7 @@ const Earnings: React.FC = () => {
 
           
           {/* Content */}
-          <Traduttore />
+          {/* <Traduttore /> */}
 
         </Box>
       </Box>
