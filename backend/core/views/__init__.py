@@ -11,6 +11,7 @@ from .openai import (OpenAIConversationViewSet,
 
 from .extract_content_view import ExtractContentView
 from .quickdoc_view import QuickDocGenerateView
+from .check_compliance_view import CheckComplianceView
 
 __all__ = [
     'DeeplTranslateFileView',
@@ -23,5 +24,6 @@ __all__ = [
     'ThreadsView',
     'SaveConversationView',
     'ConversationForChatView',
+    'CheckComplianceView',
     # 'AssistantLawConsultantView'
 ]

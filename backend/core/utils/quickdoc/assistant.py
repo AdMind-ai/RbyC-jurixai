@@ -13,7 +13,7 @@ def generate_doc_with_assistant(format, language, instructions):
     client = OpenAI(api_key=os.getenv("OPENAI_KEY"))
 
     # Prompt ID já salvo no Playground
-    prompt_id = "pmpt_68caada8d3208197babfa45be05ee86809583cf9bed523b8"
+    prompt_id = settings.OPENAI_PROMPT_ID_QUICKDOC
 
     # Reforça no input do usuário
     user_prompt = (

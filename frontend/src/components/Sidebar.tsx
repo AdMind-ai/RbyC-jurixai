@@ -46,8 +46,7 @@ const menuItems = [
     title: 'Check compliance',
     path: '/check-compliance',
     icon: ComplianceIcon,
-    activeIcon: ComplianceIconActive,
-    disabled: true,
+    activeIcon: ComplianceIconActive
   },
   // {
   //   title: 'Traduttore documenti',
@@ -103,7 +102,7 @@ const Sidebar: React.FC = () => {
 
 
   const handleMenuClick = (item: typeof menuItems[0]) => {
-    if (item.disabled) return;
+    // if (item.disabled) return;
 
     setActivePath(item.path)
     navigate(item.path)
@@ -187,18 +186,16 @@ const Sidebar: React.FC = () => {
                     alignItems: 'center',
                     width: 'calc(9vw)',
                     height: 'calc(3vw)',
-                    cursor: item.disabled ? 'not-allowed' : 'pointer',
+                    cursor: 'pointer',
                     backgroundColor: isActive
                       ? theme.palette.primary.main
                       : 'transparent',
                     borderRadius: 'calc(0.5vw)',
-                    pointerEvents: item.disabled ? 'none' : 'auto',
+                    pointerEvents: 'auto',
                     '&:hover': {
-                      backgroundColor: item.disabled
-                        ? 'transparent'
-                        : isActive
-                          ? theme.palette.primary.main
-                          : 'rgba(0, 0, 0, 0.1)',
+                      backgroundColor: isActive
+                        ? theme.palette.primary.main
+                        : 'rgba(0, 0, 0, 0.1)',
                       borderRadius: 'calc(0.5vw)',
                     },
                   }}

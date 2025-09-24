@@ -24,8 +24,7 @@ const cards = [
     description:
     '',
     icon: ComplianceIcon,
-    path: '/',
-    disable: true
+    path: '/check-compliance'
   },
   // {
   //   title: 'Traduttore documenti',
@@ -87,7 +86,7 @@ const Home: React.FC = () => {
                 description={card.description}
                 icon={card.icon}
                 path={card.path}
-                isDisabled={card.disable ? card.disable : false}
+                // isDisabled={card.disable ? card.disable : false}
               />
             </Box>
           ))}

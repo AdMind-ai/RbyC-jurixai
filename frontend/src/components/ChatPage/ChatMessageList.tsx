@@ -16,10 +16,11 @@ interface ChatMessageListProps {
   messages: Message[]
   isTyping: boolean
   isOverview: boolean;
+  page?: string;
 }
 
 
-const ChatMessageList: React.FC<ChatMessageListProps> = ({ messages, isTyping, isOverview }) => {
+const ChatMessageList: React.FC<ChatMessageListProps> = ({ messages, isTyping, isOverview, page }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -86,10 +87,11 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({ messages, isTyping, i
   return (
     <Box 
       sx={{ 
-        position: 'absolute', 
+        position: page == 'check-compliance' ? 'relative' : 'absolute', 
         top: 0, bottom: 0, left: 0, right: 0, 
         overflowY: 'auto', 
-        px: '1.1vw', pb: '20vh'
+        px: '1.1vw', 
+        pb: page == 'check-compliance' ? '2vh' : '20vh'
       }}
     >
 
