@@ -81,6 +81,7 @@ const DocCheck = () => {
 
       setIsTyping(false)
     } catch (err) {
+      console.log(err)
       toast.error("Errore durante l'invio del documento o la lettura del flusso")
     } finally {
       setIsLoading(false)
@@ -123,6 +124,7 @@ const DocCheck = () => {
       setIsTyping(false)
       setIsOverview(false)
     } catch (err) {
+      console.log(err)
       toast.error("Errore durante l'invio del messaggio")
       setIsTyping(false)
     }
