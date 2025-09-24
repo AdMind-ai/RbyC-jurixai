@@ -25,6 +25,7 @@ class APIRootView(APIView):
             "company": request.build_absolute_uri(reverse("company-info-adm")),
             "file_extractor": request.build_absolute_uri(reverse("extract-file-content")),
             "quickdoc-generate": request.build_absolute_uri(reverse("quickdoc-generate")),
+            'check-compliance': request.build_absolute_uri(reverse("check-compliance")), 
             "users": {
                 "token_obtain": request.build_absolute_uri(reverse("token_obtain_pair")),
                 "token_refresh": request.build_absolute_uri(reverse("token_refresh")),

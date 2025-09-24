@@ -39,7 +39,6 @@ const CheckCompliance: React.FC = () => {
 
         {/* Main Content */}
         <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'top', width: '100%', height: '100%', paddingTop: '1.5vw' }} >
-
           
           {/* Content */}
           <DocCheck />
