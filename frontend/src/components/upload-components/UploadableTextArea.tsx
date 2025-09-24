@@ -5,6 +5,7 @@ import { toast } from 'react-toastify'
 
 interface UploadableTextAreaProps {
   onFileUpload: (file: File | File[]) => void;
+  onClearFile: () => void;
   documentPlaceHolder: string;
 }
 
@@ -21,7 +22,7 @@ const ACCEPTED_FILE_EXTENSIONS = [
 //   '.txt', '.pdf', '.doc', '.docx', '.odt', '.rtf', '.html', '.md', '.xls', '.xlsx'
 // ];
 
-const UploadableTextArea: React.FC<UploadableTextAreaProps> = ({ onFileUpload, documentPlaceHolder='Carica un file o trascinalo qui' }) => {
+const UploadableTextArea: React.FC<UploadableTextAreaProps> = ({ onFileUpload, onClearFile, documentPlaceHolder='Carica un file o trascinalo qui' }) => {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [dragOver, setDragOver] = useState<boolean>(false);
 
@@ -80,6 +81,7 @@ const UploadableTextArea: React.FC<UploadableTextAreaProps> = ({ onFileUpload, d
 
   const handleDeleteDocument = (id: number) => {
     setDocuments((prevDocs) => prevDocs.filter((doc) => doc.id !== id));
+    onClearFile()
   };
 
   const openFileSelector = () => {

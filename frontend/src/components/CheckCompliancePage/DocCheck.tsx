@@ -33,6 +33,10 @@ const DocCheck = () => {
     setFile(first)
   }
 
+  const handleClearFileUpload = () => {
+    setFile(null)
+  }
+
   const handleAnalyze = async () => {
     if (!file) return
     setIsLoading(true)
@@ -113,6 +117,7 @@ const DocCheck = () => {
 
             <UploadableTextArea
               onFileUpload={handleFileUpload}
+              onClearFile={handleClearFileUpload}
               documentPlaceHolder='Carica o trascina il tuo file qui'
             />
 
