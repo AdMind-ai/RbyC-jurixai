@@ -11,7 +11,7 @@ interface CardProps {
   isDisabled?: boolean
 }
 
-const HomeCard: React.FC<CardProps> = ({ title, description, icon, path, isDisabled }) => {
+const HomeCard: React.FC<CardProps> = ({ title, description, icon, path, isDisabled = false }) => {
   const theme = useTheme()
   const navigate = useNavigate()
 

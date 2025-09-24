@@ -15,8 +15,11 @@ interface Document {
 }
 
 const ACCEPTED_FILE_EXTENSIONS = [
-  '.txt', '.pdf', '.doc', '.docx', '.odt', '.rtf', '.html', '.md', '.xls', '.xlsx'
+  '.pdf'
 ];
+// const ACCEPTED_FILE_EXTENSIONS = [
+//   '.txt', '.pdf', '.doc', '.docx', '.odt', '.rtf', '.html', '.md', '.xls', '.xlsx'
+// ];
 
 const UploadableTextArea: React.FC<UploadableTextAreaProps> = ({ onFileUpload, documentPlaceHolder='Carica un file o trascinalo qui' }) => {
   const [documents, setDocuments] = useState<Document[]>([]);

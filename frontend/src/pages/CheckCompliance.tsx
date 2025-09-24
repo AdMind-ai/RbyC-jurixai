@@ -17,7 +17,6 @@ const CheckCompliance: React.FC = () => {
           display: 'flex',
           flexDirection: 'column',
           padding: '3vh ',
-          overflow: 'auto',
           height: '100%',
           width: '100%',
         }}
