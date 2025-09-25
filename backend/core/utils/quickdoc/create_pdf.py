@@ -34,20 +34,19 @@ def create_pdf_with_template(text, title):
     first_page = True         # flag
 
     max_width = width - 100
-    lines = text.split("\n")
+    lines = text.splitlines()
 
-    for line in lines:
-        splitted = simpleSplit(line.strip(), "Helvetica", 11, max_width)
+    for idx, line in enumerate(lines):
+        if line.strip() == "":
+            y -= line_height  # pula linha
+            continue
+
+        splitted = simpleSplit(line, "Helvetica", 11, max_width)
         for l in splitted:
             if y < min_y:
                 c.showPage()
                 c.setFont("Helvetica", 11)
-
-                # se não é mais a primeira página, sobe mais o corpo
-                if first_page:
-                    first_page = False
-                y = height - (200 if first_page else 130)
-
+                y = height - 130
             c.drawString(x, y, l)
             y -= line_height
 
