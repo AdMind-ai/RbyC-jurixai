@@ -39,8 +39,9 @@ def create_pdf_with_template(text, title):
     story.append(Paragraph(title[:100], title_style))
     story.append(Spacer(1, 12))
 
-    # corpo do texto (mantém \n\n como parágrafo e \n como quebra de linha)
-    for paragraph in text.split("\n\n"):
+    normalized_text = text.replace("\r\n", "\n").replace("\r", "\n")
+
+    for paragraph in normalized_text.split("\n\n"):
         story.append(Paragraph(paragraph.replace("\n", "<br/>"), body_style))
         story.append(Spacer(1, 12))
 
