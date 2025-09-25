@@ -1,3 +1,5 @@
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
@@ -9,48 +11,41 @@ from io import BytesIO
 from pdfrw import PdfReader, PdfWriter, PageMerge
 
 def create_pdf_with_template(text, title):
-    # -------------------------
-    # fluxo com template
-    # -------------------------
     template_path = Path(settings.STATIC_ROOT) / "quickdoc" / "template_pdf.pdf"
     width, height = A4
 
-    # --------------------------
-    # 1. cria o overlay com texto
-    # --------------------------
+    # buffer do overlay
     overlay_buffer = BytesIO()
-    c = canvas.Canvas(overlay_buffer, pagesize=A4)
+    doc = SimpleDocTemplate(overlay_buffer, pagesize=A4,
+                            leftMargin=60, rightMargin=60,
+                            topMargin=130, bottomMargin=100)
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "TitleStyle",
+        parent=styles["Heading1"],
+        alignment=1,   # centralizado
+        fontSize=14,
+        spaceAfter=20
+    )
+
+    body_style = styles["Normal"]
+    body_style.fontSize = 11
+    body_style.leading = 17  # espaçamento entre linhas
+
+    story = []
 
     # título
-    c.setFont("Helvetica-Bold", 14)
-    c.drawCentredString(width/2, height-130, title[:100])
+    story.append(Paragraph(title[:100], title_style))
+    story.append(Spacer(1, 12))
 
-    # corpo do texto
-    c.setFont("Helvetica", 11)
-    x = 60
-    y = height - 170          # depois do título
-    line_height = 17
-    min_y = 100               # margem inferior
-    first_page = True         # flag
+    # corpo do texto (mantém \n\n como parágrafo e \n como quebra de linha)
+    for paragraph in text.split("\n\n"):
+        story.append(Paragraph(paragraph.replace("\n", "<br/>"), body_style))
+        story.append(Spacer(1, 12))
 
-    max_width = width - 100
-    lines = text.splitlines()
+    doc.build(story)
 
-    for idx, line in enumerate(lines):
-        if line.strip() == "":
-            y -= line_height  # pula linha
-            continue
-
-        splitted = simpleSplit(line, "Helvetica", 11, max_width)
-        for l in splitted:
-            if y < min_y:
-                c.showPage()
-                c.setFont("Helvetica", 11)
-                y = height - 130
-            c.drawString(x, y, l)
-            y -= line_height
-
-    c.save()
     overlay_buffer.seek(0)
 
     # combina overlay + template
@@ -58,7 +53,7 @@ def create_pdf_with_template(text, title):
     writer = PdfWriter()
 
     for overlay_page in overlay_pdf.pages:
-        base = PdfReader(str(template_path)).pages[0]  # sempre usa a primeira página do template
+        base = PdfReader(str(template_path)).pages[0]
         PageMerge(base).add(overlay_page).render()
         writer.addpage(base)
 
