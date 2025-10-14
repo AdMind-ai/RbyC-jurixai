@@ -350,7 +350,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
         </>
       ) : (
         <Box sx={{ position: 'absolute', bottom: 0, left: 0, right: 0, display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
-          <Box sx={{ width: '100%', maxWidth: '86vw', backgroundColor: 'white', borderRadius: '12px', pointerEvents: 'auto' }}>
+          <Box sx={{ width: '100%', maxWidth: '84vw', backgroundColor: 'white', borderRadius: '12px', pointerEvents: 'auto' }}>
             {ChatTextInputBox()}
           </Box>
         </Box>

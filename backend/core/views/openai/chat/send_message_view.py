@@ -143,6 +143,9 @@ class OpenAISendMessageView(APIView):
                     conversation=conversation_id,
                     store=True,
                     stream=True,
+                    reasoning={
+                        "effort": "low"
+                    },
                     include=["reasoning.encrypted_content", "web_search_call.action.sources"],
                     timeout=600,
                 )
