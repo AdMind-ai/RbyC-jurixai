@@ -103,8 +103,7 @@ const QuickDoc: React.FC = () => {
             </Typography>
           </Box>
 
-          {isGenerated && <SaveCleanButtons onClean={() => handleNewExtract()} disguise_save={true}></SaveCleanButtons>}
-
+          {isGenerated && <SaveCleanButtons onClean={handleNewExtract} showSave={false} />}
         </Box>
         <Divider />
 
