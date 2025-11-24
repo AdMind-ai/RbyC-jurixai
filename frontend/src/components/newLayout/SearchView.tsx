@@ -1,91 +1,243 @@
-import React, { useState } from 'react';
-import { Search, ArrowRight, FileText } from 'lucide-react';
+import React from "react";
+import { useNavigate } from "react-router-dom";
+import {
+    Box,
+    Divider,
+    Typography,
+    Button,
+    Dialog,
+    DialogContent,
+    DialogActions,
+    DialogContentText,
+    DialogTitle,
+    IconButton,
+} from "@mui/material";
+import { useDocSearch } from "../../hooks/useDocSearch";
+import DocSearchMessageList from "../../components/DocSearchPage/DocSearchMessageList";
+import DocSearchInputArea from "../../components/DocSearchPage/DocSearchInputArea";
+import LinedDropdown from "../../components/dropdowns/LinedDropdown";
+import SaveCleanButtons from "../../components/buttons/SaveCleanButtons";
+import CloseIcon from "@mui/icons-material/Close";
 
 const SearchView: React.FC = () => {
-  const [query, setQuery] = useState('');
-  const [hasSearched, setHasSearched] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+    const navigate = useNavigate();
+    const {
+        messages,
+        setMessages,
+        isTyping,
+        setIsTyping,
+        selectedChat,
+        setSelectedChat,
+        // selectedCategory,
+        // setSelectedCategory,
+        chats,
+        openSaveModal,
+        setOpenSaveModal,
+        openDeleteModal,
+        setOpenDeleteModal,
+        handleSaveClick,
+        handleDeleteClick,
+        handleSaveChat,
+        handleDeleteChat,
+        handleChatSelect,
+        handleSendMessage,
+        // createThread
+    } = useDocSearch();
 
-  const handleSearch = () => {
-    if (!query) return;
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      setHasSearched(true);
-    }, 800);
-  };
+    return (
+        <Box
+            sx={{
+                display: "flex",
+                flexDirection: "column",
+                padding: "5vh 2vh",
+                overflow: "auto",
+                height: "100%",
+                width: "100%",
+            }}
+        >
+            {/* Header */}
+            <Box
+                sx={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginBottom: "2vh",
+                }}
+            >
+                <Typography variant="h3" sx={{ marginLeft: "1vw" }}>
+                    Ricerca documentale
+                </Typography>
+                <Box
+                    sx={{
+                        display: "flex",
+                        flexDirection: "row",
+                        alignItems: "center",
+                    }}
+                >
+                    {messages.length > 0 ? (
+                        <SaveCleanButtons
+                            onSave={handleSaveClick}
+                            onClean={() => {
+                                setSelectedChat(null);
+                                handleChatSelect(null, null);
+                                setMessages([]);
+                                navigate("/search");
+                            }}
+                        />
+                    ) : null}
+                    <LinedDropdown
+                        title="Ricerche salvate"
+                        options={chats.slice().reverse().map((chat) => chat.name)}
+                        value={selectedChat ? selectedChat.name : ""}
+                        onChange={(value: string | string[]) => {
+                            const name = Array.isArray(value) ? value[0] : value;
+                            const chat = chats.find((c) => c.name === name);
+                            if (chat) {
+                                handleChatSelect(chat.id, chat.name, chat.thread_id ?? undefined);
+                                setSelectedChat(chat);
+                            }
+                        }}
+                        width={200}
+                        isDeleteItems
+                        onDeleteItem={(name) => {
+                            const chat = chats.find((c) => c.name === name);
+                            if (chat) handleDeleteClick(chat);
+                        }}
+                    />
+                </Box>
 
-  const results = [
-    { id: 1, title: 'Contratto Marco Fornitura Servizi 2024', snippet: '...in relazione al <strong>contratto di servizi</strong> stipulato in data odierna, le parti concordano quanto segue...', type: 'PDF', date: '12/01/2024' },
-    { id: 2, title: 'Visura Camerale Ordinaria - Beta S.r.l.', snippet: '...la società denominata <strong>Beta S.r.l.</strong> risulta iscritta al registro delle imprese con numero...', type: 'PDF', date: '10/02/2024' },
-    { id: 3, title: 'Verbale Assemblea Ordinaria del 05/03/2024', snippet: '...il presidente dichiara aperta la seduta e constata la regolare costituzione dell\'<strong>assemblea</strong>...', type: 'DOCX', date: '05/03/2024' },
-  ];
+                {/* Modal para salvar chat */}
+                <Dialog open={openSaveModal} onClose={() => setOpenSaveModal(false)}>
+                    <DialogTitle>Salva Chat</DialogTitle>
+                    <DialogContent>
+                        <DialogContentText>
+                            Scegli un nome per il chat:
+                        </DialogContentText>
+                        <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
+                            <input
+                                type="text"
+                                id="save-chat-input"
+                                // value={newChatName}
+                                // onChange={(e) => setNewChatName(e.target.value)}
+                                style={{
+                                    width: "80%",
+                                    padding: "8px",
+                                    borderRadius: "4px",
+                                    border: "1px solid #ccc",
+                                }}
+                            />
+                        </Box>
+                    </DialogContent>
+                    <DialogActions>
+                        <Button
+                            variant="contained"
+                            onClick={() => {
+                                const chatName = (document.getElementById("save-chat-input") as HTMLInputElement)?.value || "";
+                                handleSaveChat(chatName);
+                            }}
+                        >
+                            Salva
+                        </Button>
+                    </DialogActions>
+                </Dialog>
 
-  return (
-    <div className="w-full h-full p-8 overflow-y-auto animate-fade-in max-w-7xl mx-auto">
-      <div className="flex flex-col h-full">
-        <h2 className="text-2xl font-bold text-slate-800 mb-6 border-b border-slate-300 pb-4 flex justify-between items-center shrink-0">
-          <span>Ricerca documentale</span>
-          {hasSearched && <button onClick={() => { setHasSearched(false); setQuery(''); }} className="text-sm text-[#1e3a8a] font-medium hover:underline">Nuova Ricerca</button>}
-        </h2>
-        {!hasSearched ? (
-          <div className="flex-1 flex flex-col items-center justify-center max-w-3xl mx-auto w-full transition-all">
-            <div className="w-full mb-8 text-center">
-              <h3 className="text-xl font-medium text-slate-600 mb-2">Seleziona una categoria e poi effettua una ricerca tra i documenti</h3>
-            </div>
-            <div className="w-full bg-white p-2 rounded-xl shadow-sm border border-slate-300 flex items-center relative">
-              <div className="p-4">
-                <Search className="text-slate-400" size={24} />
-              </div>
-              <input
-                type="text"
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleSearch()}
-                placeholder="Descrivi il documento o l'informazione che ti serve"
-                className="flex-1 p-4 text-lg outline-none text-slate-700 placeholder:text-slate-300"
-              />
-              <button
-                onClick={handleSearch}
-                className="px-8 py-3 bg-slate-200 text-slate-500 font-medium rounded-lg hover:bg-slate-300 transition-colors"
-              >
-                {isLoading ? '...' : 'Invia'}
-              </button>
-            </div>
-            <div className="flex gap-4 mt-4 self-end">
-              <div className="flex items-center gap-2 text-slate-500 text-sm bg-white px-4 py-2 rounded-lg border border-slate-300 cursor-pointer hover:border-[#1e3a8a]">
-                <span>Ricerche salvate</span>
-                <ArrowRight size={14} />
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="flex-1 overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <p className="text-slate-500">Risultati trovati per: <span className="font-bold text-slate-800">"{query}"</span></p>
-              <div className="text-sm text-slate-400">3 documenti trovati</div>
-            </div>
-            <div className="space-y-4">
-              {results.map(res => (
-                <div key={res.id} className="bg-white p-6 rounded-xl shadow-sm border border-slate-300 hover:shadow-md hover:border-blue-300 transition-all cursor-pointer group">
-                  <div className="flex justify-between items-start mb-2">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600">
-                        <FileText size={20} />
-                      </div>
-                      <h4 className="font-bold text-lg text-blue-900 group-hover:underline">{res.title}</h4>
-                    </div>
-                    <span className="text-xs font-mono text-slate-400 bg-slate-50 px-2 py-1 rounded border border-slate-200">{res.type} &bull; {res.date}</span>
-                  </div>
-                  <p className="text-slate-600 ml-14" dangerouslySetInnerHTML={{ __html: res.snippet }}></p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+                {/* Modal para deletar chat */}
+                <Dialog open={openDeleteModal} onClose={() => setOpenDeleteModal(false)}>
+                    <DialogTitle
+                        sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            fontWeight: "bold",
+                            justifyContent: "center",
+                            mt: 2,
+                            fontSize: "26px",
+                            borderRadius: "16px",
+                        }}
+                    >
+                        <Box sx={{ display: "flex", alignItems: "center" }}>
+                            Conferma Eliminazione
+                        </Box>
+                        <IconButton
+                            onClick={() => setOpenDeleteModal(false)}
+                            sx={{ position: "absolute", top: 10, right: 10 }}
+                        >
+                            <CloseIcon sx={{ color: "#000" }} />
+                        </IconButton>
+                    </DialogTitle>
+                    <DialogContent sx={{ borderRadius: "16px" }}>
+                        <DialogContentText
+                            sx={{
+                                color: "black",
+                                textAlign: "center",
+                                fontSize: "20px",
+                                my: 0.5,
+                                mx: 1,
+                            }}
+                        >
+                            Vuoi davvero eliminare il chat {selectedChat?.name}?<br />
+                            Una volta eliminato, non sarà possibile recuperarlo.
+                        </DialogContentText>
+                    </DialogContent>
+                    <DialogActions
+                        sx={{
+                            justifyContent: "center",
+                            pb: 2.5,
+                            mb: 2,
+                            borderRadius: "16px",
+                        }}
+                    >
+                        <Button
+                            variant="contained"
+                            onClick={handleDeleteChat}
+                            sx={{
+                                bgcolor: "#d32f2f",
+                                color: "#fff",
+                                py: 2.6,
+                                borderRadius: "10px",
+                                "&:hover": { bgcolor: "#c62828" },
+                            }}
+                        >
+                            Elimina
+                        </Button>
+                    </DialogActions>
+                </Dialog>
+            </Box>
+
+            <Divider sx={{ mx: 2 }} />
+
+            <Box
+                sx={{
+                    flex: 1,
+                    position: "relative",
+                    overflow: "hidden",
+                    display: "flex",
+                    flexDirection: "column",
+                    marginTop: "1rem",
+                    height: "100%",
+                }}
+            >
+                <DocSearchMessageList
+                    messages={messages}
+                    isTyping={isTyping}
+                />
+                {/* Messages Container */}
+                {(selectedChat || messages.length !== 0) ? (
+                    <DocSearchInputArea
+                        onSendMessage={handleSendMessage}
+                        isEmptyMessages={messages.length === 0}
+                        isTyping={isTyping}
+                        setIsTyping={setIsTyping}
+                    />
+                ) : (
+                    <DocSearchInputArea
+                        onSendMessage={handleSendMessage}
+                        isEmptyMessages={messages.length === 0}
+                        isTyping={isTyping}
+                        setIsTyping={setIsTyping}
+                    />
+                )}
+            </Box>
+        </Box>
+    );
 };
 
 export default SearchView;

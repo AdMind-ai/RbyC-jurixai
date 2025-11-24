@@ -14,7 +14,7 @@ import DocumentGenerator from './components/newLayout/DocumentGenerator'
 import AIAssistant from './components/newLayout/AIAssistant'
 import SearchView from './components/newLayout/SearchView'
 import ComplianceView from './components/newLayout/ComplianceView'
-import ChatGeneralView from './components/newLayout/ChatGeneralView'
+import Chat from './pages/Chat'
 
 const AppRoutes = () => {
 
@@ -48,7 +48,7 @@ const AppRoutes = () => {
           {/* Tools Routes */}
           <Route path="/search" element={<SearchView />} />
           <Route path="/compliance" element={<ComplianceView />} />
-          <Route path="/chat-general" element={<ChatGeneralView />} />
+          <Route path="/chat-general" element={<Chat />} />
 
           {/* Access Routes */}
           <Route path="/accessi" element={<UserAccess />} />

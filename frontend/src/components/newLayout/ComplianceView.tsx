@@ -37,10 +37,6 @@ const ComplianceView: React.FC = () => {
     e.stopPropagation();
   };
 
-  const handleClearFileUpload = () => {
-    setFile(null);
-  };
-
   // Lógica de análise
   const handleAnalyze = async () => {
       if (!file) return

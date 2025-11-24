@@ -6,24 +6,22 @@ import CleaningServicesOutlinedIcon from '@mui/icons-material/CleaningServicesOu
 interface SaveCleanButtonsProps {
   onSave?: () => void;
   onClean?: () => void;
-  disguise_save?: boolean;
-  disguise_clean?: boolean;
+  showSave?: boolean;
 }
 
-const SaveCleanButtons: React.FC<SaveCleanButtonsProps> = ({ onSave, onClean, disguise_save = false, disguise_clean = false }) => {
+const SaveCleanButtons: React.FC<SaveCleanButtonsProps> = ({ onSave, onClean, showSave }) => {
   return (
     <Stack direction="row" spacing={0}>
-      {!disguise_save && (
+      {onSave && (showSave !== false) && (
         <Button
           variant="text"
           onClick={onSave}
-          // startIcon={<SaveIcon sx={{ height: '2vh', width: '1.8vh' }} /> }
           sx={{ color: '#1DB102', height: '3vh', width: '5vw', fontSize: '1vw', fontWeight: 400 }}
         >
           Salva
         </Button>
       )}
-      {!disguise_clean && (
+      {onClean && (
         <Button
           variant="text"
           onClick={onClean}

@@ -406,7 +406,7 @@ const Dashboard: React.FC<DashboardProps> = ({ companies, deadlines, onAddDeadli
                         paddingAngle={5}
                         dataKey="value"
                     >
-                        {typeData.map((entry, index) => (
+                        {typeData.map((_, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} strokeWidth={0} />
                         ))}
                     </Pie>
@@ -495,7 +495,7 @@ const Dashboard: React.FC<DashboardProps> = ({ companies, deadlines, onAddDeadli
                       required
                       className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                       value={newDeadline.type}
-                      onChange={e => setNewDeadline({...newDeadline, type: e.target.value as any})}
+                      onChange={e => setNewDeadline({...newDeadline, type: e.target.value as 'TAX' | 'CORPORATE' | 'LEGAL'})}
                     >
                       <option value="CORPORATE">Societario</option>
                       <option value="TAX">Fiscale</option>

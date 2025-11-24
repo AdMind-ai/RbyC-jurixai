@@ -1,6 +1,4 @@
 import React, { useEffect, useState } from 'react'
-import { Box, Divider } from '@mui/material'
-import Layout from '../layouts/Layout'
 import ChatHeader from '../components/ChatPage/ChatHeader'
 import ChatMessageList from '../components/ChatPage/ChatMessageList'
 import ChatInputArea from '../components/ChatPage/ChatInputArea'
@@ -111,87 +109,57 @@ const Chat: React.FC = () => {
 
 
   return (
-    <Layout>
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: 'column',
-          padding: '2.2vh 3vh',
-          overflow: 'auto',
-          height: '100%',
-          width: '100%',
-        }}
-      >
-        {/* Header */}
-        <ChatHeader
-          conversationId={conversationId}
-          selectedModel={selectedModel}
-          setSelectedModel={setSelectedModel}
-          searchWebEnabled={searchWebEnabled}
-          onChatSelect={handleChatSelect}
-          selectedChat={selectedChat}
-          setSelectedChat={setSelectedChat}
-          saveCleanEnabled={messages.length > 0}
+    <div className="flex flex-col items-center justify-center min-h-screen w-full bg-[#f8fafc]">
+      {/* Header */}
+      <ChatHeader
+        conversationId={conversationId}
+        selectedModel={selectedModel}
+        setSelectedModel={setSelectedModel}
+        searchWebEnabled={searchWebEnabled}
+        onChatSelect={handleChatSelect}
+        selectedChat={selectedChat}
+        setSelectedChat={setSelectedChat}
+        saveCleanEnabled={messages.length > 0}
+        messages={messages}
+        setMessages={setMessages}
+      />
+      <div className="flex-1 relative flex flex-col items-center justify-center h-full w-full relative">
+        <ChatMessageList
           messages={messages}
-          setMessages={setMessages}
+          isTyping={isTyping}
+          isOverview={isOverview}
         />
-
-        <Divider />
-
-        <Box
-          sx={{
-            flex: 1,
-            position: 'relative',
-            overflow: 'hidden',
-            display: 'flex',
-            flexDirection: 'column',
-            marginTop: '1rem',
-            height: '100%',
-          }}
-        >
-          <ChatMessageList
+        {/* Messages Container */}
+        {selectedChat || messages.length !== 0 ? (
+          <ChatInputArea
+            conversationId={conversationId}
+            onSend={handleSendMessage}
+            selectedChat={selectedChat}
+            setSelectedChat={setSelectedChat}
+            searchWebEnabled={searchWebEnabled}
+            setSearchWebEnabled={setSearchWebEnabled}
+            setCitations={setCitations}
+            setIsOverview={setIsOverview}
+            setIsTyping={setIsTyping}
             messages={messages}
-            isTyping={isTyping}
-            isOverview={isOverview}
           />
-          {/* Messages Container */}
-          {selectedChat || messages.length != 0 ? (
-            <>
-              <ChatInputArea
-                conversationId={conversationId}
-                onSend={handleSendMessage}
-                selectedModel={selectedModel}
-                selectedChat={selectedChat}
-                setSelectedChat={setSelectedChat}
-                searchWebEnabled={searchWebEnabled}
-                setSearchWebEnabled={setSearchWebEnabled}
-                isEmptyMessages={false}
-                setCitations={setCitations}
-                setIsOverview={setIsOverview}
-                setIsTyping={setIsTyping}
-              />
-            </>
-          ) : (
-            <ChatInputArea
-              conversationId={conversationId}
-              onSend={handleSendMessage}
-              selectedModel={selectedModel}
-              selectedChat={selectedChat}
-              setSelectedChat={setSelectedChat}
-              searchWebEnabled={searchWebEnabled}
-              setSearchWebEnabled={setSearchWebEnabled}
-              isEmptyMessages={true}
-              setCitations={setCitations}
-              setIsOverview={setIsOverview}
-              setIsTyping={setIsTyping}
-            />
-            // messages.length > 0 ||
-            // <ChatEmptyState onSendMessage={(msg)=>handleSendMessage(msg,"user")} />
-          )}
-        </Box>
-      </Box>
-    </Layout>
-  )
+        ) : (
+          <ChatInputArea
+            conversationId={conversationId}
+            onSend={handleSendMessage}
+            selectedChat={selectedChat}
+            setSelectedChat={setSelectedChat}
+            searchWebEnabled={searchWebEnabled}
+            setSearchWebEnabled={setSearchWebEnabled}
+            setCitations={setCitations}
+            setIsOverview={setIsOverview}
+            setIsTyping={setIsTyping}
+            messages={messages}
+          />
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default Chat

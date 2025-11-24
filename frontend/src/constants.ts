@@ -1,4 +1,4 @@
-import { Company, CompanyType, Deadline, Officer, Role, Shareholder } from './types/types';
+import { Company, CompanyType, Deadline, Role } from './types/types';
 
 export const MOCK_COMPANIES: Company[] = [
   {

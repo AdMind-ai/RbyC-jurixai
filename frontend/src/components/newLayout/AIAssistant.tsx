@@ -15,7 +15,7 @@ interface Message {
   text: string;
 }
 
-const AIAssistant: React.FC<AIAssistantProps> = ({ companies, deadlines }) => {
+const AIAssistant: React.FC<AIAssistantProps> = () => {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([
     { id: 1, sender: 'bot', text: 'Ciao! Sono il tuo assistente legale. Posso darti informazioni sulle società gestite, le scadenze imminenti o le cariche sociali. Chiedimi pure!' }
@@ -39,18 +39,6 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ companies, deadlines }) => {
     setInput('');
     setIsTyping(true);
 
-    // Prepare context context data for the AI
-    const contextData = JSON.stringify({
-      companies: companies.map(c => ({
-         name: c.name,
-         type: c.type,
-         vat: c.vatNumber,
-         officers: c.officers,
-         shareholders: c.shareholders,
-         nextMeeting: c.nextMeetingDate
-      })),
-      deadlines: deadlines.filter(d => !d.completed)
-    });
 
     const responseText = ""
 
@@ -94,11 +82,11 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ companies, deadlines }) => {
                   }`}>
                      <ReactMarkdown
                         components={{
-                            p: ({node, ...props}) => <p className="mb-1 last:mb-0" {...props} />,
-                            ul: ({node, ...props}) => <ul className="list-disc pl-4 my-1" {...props} />,
-                            ol: ({node, ...props}) => <ol className="list-decimal pl-4 my-1" {...props} />,
-                            li: ({node, ...props}) => <li className="my-0.5" {...props} />,
-                            strong: ({node, ...props}) => <strong className="font-bold" {...props} />
+                            p: ({...props}) => <p className="mb-1 last:mb-0" {...props} />,
+                            ul: ({...props}) => <ul className="list-disc pl-4 my-1" {...props} />,
+                            ol: ({...props}) => <ol className="list-decimal pl-4 my-1" {...props} />,
+                            li: ({...props}) => <li className="my-0.5" {...props} />,
+                            strong: ({...props}) => <strong className="font-bold" {...props} />
                         }}
                      >
                         {msg.text}

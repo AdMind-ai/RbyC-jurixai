@@ -393,7 +393,7 @@ const CompanyList: React.FC<CompanyListProps> = ({ companies, onAddCompany, onAd
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1">Stato</label>
-                            <select className="w-full p-2 border border-slate-300 rounded-lg" value={newCompany.status} onChange={e => setNewCompany({...newCompany, status: e.target.value as any})}>
+                            <select className="w-full p-2 border border-slate-300 rounded-lg" value={newCompany.status} onChange={e => setNewCompany({...newCompany, status: e.target.value as 'Active' | 'Liquidation' | 'Inactive'})}>
                                 <option value="Active">Attiva</option>
                                 <option value="Liquidation">In Liquidazione</option>
                                 <option value="Inactive">Inattiva</option>
@@ -572,7 +572,7 @@ const CompanyList: React.FC<CompanyListProps> = ({ companies, onAddCompany, onAd
                       required
                       className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                       value={quickDeadline.type}
-                      onChange={e => setQuickDeadline({...quickDeadline, type: e.target.value as any})}
+                      onChange={e => setQuickDeadline({...quickDeadline, type: e.target.value as 'TAX' | 'CORPORATE' | 'LEGAL'})}
                     >
                       <option value="CORPORATE">Societario</option>
                       <option value="TAX">Fiscale</option>

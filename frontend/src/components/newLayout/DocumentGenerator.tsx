@@ -64,7 +64,6 @@ const DocumentGenerator: React.FC<DocumentGeneratorProps> = ({ companies }) => {
     setIsLoading(true);
     setGeneratedContent('');
 
-    const company = selectedCompanyId ? companies.find(c => c.id === selectedCompanyId) || null : null;
     
     const result = "Simulated generated document content"
     setGeneratedContent(result);

@@ -1,39 +1,39 @@
 
 import React from 'react';
 import { Search, ShieldCheck, Bot, Briefcase } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
-interface HomeProps {
-}
+const Home: React.FC = () => {
+  const navigate = useNavigate();
 
-const Home: React.FC<HomeProps> = ({  }) => {
   const cards = [
     {
       id: 'search',
       title: 'Ricerca documentale',
       icon: Search,
       desc: 'Cerca e analizza documenti nell\'intero archivio dello studio. Supporta ricerca semantica e full-text.',
-      action: 'search'
+      action: '/search',
     },
     {
       id: 'compliance',
       title: 'Check compliance',
       icon: ShieldCheck,
       desc: 'Verifica la conformità normativa dei documenti caricati rispetto alle policy interne e GDPR.',
-      action: 'compliance'
+      action: '/compliance'
     },
     {
       id: 'chat',
       title: 'Chat Assistant',
       icon: Bot,
       desc: 'Interfaccia diretta con i modelli LLM per supporto generico, stesura mail e brainstorming.',
-      action: 'chat-general'
+      action: '/chat-general'
     },
     {
       id: 'segreteria',
       title: 'Segreteria Societaria',
       icon: Briefcase,
       desc: 'Gestione completa di scadenze, verbali, anagrafiche societarie e libro soci.',
-      action: 'seg-dashboard' // Jumps to the dashboard of the sub-app
+      action: '/segreteria/dashboard'
     }
   ];
 
@@ -61,7 +61,7 @@ const Home: React.FC<HomeProps> = ({  }) => {
                     </p>
                     
                     <button 
-                      onClick={() => null}
+                      onClick={() => navigate(card.action)}
                       className="w-full py-2 bg-[#1e3a8a] text-white rounded-lg font-semibold text-xs uppercase tracking-wide hover:bg-blue-900 transition-colors shadow-md shadow-blue-900/20 mt-auto shrink-0"
                     >
                       VAI ALLA FUNZIONE
