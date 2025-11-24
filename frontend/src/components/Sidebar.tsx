@@ -1,369 +1,223 @@
-import React, { useState, useEffect } from 'react'
-import { Box, List, ListItem, ListItemIcon, Divider, Typography } from '@mui/material'
-import { useGlobal } from '../context/GlobalContext';
-import { useNavigate, useLocation } from 'react-router-dom'
-import { useTheme } from '@mui/material/styles'
+import React, { useState, useEffect } from 'react';
+import { 
+  LayoutDashboard, 
+  Building2, 
+  FileText, 
+  Bot, 
+  Search, 
+  ShieldCheck, 
+  Home, 
+  ChevronDown, 
+  ChevronRight,
+  Briefcase,
+  UserPlus,
+  LogOut
+} from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
 
-// Importação dos ícones
-import HomeIcon from '../assets/icons/sidebar/home-icon.svg'
-import HomeIconActive from '../assets/icons/sidebar/home-icon-active.svg'
-// import TranslatorIcon from '../assets/icons/sidebar/translator-icon.svg'
-// import TranslatorIconActive from '../assets/icons/sidebar/translator-icon-active.svg'
-import ComplianceIcon from '../assets/icons/sidebar/compliance-icon.svg'
-import ComplianceIconActive from '../assets/icons/sidebar/compliance-icon-active.svg'
-import DocIcon from '../assets/icons/sidebar/doc-icon.svg'
-import DocIconActive from '../assets/icons/sidebar/doc-icon-active.svg'
-import SearchIcon from '../assets/icons/sidebar/search-icon.svg'
-import SearchIconActive from '../assets/icons/sidebar/search-icon-active.svg'
-import ChatIcon from '../assets/icons/sidebar/chat-icon.svg'
-import ChatIconActive from '../assets/icons/sidebar/chat-icon-active.svg'
-// import UsageIcon from '../assets/icons/sidebar/usage-icon.svg'
-// import UsageIconActive from '../assets/icons/sidebar/usage-icon-active.svg'
-import AccessIcon from '../assets/icons/sidebar/access-icon.svg'
-import AccessIconActive from '../assets/icons/sidebar/access-icon-active.svg'
+const routeMap = {
+  home: '/',
+  search: '/search',
+  compliance: '/compliance',
+  'chat-general': '/chat-general',
+  accessi: '/accessi',
+  'seg-dashboard': '/segreteria/dashboard',
+  'seg-companies': '/segreteria/companies',
+  'seg-documents': '/segreteria/documents',
+  'seg-assistant': '/segreteria/assistant',
+} as const;
 
-// Logos
-import Logo from '../assets/logo.png'
+type RouteKey = keyof typeof routeMap;
 
-// Menu links
-const lawOptions = [
-  { title: 'Law References', path: 'Law References' },
-  // { title: 'Answer Generation', path: 'Answer Generation' },
-  // { title: 'Evaluator', path: 'Evaluator' },
-  // { title: 'Rerank', path: 'Rerank' },
-  // { title: 'Filter Prompt', path: 'Filter Prompt' },
-]
-
-const menuItems = [
-  { title: 'Home', path: '/', icon: HomeIcon, activeIcon: HomeIconActive },
-  {
-    title: 'Ricerca documentale',
-    path: '/doc-search',
-    icon: SearchIcon,
-    activeIcon: SearchIconActive,
-  },
-  {
-    title: 'Check compliance',
-    path: '/check-compliance',
-    icon: ComplianceIcon,
-    activeIcon: ComplianceIconActive
-  },
-  // {
-  //   title: 'Traduttore documenti',
-  //   path: '/doc-translator',
-  //   icon: TranslatorIcon,
-  //   activeIcon: TranslatorIconActive,
-  // },
-  {
-    title: 'Chat Assistant',
-    path: '/chat-assistant',
-    icon: ChatIcon,
-    activeIcon: ChatIconActive,
-  },
-  {
-    title: 'QuickDoc Creator',
-    path: '/quick-doc',
-    icon: DocIcon,
-    activeIcon: DocIconActive,
-  }
-]
-
-
-
-const admItems = [
-  // { title: 'Consumo AI', path: '/usage', icon: UsageIcon, activeIcon: UsageIconActive },
-  { title: 'Accessi', path: '/access', icon: AccessIcon, activeIcon: AccessIconActive },
-]
+const segreteriaTabs: { key: RouteKey; label: string; icon: React.ReactElement }[] = [
+  { key: 'seg-dashboard', label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
+  { key: 'seg-companies', label: 'Società', icon: <Building2 size={16} /> },
+  { key: 'seg-documents', label: 'Documenti AI', icon: <FileText size={16} /> },
+  { key: 'seg-assistant', label: 'Assistente Legale', icon: <Bot size={16} /> },
+];
 
 const Sidebar: React.FC = () => {
-  const { setSelectedLawTab, selectedLawTab } = useGlobal();
-  const theme = useTheme()
-  const navigate = useNavigate()
-  const location = useLocation()
-  const [activePath, setActivePath] = useState(location.pathname)
-  // const [openMenu, setOpenMenu] = useState<string | null>(null)
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [isSegreteriaOpen, setIsSegreteriaOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
+  // Open Segreteria if current route matches
   useEffect(() => {
-    if (selectedLawTab && selectedLawTab.trim() !== '') {
-      const option = lawOptions.find(opt => opt.title === selectedLawTab)
-      if (option) {
-        setActivePath(option.path)
-        navigate('/law-consultant')
-      } else {
-        setActivePath('/law-consultant');
-      }
+    if (location.pathname.startsWith('/seg-')) {
+      setIsSegreteriaOpen(true);
     }
-    if (selectedLawTab == '') {
-      setActivePath('/law-consultant');
-      setSelectedLawTab(null)
-      // setOpenMenu(null);
+  }, [location.pathname]);
+
+  const handleNav = (tab: RouteKey) => {
+    const route = routeMap[tab];
+    if (route) navigate(route);
+  };
+
+  const toggleSegreteria = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsSegreteriaOpen(!isSegreteriaOpen);
+    if (!isSegreteriaOpen && !location.pathname.startsWith('/seg-')) {
+      navigate(routeMap['seg-dashboard']);
     }
-  }, [selectedLawTab])
-
-
-  const handleMenuClick = (item: typeof menuItems[0]) => {
-    // if (item.disabled) return;
-
-    setActivePath(item.path)
-    navigate(item.path)
-    // setOpenMenu(null)
-    setSelectedLawTab(null)
-
-  }
+  };
 
   return (
-    <Box
-      sx={{
-        zIndex: 1000,
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-        height: '100vh',
-        width: 'calc(12vw)',
-        minWidth: '20px',
-        maxWidth: '410px',
-        color: theme.palette.text.primary,
-      }}
-    >
-      {/* Logo */}
-      <Box
-        sx={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: 'calc(6vw)',
-          minWidth: '20px',
-          maxWidth: '400px',
-          textAlign: 'center',
-          height: 'calc(8.5vh)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        {/* Logo Icon */}
-        <Box
-          component="img"
-          src={Logo}
-          alt="Investor Logo"
-          sx={{
-            // width: "10vh",
-            height: "7.5vh",
-            marginLeft: 'calc(6.5vw)',
-            marginTop: 'calc(2.5vh)',
-          }}
-        />
-      </Box>
+    <div className="w-64 bg-[#1e3a8a] text-white h-screen flex flex-col fixed left-0 top-0 shadow-2xl z-20 border-r border-blue-900">
+      {/* Logo Section */}
+      <div className="p-6 border-b border-blue-800 bg-[#172554]">
+        <div className="flex items-center gap-2 mb-1">
+           <span className="text-3xl font-light tracking-tight">Re<span className="font-bold">fink</span></span>
+        </div>
+        <div className="flex items-center gap-1">
+            <div className="h-px w-8 bg-[#15803d]"></div>
+            <p className="text-[10px] uppercase tracking-wider text-slate-300">Powered by <span className="font-bold text-white">CONSILIA</span></p>
+        </div>
+      </div>
 
-      {/* Menu Functions */}
-      <Box
-        sx={{
-          marginTop: 'calc(12vh)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-        }}
-      >
-        <List
-          sx={{
-            padding: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 'calc(0.7vw)',
-          }}
+      {/* Navigation */}
+      <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto">
+        <button
+          onClick={() => handleNav('home')}
+          className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 mb-4 ${
+            location.pathname === routeMap['home']
+              ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
+              : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
+          }`}
         >
-          {menuItems.map((item) => {
-            const isActive = activePath === item.path ? true : false
+          <Home size={20} />
+          <span className="font-medium text-sm">Home</span>
+        </button>
 
-            return (
-              <Box key={item.title} sx={{ width: '100%' }}>
-                <ListItem
-                  onClick={() => handleMenuClick(item)}
-                  sx={{
-                    padding: 0,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    width: 'calc(9vw)',
-                    height: 'calc(3vw)',
-                    cursor: 'pointer',
-                    backgroundColor: isActive
-                      ? theme.palette.primary.main
-                      : 'transparent',
-                    borderRadius: 'calc(0.5vw)',
-                    pointerEvents: 'auto',
-                    '&:hover': {
-                      backgroundColor: isActive
-                        ? theme.palette.primary.main
-                        : 'rgba(0, 0, 0, 0.1)',
-                      borderRadius: 'calc(0.5vw)',
-                    },
-                  }}
-                >
-                  <ListItemIcon
-                    sx={{
-                      display: 'flex',
-                      justifyContent: 'left',
-                      alignItems: 'center',
-                      width: '100%',
-                      minWidth: '10px',
-                      maxWidth: '400px',
-                      px: 1.5,
-                    }}
-                  >
-                    <img
-                      src={isActive ? item.activeIcon : item.icon}
-                      alt={`${item.title} Icon`}
-                      style={{
-                        width: 'calc(1.7vw)',
-                        height: 'calc(1.7vw)',
-                      }}
-                    />
-                    <Typography
-                      sx={{
-                        fontSize: 'calc(0.9vw)',
-                        color: isActive
-                          ? theme.palette.primary.contrastText
-                          : theme.palette.primary.main,
-                        fontWeight: isActive ? 700 : 400,
-                        lineHeight: '1',
-                        marginLeft: 'calc(0.5vw)',
-                      }}
-                    >{item.title}</Typography>
-                  </ListItemIcon>
-                </ListItem>
-                {/* Submenu expandido */}
-                {/* {item.options && (
-                  <Collapse in={openMenu === item.title} timeout="auto" unmountOnExit>
-                    <Box sx={{ width: '100%', mt: 1 }}>
-                      {item.options.map(opt => (
-                        <ListItem
-                          key={opt.title}
-                          onClick={e => {
-                            e.stopPropagation()
-                            setActivePath(opt.path)
-                            setSelectedLawTab(opt.title)
-                            navigate(item.path)
-                          }}
-                          sx={{
-                            py: 0.5,
-                            cursor: "pointer",
-                            backgroundColor: activePath === opt.path
-                              ? theme.palette.secondary.light
-                              : "transparent",
-                            borderRadius: 1,
-                            mb: 0.2,
-                            "&:hover": {
-                              backgroundColor: theme.palette.action.hover
-                            }
-                          }}
-                        >
-                          <Typography
-                            sx={{
-                              fontSize: '0.5em',
-                              color: activePath === opt.path
-                                ? theme.palette.primary.contrastText
-                                : theme.palette.text.secondary,
-                              fontWeight: activePath === opt.path ? 700 : 400
-                            }}
-                          >
-                            {opt.title}
-                          </Typography>
-                        </ListItem>
-                      ))}
-                    </Box>
-                  </Collapse>
-                )} */}
-              </Box>
-            )
-          })}
-        </List>
-      </Box>
+        <div className="px-4 py-2 text-[11px] font-bold text-blue-300 uppercase tracking-wider opacity-70">
+          Strumenti
+        </div>
 
-      {/* Adm */}
-      <Box
-        sx={{
-          marginBottom: 'calc(4vh)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-        }}
-      >
-        <Divider sx={{ width: 'calc(70%)' }} />
-        <List
-          sx={{
-            marginTop: 'calc(0.5vw)',
-            padding: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 'calc(0.6vw)',
-          }}
+        <button
+          onClick={() => handleNav('search')}
+          className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
+            location.pathname === routeMap['search']
+              ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
+              : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
+          }`}
         >
-          {admItems.map((item) => {
-            const isActive = activePath === item.path
-            return (
-              <ListItem
-                key={item.title}
-                onClick={() => handleMenuClick(item)}
-                sx={{
-                  padding: 0,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  width: 'calc(9vw)',
-                  height: 'calc(3vw)',
-                  cursor: 'pointer',
-                  backgroundColor: isActive
-                    ? theme.palette.primary.main
-                    : 'transparent',
-                  borderRadius: 'calc(0.5vw)',
-                  '&:hover': {
-                    backgroundColor: isActive ? theme.palette.primary.main : 'rgba(0, 0, 0, 0.1)',
-                    borderRadius: 'calc(0.5vw)',
-                  },
-                }}
-              >
-                <Box>
+          <Search size={20} />
+          <span className="font-medium text-sm">Ricerca documentale</span>
+        </button>
 
-                </Box>
-                <ListItemIcon
-                  sx={{
-                    display: 'flex',
-                    justifyContent: 'left',
-                    alignItems: 'center',
-                    width: '100%',
-                    minWidth: '10px',
-                    maxWidth: '400px',
-                    px: 1.5,
-                  }}
+        <button
+          onClick={() => handleNav('compliance')}
+          className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
+            location.pathname === routeMap['compliance']
+              ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
+              : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
+          }`}
+        >
+          <ShieldCheck size={20} />
+          <span className="font-medium text-sm">Check compliance</span>
+        </button>
+
+        <button
+          onClick={() => handleNav('chat-general')}
+          className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
+            location.pathname === routeMap['chat-general']
+              ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
+              : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
+          }`}
+        >
+          <Bot size={20} />
+          <span className="font-medium text-sm">Chat Assistant</span>
+        </button>
+
+        {/* Dropdown Group */}
+        <div>
+          <button
+            onClick={toggleSegreteria}
+            className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200 ${
+              location.pathname.startsWith('/seg-')
+                ? 'bg-[#172554] text-white'
+                : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <Briefcase size={20} />
+              <span className="font-medium text-sm">Segreteria Societaria</span>
+            </div>
+            {isSegreteriaOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          </button>
+
+          {isSegreteriaOpen && (
+            <div className="mt-1 ml-4 space-y-1 border-l border-blue-700 pl-2">
+              {segreteriaTabs.map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => handleNav(tab.key)}
+                  className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg text-xs transition-all duration-200 ${
+                    location.pathname === routeMap[tab.key]
+                      ? 'text-[#4ade80] font-semibold bg-blue-900/50'
+                      : 'text-blue-300 hover:text-white'
+                  }`}
                 >
-                  <img
-                    src={isActive ? item.activeIcon : item.icon}
-                    alt={`${item.title} Icon`}
-                    style={{
-                      width: 'calc(1.7vw)',
-                      height: 'calc(1.7vw)',
-                    }}
-                  />
-                  <Typography
-                    sx={{
-                      fontSize: 'calc(0.9vw)',
-                      color: isActive
-                        ? theme.palette.primary.contrastText
-                        : theme.palette.primary.main,
-                      fontWeight: isActive ? 700 : 400,
-                      lineHeight: '1',
-                      marginLeft: 'calc(0.5vw)',
-                    }}
-                  >{item.title}</Typography>
-                </ListItemIcon>
-              </ListItem>
-            )
-          })}
-        </List>
-      </Box>
-    </Box>
-  )
-}
+                  {tab.icon}
+                  <span className="text-xs font-medium">{tab.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </nav>
 
-export default Sidebar
+      {/* Accessi Button */}
+      <div className="px-3 py-2 border-t border-blue-800 bg-[#1e3a8a]">
+        <button
+          onClick={() => handleNav('accessi')}
+          className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
+            location.pathname === routeMap['accessi']
+              ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
+              : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
+          }`}
+        >
+          <UserPlus size={20} />
+          <span className="font-medium text-sm">Accessi</span>
+        </button>
+      </div>
+
+      {/* User Profile Section */}
+      <div className="border-t border-blue-800 bg-[#172554] p-4">
+        <div 
+          onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+          className="flex items-center gap-3 cursor-pointer hover:bg-[#1e3a8a] p-2 rounded-lg transition-colors"
+        >
+          <div className="w-9 h-9 bg-[#15803d] rounded-full flex items-center justify-center text-white font-bold text-sm shadow-sm border-2 border-blue-900">
+            R
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium text-white truncate">rbyc_admin</p>
+            <p className="text-[9px] text-blue-300 truncate">Amministratore</p>
+          </div>
+          {isUserMenuOpen ? <ChevronDown size={16} className="text-blue-300" /> : <ChevronRight size={16} className="text-blue-300" />}
+        </div>
+
+        {isUserMenuOpen && (
+          <div className="mt-2 space-y-1 animate-fade-in">
+            <button 
+              onClick={() => console.log('Logout clicked')}
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-red-300 hover:text-white hover:bg-red-500/20 rounded-lg transition-colors"
+            >
+              <LogOut size={14} />
+              Disconnetti
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="py-2 bg-[#172554] text-[10px] text-blue-400 text-center border-t border-blue-800">
+        Refink Suite v2.4.0
+      </div>
+    </div>
+  );
+};
+
+export default Sidebar;
+ 
