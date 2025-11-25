@@ -30,7 +30,7 @@ class OpenAISendMessageView(APIView):
 
         content = serializer.validated_data.get('content', '')
         file = serializer.validated_data.get('file', None)
-        model = request.data.get('model', 'gpt-5')
+        model = request.data.get('model', 'gpt-5.1')
 
         # logger.debug(
         #     f"Received data - Content: {content}, Model: {model}, User: {user}, conversation_id: {conversation_id}, file: {file}")
@@ -48,23 +48,18 @@ class OpenAISendMessageView(APIView):
             assistant_thread = None
 
             if conversation_id:
-                print(f'Debug 0 {conversation_id}')
                 assistant_thread = AssistantThread.objects.filter(thread_id=conversation_id).first()
                 if not assistant_thread:
                     # thread_id inválido → criar novo registro
                     assistant_thread = AssistantThread.objects.create(thread_id=conversation_id, active=True)
-                    print(f"Debug 2: {assistant_thread.thread_id}")
             else:
                 # cria thread local, id será preenchido depois
                 conversation_openai = client.conversations.create()
-                print(conversation_openai)
                 assistant_thread = AssistantThread.objects.create(thread_id=conversation_openai.id, active=True)
-                print(f"Debug 3: {assistant_thread.thread_id}")
             
             # cria ou reaproveita conversa local (ChatConversation)
             if assistant_thread and assistant_thread.conversation:
                 conversation = assistant_thread.conversation
-                print(f"Debug 4: {assistant_thread.thread_id}")
             else:
                 # cria nova conversa local
                 user = request.user
@@ -76,7 +71,6 @@ class OpenAISendMessageView(APIView):
                 )
                 assistant_thread.conversation = conversation
                 assistant_thread.save(update_fields=["conversation"])
-                print(f"Debug 5: {assistant_thread.thread_id}")
 
         # salva a mensagem do usuário
         ChatMessage.objects.create(
@@ -94,7 +88,6 @@ class OpenAISendMessageView(APIView):
             file_base64 = base64.b64encode(file_content).decode('utf-8')
 
             if 'image' in file.content_type:
-                print(file.content_type)
                 user_message_content.append(
                     {"type": "input_image",
                         "image_url": f"data:{file_type};base64,{file_base64}"}
@@ -106,32 +99,9 @@ class OpenAISendMessageView(APIView):
                         "file_data": f"data:{file_type};base64,{file_base64}"}
                 )
 
-        # Atualizando o histórico com a mensagem do usuário
-        # history_entry = {
-        #     "role": "user",
-        #     "content": user_message_content
-        # }
-        # messages.append(history_entry)
-
-        # history, current_tokens = manage_history_tokens(
-        #     messages, content, encoding_name, max_input_tokens)
-
-        # ChatMessage.objects.create(
-        #     conversation=conversation,
-        #     content=content,
-        #     file=None,
-        #     file=file if file else None,
-        #     file_url= chat_message.file.url,
-        #     is_user=True
-        # )
-        # file_url = chat_message.file.url if chat_message.file else None
-        # chat_message.file_url = file_url
-        # chat_message.save()
-
         def event_stream():
             full_ai_message = ""
             try:
-                print(f"Debug 6: {assistant_thread.thread_id}")
                 response = client.responses.create(
                     model=model,
                     input=[
@@ -149,7 +119,6 @@ class OpenAISendMessageView(APIView):
                     include=["reasoning.encrypted_content", "web_search_call.action.sources"],
                     timeout=600,
                 )
-                # print(response.output_text, '\n')
                 for event in response:
                     if getattr(event, 'type', None) == 'response.output_text.delta':
                         delta_content = event.delta

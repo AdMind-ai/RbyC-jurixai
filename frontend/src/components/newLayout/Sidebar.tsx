@@ -199,8 +199,8 @@ const Sidebar: React.FC = () => {
             {userInitial}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-white truncate">{userName}</p>
-            <p className="text-[9px] text-blue-300 truncate">{userRole}</p>
+            <p className="text-sm font-medium text-white truncate">{userName}</p>
+            <p className="text-[12px] text-blue-300 truncate">{userRole}</p>
           </div>
           {isUserMenuOpen ? <ChevronDown size={16} className="text-blue-300" /> : <ChevronRight size={16} className="text-blue-300" />}
         </div>

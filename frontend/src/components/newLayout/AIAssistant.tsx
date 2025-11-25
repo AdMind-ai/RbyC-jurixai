@@ -55,18 +55,18 @@ const AIAssistant: React.FC<AIAssistantProps> = () => {
   };
 
   return (
-    <div className="w-full h-full p-8 flex flex-col max-w-4xl mx-auto animate-fade-in">
-      <div className="mb-4 border-b border-slate-300 pb-4">
-        <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+    <div className="w-full h-full p-6 flex flex-col max-w-3xl mx-auto animate-fade-in">
+      <div className="mb-3 border-b border-slate-300 pb-3">
+        <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
           <Bot className="text-[#1e3a8a]" />
           Assistente Legale
         </h2>
-        <p className="text-slate-500">Interroga il database dello studio con linguaggio naturale</p>
+        <p className="text-slate-500 text-sm">Interroga il database dello studio con linguaggio naturale</p>
       </div>
 
-      <div className="flex-1 bg-white rounded-xl shadow-sm border border-slate-300 overflow-hidden flex flex-col">
+      <div className="flex-1 bg-white rounded-lg shadow-sm border border-slate-300 overflow-hidden flex flex-col">
         {/* Chat Area */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/50">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50">
           {messages.map((msg) => (
             <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
                <div className={`flex max-w-[80%] gap-3 ${msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
@@ -75,7 +75,7 @@ const AIAssistant: React.FC<AIAssistantProps> = () => {
                   }`}>
                     {msg.sender === 'user' ? <User size={16} /> : <Bot size={16} />}
                   </div>
-                  <div className={`p-4 rounded-2xl text-sm leading-relaxed shadow-sm ${
+                  <div className={`p-3 rounded-xl text-sm leading-relaxed shadow-sm ${
                     msg.sender === 'user' 
                       ? 'bg-white text-slate-800 rounded-tr-none border border-slate-300' 
                       : 'bg-[#1e3a8a] text-white rounded-tl-none shadow-md'
@@ -101,7 +101,7 @@ const AIAssistant: React.FC<AIAssistantProps> = () => {
                   <div className="w-8 h-8 rounded-full bg-[#1e3a8a] text-white flex items-center justify-center">
                      <Bot size={16} />
                   </div>
-                  <div className="bg-blue-50 px-4 py-3 rounded-2xl rounded-tl-none border border-blue-200">
+                  <div className="bg-blue-50 px-3 py-2 rounded-xl rounded-tl-none border border-blue-200">
                      <div className="flex gap-1">
                         <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"></span>
                         <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce delay-75"></span>
@@ -115,7 +115,7 @@ const AIAssistant: React.FC<AIAssistantProps> = () => {
         </div>
 
         {/* Input Area */}
-        <div className="p-4 bg-white border-t border-slate-200">
+        <div className="p-3 bg-white border-t border-slate-200">
             <div className="relative flex items-center gap-2">
               <input
                 type="text"
@@ -123,18 +123,18 @@ const AIAssistant: React.FC<AIAssistantProps> = () => {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Chiedi qualcosa sulle scadenze o sulle società..."
-                className="flex-1 p-3 pl-4 pr-12 rounded-full border border-slate-300 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all"
+                className="flex-1 p-2 pl-3 pr-10 rounded-full border border-slate-300 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all text-sm"
               />
               <button 
                 onClick={handleSend}
                 disabled={!input.trim() || isTyping}
-                className="absolute right-2 p-2 bg-[#1e3a8a] text-white rounded-full hover:bg-blue-900 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors shadow-md"
+                className="absolute right-2 p-1.5 bg-[#1e3a8a] text-white rounded-full hover:bg-blue-900 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors shadow-md"
               >
-                <Send size={18} />
+                <Send size={16} />
               </button>
             </div>
-            <div className="mt-2 flex items-center gap-2 text-xs text-slate-400 justify-center">
-               <Info size={12} />
+            <div className="mt-1 flex items-center gap-2 text-xs text-slate-400 justify-center">
+               <Info size={11} />
                <span>L'AI può commettere errori. Verifica sempre le informazioni importanti.</span>
             </div>
         </div>

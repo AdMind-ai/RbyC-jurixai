@@ -124,39 +124,28 @@ const Chat: React.FC = () => {
         setMessages={setMessages}
       />
       <div className="flex-1 relative flex flex-col items-center justify-center h-full w-full relative">
-        <ChatMessageList
-          messages={messages}
-          isTyping={isTyping}
-          isOverview={isOverview}
-        />
-        {/* Messages Container */}
-        {selectedChat || messages.length !== 0 ? (
-          <ChatInputArea
-            conversationId={conversationId}
-            onSend={handleSendMessage}
-            selectedChat={selectedChat}
-            setSelectedChat={setSelectedChat}
-            searchWebEnabled={searchWebEnabled}
-            setSearchWebEnabled={setSearchWebEnabled}
-            setCitations={setCitations}
-            setIsOverview={setIsOverview}
-            setIsTyping={setIsTyping}
+        <div className="w-full max-w-6xl mx-auto px-8 flex flex-col h-full">
+          <ChatMessageList
             messages={messages}
+            isTyping={isTyping}
+            isOverview={isOverview}
           />
-        ) : (
-          <ChatInputArea
-            conversationId={conversationId}
-            onSend={handleSendMessage}
-            selectedChat={selectedChat}
-            setSelectedChat={setSelectedChat}
-            searchWebEnabled={searchWebEnabled}
-            setSearchWebEnabled={setSearchWebEnabled}
-            setCitations={setCitations}
-            setIsOverview={setIsOverview}
-            setIsTyping={setIsTyping}
-            messages={messages}
-          />
-        )}
+          {/* Messages Container */}
+          <div className="w-full">
+            <ChatInputArea
+              conversationId={conversationId}
+              onSend={handleSendMessage}
+              selectedChat={selectedChat}
+              setSelectedChat={setSelectedChat}
+              searchWebEnabled={searchWebEnabled}
+              setSearchWebEnabled={setSearchWebEnabled}
+              setCitations={setCitations}
+              setIsOverview={setIsOverview}
+              setIsTyping={setIsTyping}
+              messages={messages}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -143,8 +143,8 @@ const CompanyList: React.FC<CompanyListProps> = ({ companies, onAddCompany, onAd
   };
 
   return (
-    <div className="w-full h-full p-8 flex flex-col gap-6 relative animate-fade-in max-w-7xl mx-auto">
-      <div className="flex justify-between items-center border-b border-slate-300 pb-4 mb-2">
+    <div className="w-full h-full p-8 flex flex-col gap-4 relative animate-fade-in max-w-6xl mx-auto text-sm">
+    <div className="flex justify-between items-center border-b border-slate-300 pb-2 mb-2">
         <div>
           <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
              <Building2 className="text-[#1e3a8a]" size={28} />
@@ -154,61 +154,61 @@ const CompanyList: React.FC<CompanyListProps> = ({ companies, onAddCompany, onAd
         </div>
         <div className="flex gap-3">
             <div className="relative hidden md:block">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input
                 type="text"
                 placeholder="Cerca per nome o P.IVA..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 pr-4 py-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 w-64"
+                className="pl-8 pr-2 py-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 w-52 text-sm"
             />
             </div>
             <button 
                 onClick={openCreateModal}
-                className="bg-[#1e3a8a] hover:bg-blue-900 text-white px-4 py-2 rounded-lg flex items-center gap-2 font-medium transition-colors shadow-sm"
+                className="bg-[#1e3a8a] hover:bg-blue-900 text-white px-3 py-1.5 rounded-lg flex items-center gap-2 font-medium transition-colors shadow-sm text-sm"
             >
-                <Plus size={20} />
+                <Plus size={16} />
                 <span className="hidden md:inline">Nuova Società</span>
             </button>
         </div>
       </div>
 
-      <div className="flex-1 flex gap-6 overflow-hidden">
+    <div className="flex-1 flex gap-4 overflow-hidden">
         {/* List Side */}
-        <div className={`bg-white rounded-xl shadow-sm border border-slate-300 flex-1 overflow-auto ${selectedCompany ? 'hidden lg:block lg:w-1/2' : 'w-full'}`}>
+        <div className={`bg-white rounded-lg shadow-sm border border-slate-300 flex-1 overflow-auto ${selectedCompany ? 'hidden lg:block lg:w-1/2' : 'w-full'}`}> 
           <table className="w-full text-left">
-            <thead className="bg-slate-50 sticky top-0 z-10 border-b border-slate-200">
-              <tr>
-                <th className="p-4 font-semibold text-slate-600 text-sm">Ragione Sociale</th>
-                <th className="p-4 font-semibold text-slate-600 text-sm">Forma Giuridica</th>
-                <th className="p-4 font-semibold text-slate-600 text-sm">P. IVA</th>
-                <th className="p-4 font-semibold text-slate-600 text-sm">Stato</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
-              {filteredCompanies.map(company => (
-                <tr 
-                  key={company.id} 
-                  onClick={() => setSelectedCompany(company)}
-                  className={`cursor-pointer transition-colors ${selectedCompany?.id === company.id ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
-                >
-                  <td className="p-4 font-medium text-slate-800">{company.name}</td>
-                  <td className="p-4 text-slate-600 text-sm">
-                    <span className="px-2 py-1 bg-slate-100 border border-slate-200 rounded text-xs font-semibold">{company.type}</span>
-                  </td>
-                  <td className="p-4 text-slate-600 font-mono text-sm">{company.vatNumber}</td>
-                  <td className="p-4">
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border
-                      ${company.status === 'Active' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>
-                      {company.status === 'Active' ? 'Attiva' : company.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
+                        <thead className="bg-slate-50 sticky top-0 z-10 border-b border-slate-200">
+                            <tr>
+                                <th className="p-2 font-semibold text-slate-600 text-xs">Ragione Sociale</th>
+                                <th className="p-2 font-semibold text-slate-600 text-xs">Forma Giuridica</th>
+                                <th className="p-2 font-semibold text-slate-600 text-xs">P. IVA</th>
+                                <th className="p-2 font-semibold text-slate-600 text-xs">Stato</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200">
+                            {filteredCompanies.map(company => (
+                                <tr 
+                                    key={company.id} 
+                                    onClick={() => setSelectedCompany(company)}
+                                    className={`cursor-pointer transition-colors ${selectedCompany?.id === company.id ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
+                                >
+                                    <td className="p-2 font-medium text-slate-800 text-sm">{company.name}</td>
+                                    <td className="p-2 text-slate-600 text-xs">
+                                        <span className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px] font-semibold">{company.type}</span>
+                                    </td>
+                                    <td className="p-2 text-slate-600 font-mono text-xs">{company.vatNumber}</td>
+                                    <td className="p-2">
+                                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium border
+                                            ${company.status === 'Active' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>
+                                            {company.status === 'Active' ? 'Attiva' : company.status}
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
           </table>
           {filteredCompanies.length === 0 && (
-            <div className="p-12 text-center text-slate-400">
+            <div className="p-8 text-center text-slate-400 text-sm">
               Nessuna società trovata.
             </div>
           )}
@@ -216,82 +216,82 @@ const CompanyList: React.FC<CompanyListProps> = ({ companies, onAddCompany, onAd
 
         {/* Detail Side */}
         {selectedCompany && (
-          <div className="bg-white rounded-xl shadow-sm border border-slate-300 flex-1 overflow-auto animate-slide-in-right p-6 lg:w-1/2 h-full relative">
+          <div className="bg-white rounded-lg shadow-sm border border-slate-300 flex-1 overflow-auto animate-slide-in-right p-4 lg:w-1/2 h-full relative">
              
              {/* Action Buttons Top Right */}
-             <div className="absolute top-4 right-4 flex gap-2">
+             <div className="absolute top-2 right-2 flex gap-1">
                 <button 
                     onClick={openEditModal}
-                    className="p-2 text-[#1e3a8a] hover:bg-blue-50 rounded-full transition-colors border border-transparent hover:border-blue-100"
+                    className="p-1.5 text-[#1e3a8a] hover:bg-blue-50 rounded-full transition-colors border border-transparent hover:border-blue-100"
                     title="Modifica Società"
                 >
-                    <Edit size={18} />
+                    <Edit size={14} />
                 </button>
                 <button 
                     onClick={() => setSelectedCompany(null)} 
-                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors border border-transparent hover:border-slate-200"
+                    className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors border border-transparent hover:border-slate-200"
                     title="Chiudi dettaglio"
                 >
-                    <X size={20} />
+                    <X size={16} />
                 </button>
              </div>
 
-             <div className="flex justify-between items-start mb-6 pr-20">
-                <div>
-                    <h3 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                      <Building className="text-[#1e3a8a]" />
-                      {selectedCompany.name}
-                    </h3>
-                    <p className="text-slate-500 flex items-center gap-2 mt-1">
-                       {selectedCompany.type} &bull; {selectedCompany.vatNumber}
-                    </p>
-                </div>
-             </div>
+                 <div className="flex justify-between items-start mb-4 pr-10">
+                     <div>
+                          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                             <Building className="text-[#1e3a8a]" size={16} />
+                             {selectedCompany.name}
+                          </h3>
+                          <p className="text-slate-500 flex items-center gap-2 mt-1 text-xs">
+                              {selectedCompany.type} &bull; {selectedCompany.vatNumber}
+                          </p>
+                     </div>
+                 </div>
 
              {/* Toolbar */}
-             <div className="flex gap-2 mb-6">
+             <div className="flex gap-2 mb-4">
                 <button 
                     onClick={() => setIsDeadlineModalOpen(true)}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-sm rounded-lg font-medium transition-colors"
+                    className="flex items-center gap-2 px-2 py-1 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-xs rounded-lg font-medium transition-colors"
                 >
-                    <Clock size={14} />
+                    <Clock size={12} />
                     Aggiungi Scadenza
                 </button>
              </div>
 
              <div className="space-y-6">
                 {/* General Info */}
-                <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
                     <div>
-                        <p className="text-xs text-slate-400 uppercase font-semibold">Capitale Sociale</p>
-                        <p className="text-lg font-medium text-slate-800">€ {selectedCompany.capital.toLocaleString('it-IT')}</p>
+                        <p className="text-[10px] text-slate-400 uppercase font-semibold">Capitale Sociale</p>
+                        <p className="text-base font-medium text-slate-800">€ {selectedCompany.capital.toLocaleString('it-IT')}</p>
                     </div>
                     <div>
-                        <p className="text-xs text-slate-400 uppercase font-semibold">Sede Legale</p>
-                        <p className="text-sm font-medium text-slate-800">{selectedCompany.address}</p>
+                        <p className="text-[10px] text-slate-400 uppercase font-semibold">Sede Legale</p>
+                        <p className="text-xs font-medium text-slate-800">{selectedCompany.address}</p>
                     </div>
                 </div>
 
                 {/* Letterhead Info */}
                 {(selectedCompany.letterheadInfo || selectedCompany.letterheadFile) && (
-                     <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                        <p className="text-xs text-slate-400 uppercase font-semibold mb-2">Carta Intestata Configurata</p>
+                     <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                        <p className="text-[10px] text-slate-400 uppercase font-semibold mb-1">Carta Intestata Configurata</p>
                         {selectedCompany.letterheadFile && (
-                            <div className="flex items-center gap-2 text-sm text-[#1e3a8a] mb-2">
-                                <Upload size={14} />
+                            <div className="flex items-center gap-2 text-xs text-[#1e3a8a] mb-1">
+                                <Upload size={12} />
                                 File Caricato: {selectedCompany.letterheadFile.name}
                             </div>
                         )}
                         {selectedCompany.letterheadInfo && (
-                            <p className="text-sm text-slate-600 italic line-clamp-3">{selectedCompany.letterheadInfo}</p>
+                            <p className="text-xs text-slate-600 italic line-clamp-3">{selectedCompany.letterheadInfo}</p>
                         )}
                      </div>
                 )}
 
                 {/* Officers */}
                 <div>
-                    <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wide mb-3 flex items-center gap-2">
-                        <ShieldCheck size={16} className="text-blue-500"/> Organi Sociali
+                    <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wide mb-2 flex items-center gap-1">
+                        <ShieldCheck size={12} className="text-blue-500"/> Organi Sociali
                     </h4>
                     {selectedCompany.officers.length > 0 ? (
                         <div className="space-y-2">
@@ -308,13 +308,13 @@ const CompanyList: React.FC<CompanyListProps> = ({ companies, onAddCompany, onAd
                                 </div>
                             ))}
                         </div>
-                    ) : <p className="text-sm text-slate-400 italic">Nessun organo sociale registrato.</p>}
+                    ) : <p className="text-xs text-slate-400 italic">Nessun organo sociale registrato.</p>}
                 </div>
 
                 {/* Shareholders */}
                 <div>
-                    <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wide mb-3 flex items-center gap-2">
-                        <User size={16} className="text-purple-500"/> Compagine Sociale
+                    <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wide mb-2 flex items-center gap-1">
+                        <User size={12} className="text-purple-500"/> Compagine Sociale
                     </h4>
                     {selectedCompany.shareholders.length > 0 ? (
                     <div className="space-y-2">
@@ -327,16 +327,16 @@ const CompanyList: React.FC<CompanyListProps> = ({ companies, onAddCompany, onAd
                             </div>
                         ))}
                     </div>
-                    ) : <p className="text-sm text-slate-400 italic">Nessun socio registrato.</p>}
+                    ) : <p className="text-xs text-slate-400 italic">Nessun socio registrato.</p>}
                 </div>
 
                  {/* Next Actions */}
                  {selectedCompany.nextMeetingDate && (
-                     <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3">
-                         <Calendar className="text-amber-600 mt-1" size={20} />
+                     <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2">
+                         <Calendar className="text-amber-600 mt-0.5" size={14} />
                          <div>
-                             <p className="font-bold text-amber-800 text-sm">Prossima Assemblea Prevista</p>
-                             <p className="text-amber-700 text-sm mt-1">
+                             <p className="font-bold text-amber-800 text-xs">Prossima Assemblea Prevista</p>
+                             <p className="text-amber-700 text-xs mt-1">
                                  {new Date(selectedCompany.nextMeetingDate).toLocaleDateString('it-IT', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                              </p>
                          </div>
@@ -348,22 +348,21 @@ const CompanyList: React.FC<CompanyListProps> = ({ companies, onAddCompany, onAd
       </div>
 
        {/* Create/Edit Company Modal */}
-       {isCompanyModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-3xl shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto flex flex-col">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-slate-800">{isEditing ? 'Modifica Società' : 'Nuova Società'} - Fase {step}/4</h3>
-              <button onClick={() => setIsCompanyModalOpen(false)} className="text-slate-400 hover:text-slate-600">
-                <X size={20} />
-              </button>
-            </div>
-            
-            {/* Progress Bar */}
-            <div className="w-full bg-slate-100 h-2 rounded-full mb-6">
-                <div className="bg-[#1e3a8a] h-2 rounded-full transition-all duration-300" style={{ width: `${step * 25}%` }}></div>
-            </div>
+             {isCompanyModalOpen && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+                    <div className="bg-white rounded-xl p-4 w-full max-w-2xl shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto flex flex-col text-sm">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-lg font-bold text-slate-800">{isEditing ? 'Modifica Società' : 'Nuova Società'} - Fase {step}/4</h3>
+                            <button onClick={() => setIsCompanyModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                                <X size={16} />
+                            </button>
+                        </div>
+                        {/* Progress Bar */}
+                        <div className="w-full bg-slate-100 h-1.5 rounded-full mb-4">
+                                <div className="bg-[#1e3a8a] h-1.5 rounded-full transition-all duration-300" style={{ width: `${step * 25}%` }}></div>
+                        </div>
 
-            <div className="flex-1 overflow-y-auto px-1">
+                        <div className="flex-1 overflow-y-auto px-1">
                 {step === 1 && (
                     <div className="space-y-4">
                         <h4 className="font-medium text-slate-900 border-b border-slate-200 pb-2">Dati Generali</h4>
@@ -512,15 +511,14 @@ const CompanyList: React.FC<CompanyListProps> = ({ companies, onAddCompany, onAd
 
             </div>
 
-            <div className="pt-6 border-t border-slate-200 flex justify-between mt-4">
+            <div className="pt-4 border-t border-slate-200 flex justify-between mt-3">
                 {step > 1 ? (
-                     <button onClick={() => setStep(step - 1)} className="text-slate-500 px-4 py-2 hover:bg-slate-100 rounded">Indietro</button>
+                     <button onClick={() => setStep(step - 1)} className="text-slate-500 px-3 py-1.5 hover:bg-slate-100 rounded text-xs">Indietro</button>
                 ) : <div></div>}
-                
                 {step < 4 ? (
-                    <button onClick={() => setStep(step + 1)} className="bg-[#1e3a8a] text-white px-6 py-2 rounded-lg hover:bg-blue-900">Avanti</button>
+                    <button onClick={() => setStep(step + 1)} className="bg-[#1e3a8a] text-white px-4 py-1.5 rounded-lg hover:bg-blue-900 text-xs">Avanti</button>
                 ) : (
-                    <button onClick={handleSaveCompany} className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 font-bold shadow-md">
+                    <button onClick={handleSaveCompany} className="bg-green-600 text-white px-4 py-1.5 rounded-lg hover:bg-green-700 font-bold shadow-md text-xs">
                         {isEditing ? 'Salva Modifiche' : 'Crea Società'}
                     </button>
                 )}
@@ -530,63 +528,63 @@ const CompanyList: React.FC<CompanyListProps> = ({ companies, onAddCompany, onAd
        )}
 
        {/* Quick Deadline Modal */}
-       {isDeadlineModalOpen && selectedCompany && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl border border-slate-200">
-             <div className="flex justify-between items-center mb-4">
-               <h3 className="text-lg font-bold text-slate-800">Aggiungi Scadenza</h3>
-               <button onClick={() => setIsDeadlineModalOpen(false)} className="text-slate-400 hover:text-slate-600">
-                 <X size={20} />
-               </button>
-             </div>
-             <form onSubmit={handleSaveDeadline} className="space-y-4">
-               <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 mb-2">
-                   <p className="text-xs text-slate-500">Società</p>
-                   <p className="font-semibold text-slate-800">{selectedCompany.name}</p>
-               </div>
-               <div>
-                 <label className="block text-sm font-medium text-slate-700 mb-1">Descrizione</label>
-                 <input 
-                   required
-                   type="text" 
-                   className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                   value={quickDeadline.title || ''}
-                   onChange={e => setQuickDeadline({...quickDeadline, title: e.target.value})}
-                   placeholder="Es: Rinnovo Cariche"
-                 />
-               </div>
-               <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Data</label>
-                    <input 
-                      required
-                      type="date" 
-                      className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                      value={quickDeadline.dueDate || ''}
-                      onChange={e => setQuickDeadline({...quickDeadline, dueDate: e.target.value})}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Tipo</label>
-                    <select 
-                      required
-                      className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                      value={quickDeadline.type}
-                      onChange={e => setQuickDeadline({...quickDeadline, type: e.target.value as 'TAX' | 'CORPORATE' | 'LEGAL'})}
-                    >
-                      <option value="CORPORATE">Societario</option>
-                      <option value="TAX">Fiscale</option>
-                      <option value="LEGAL">Legale</option>
-                    </select>
-                  </div>
-               </div>
-               <button type="submit" className="w-full bg-[#1e3a8a] text-white py-2 rounded-lg hover:bg-blue-900 font-medium mt-4 shadow-sm">
-                 Salva Scadenza
-               </button>
-             </form>
-           </div>
-        </div>
-       )}
+             {isDeadlineModalOpen && selectedCompany && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+                        <div className="bg-white rounded-xl p-4 w-full max-w-sm shadow-2xl border border-slate-200">
+                         <div className="flex justify-between items-center mb-2">
+                             <h3 className="text-base font-bold text-slate-800">Aggiungi Scadenza</h3>
+                             <button onClick={() => setIsDeadlineModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                                 <X size={16} />
+                             </button>
+                         </div>
+                         <form onSubmit={handleSaveDeadline} className="space-y-3">
+                             <div className="p-2 bg-slate-50 rounded-lg border border-slate-200 mb-2">
+                                     <p className="text-xs text-slate-500">Società</p>
+                                     <p className="font-semibold text-slate-800">{selectedCompany.name}</p>
+                             </div>
+                             <div>
+                                 <label className="block text-xs font-medium text-slate-700 mb-1">Descrizione</label>
+                                 <input 
+                                     required
+                                     type="text" 
+                                     className="w-full p-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                                     value={quickDeadline.title || ''}
+                                     onChange={e => setQuickDeadline({...quickDeadline, title: e.target.value})}
+                                     placeholder="Es: Rinnovo Cariche"
+                                 />
+                             </div>
+                             <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-700 mb-1">Data</label>
+                                        <input 
+                                            required
+                                            type="date" 
+                                            className="w-full p-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                                            value={quickDeadline.dueDate || ''}
+                                            onChange={e => setQuickDeadline({...quickDeadline, dueDate: e.target.value})}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-700 mb-1">Tipo</label>
+                                        <select 
+                                            required
+                                            className="w-full p-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                                            value={quickDeadline.type}
+                                            onChange={e => setQuickDeadline({...quickDeadline, type: e.target.value as 'TAX' | 'CORPORATE' | 'LEGAL'})}
+                                        >
+                                            <option value="CORPORATE">Societario</option>
+                                            <option value="TAX">Fiscale</option>
+                                            <option value="LEGAL">Legale</option>
+                                        </select>
+                                    </div>
+                             </div>
+                             <button type="submit" className="w-full bg-[#1e3a8a] text-white py-1.5 rounded-lg hover:bg-blue-900 font-medium mt-2 shadow-sm text-sm">
+                                 Salva Scadenza
+                             </button>
+                         </form>
+                     </div>
+                </div>
+             )}
     </div>
   );
 };
