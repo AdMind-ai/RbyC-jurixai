@@ -4,9 +4,8 @@ import { fetchWithAuth } from '../../api/fetchWithAuth';
 import { Company, Role, CompanyType, Officer, Shareholder, Deadline } from '../../types/types';
 import { Search, Building, User, Calendar, ShieldCheck, Plus, X, Trash2, Upload, Edit, Clock, Building2 } from 'lucide-react';
 
-interface CompanyListProps { }
 
-const CompanyList: React.FC<CompanyListProps> = () => {
+const CompanyList: React.FC = () => {
     const [companies, setCompanies] = useState<Company[]>([]);
     const [deadlines, setDeadlines] = useState<Deadline[]>([]);
 
@@ -125,7 +124,7 @@ const CompanyList: React.FC<CompanyListProps> = () => {
                 }
             } else {
                 // Sem arquivo, enviar JSON normal
-                const payload: any = {
+                const payload = {
                     name: newCompany.name,
                     vat_number: newCompany.vatNumber,
                     company_type: newCompany.type,
@@ -231,7 +230,7 @@ const CompanyList: React.FC<CompanyListProps> = () => {
                         type: d.category,
                     })));
                 }
-            } catch (err) { }
+            } catch { }
         };
         fetchDeadlines();
     }, []);
@@ -257,7 +256,7 @@ const CompanyList: React.FC<CompanyListProps> = () => {
                         nextMeetingDate: c.next_meeting_date,
                     })));
                 }
-            } catch (err) { }
+            } catch { }
         };
         fetchCompanies();
     }, []);
@@ -290,7 +289,7 @@ const CompanyList: React.FC<CompanyListProps> = () => {
                     setIsDeadlineModalOpen(false);
                     setQuickDeadline({ type: 'CORPORATE', completed: false });
                 }
-            } catch (err) { }
+            } catch { }
         }
     };
 

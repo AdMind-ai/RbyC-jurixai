@@ -31,7 +31,7 @@ const Dashboard: React.FC = () => {
                         nextMeetingDate: c.next_meeting_date,
                     })));
                 }
-            } catch (err) {}
+            } catch {}
         };
         const fetchDeadlines = async () => {
             try {
@@ -47,7 +47,7 @@ const Dashboard: React.FC = () => {
                         type: d.category,
                     })));
                 }
-            } catch (err) {}
+            } catch {}
         };
         fetchCompanies();
         fetchDeadlines();
@@ -167,7 +167,7 @@ const Dashboard: React.FC = () => {
                     const errData = await res.json();
                     setErrorMsg(errData?.detail || JSON.stringify(errData));
                 }
-            } catch (err) {
+            } catch {
                 setErrorMsg('Erro ao adicionar scadenza.');
             }
         } else {
@@ -186,7 +186,7 @@ const Dashboard: React.FC = () => {
             if (res.ok) {
                 setDeadlines(prev => prev.map(d => d.id === deadline.id ? { ...d, completed: !d.completed } : d));
             }
-        } catch (err) {
+        } catch {
             // handle error
         }
     };
