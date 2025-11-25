@@ -25,7 +25,7 @@ DEEPL_KEY = os.environ['DEEPL_KEY']
 
 # Azure Storage
 AZURE_ACCOUNT_NAME = "jurixaistorage"
-AZURE_CONTAINER_NAME = 'jurixai-rbyc-storage'
+AZURE_CONTAINER = 'jurixai-rbyc-storage'
 AZURE_ACCOUNT_KEY = os.environ['AZURE_ACCOUNT_KEY']
 AZURE_CONNECTION_STRING = os.environ['AZURE_CONNECTION_STRING']
 AZURE_OVERWRITE_FILES = True

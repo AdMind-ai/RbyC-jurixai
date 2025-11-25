@@ -1,10 +1,11 @@
 import React, { useEffect, useRef } from 'react'
-import { Box, Paper, Typography } from '@mui/material'
+import { Paperclip } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
 import { toast } from 'react-toastify'
 import { DotTyping } from '../DotTyping'
+import { Box, Paper, Typography } from '@mui/material'
 
 interface Message {
   sender: 'user' | 'ai'
@@ -90,7 +91,7 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({ messages, isTyping, i
         position: page == 'check-compliance' ? 'relative' : 'absolute', 
         top: 0, bottom: 0, left: 0, right: 0, 
         overflowY: 'auto', 
-        px: '1.1vw', 
+        px: page == 'check-compliance' ? '1.1vw' : '5vw', 
         pb: page == 'check-compliance' ? '2vh' : '20vh'
       }}
     >
@@ -126,6 +127,17 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({ messages, isTyping, i
                     {msg.sender === 'user' ? 'TU' : 'AI'}
                   </Typography>
 
+                  {/* Arquivos anexados do usuário */}
+                  {msg.sender === 'user' && Array.isArray(msg.citations) && msg.citations.length > 0 && (
+                    <div className="mb-2 flex flex-wrap gap-2 justify-end">
+                      {msg.citations.map((fileName, fileIdx) => (
+                        <div key={fileIdx} className="bg-slate-50 text-xs flex items-center gap-1 px-2 py-1 rounded border border-slate-300 text-slate-600">
+                          <Paperclip size={10} /> {fileName}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   {/* Think Tag */}
                   {/* {thinkText && (
                     <Box sx={{ bgcolor: '#FFF3CD', borderRadius: '8px', p: 2, my: 2 }}>
@@ -143,133 +155,6 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({ messages, isTyping, i
                       <ReactMarkdown 
                         remarkPlugins={[remarkGfm]} 
                         rehypePlugins={[rehypeHighlight]}
-                        components={{
-                          p: ({ children, ...props }) => (
-                            <Typography component="p" sx={{ margin: '0px 0', lineHeight: '1.5', fontSize:'1rem' }} {...props}>
-                              {children}
-                            </Typography>
-                          ),
-                          ul: ({ children, ...props }) => (
-                            <Box component="ul" sx={{ marginY: 0, py:0, pl:3, fontSize:'1rem', lineHeight: '1' }} {...props}>
-                              {children}
-                            </Box>
-                          ),
-                          ol: ({ children, ...props }) => (
-                            <Box component="ol" sx={{ marginY: 0, py:0, pl:3, fontSize:'1rem', lineHeight: '1' }} {...props}>
-                              {children}
-                            </Box>
-                          ),
-                          li: ({ children, ...props }) => (
-                            <Typography component="li" sx={{ margin: 0, py:0 , fontSize:'1rem', lineHeight: '1.2' }} {...props}>
-                              {children}
-                            </Typography>
-                          ),
-                          h1: ({ children, ...props }) => (
-                            <Typography component="h1" sx={{ margin: '4px 0', fontSize:'1.6rem', lineHeight: '1.8' }} {...props}>
-                              {children}
-                            </Typography>
-                          ),
-                          h2: ({ children, ...props }) => (
-                            <Typography component="h2" sx={{ margin: '4px 0', fontSize:'1.4rem', lineHeight: '1.6' }} {...props}>
-                              {children}
-                            </Typography>
-                          ),
-                          h3: ({ children, ...props }) => (
-                            <Typography component="h3" sx={{ margin: '4px 0', fontSize:'1.2rem', lineHeight: '1.4' }} {...props}>
-                              {children}
-                            </Typography>
-                          ), 
-                          h4: ({ children, ...props }) => (
-                            <Typography component="h4" sx={{ margin: '4px 0', fontSize:'1rem', lineHeight: '1' }} {...props}>
-                              {children}
-                            </Typography>
-                          ),
-                          table: ({ children, ...props }) => (
-                            <Box sx={{ overflowX: 'auto', my: 1 }}>
-                              <table
-                                {...props}
-                                style={{
-                                  width: '100%',
-                                  tableLayout: 'fixed', 
-                                  borderCollapse: 'collapse',
-                                  textAlign: 'left', 
-                                }}
-                              >
-                                {children}
-                              </table>
-                            </Box>
-                          ),
-                          // Ajustando outras tags de lista, como <thead>, <tbody>, <tr>, <th>, <td>
-                          thead: ({ children, ...props }) => (
-                            <thead {...props} style={{ backgroundColor: '#f4f4f4', fontWeight: 'bold' }}>
-                              {children}
-                            </thead>
-                          ),
-                          tbody: ({ children, ...props }) => (
-                            <tbody {...props}>{children}</tbody>
-                          ),
-                          tr: ({ children, ...props }) => (
-                            <tr {...props} style={{ borderBottom: '1px solid #ddd' }}>
-                              {children}
-                            </tr>
-                          ),
-                          th: ({ children, ...props }) => (
-                            <th {...props} style={{ padding: '8px', border: '1px solid #ddd' }}>
-                              {children}
-                            </th>
-                          ),
-                          td: ({ children, ...props }) => (
-                            <td {...props} style={{ padding: '8px', border: '1px solid #ddd' }}>
-                              {children}
-                            </td>
-                          ),
-                          a: ({ href, children, ...props }) => (
-                            <a 
-                              href={href} 
-                              target="_blank" 
-                              rel="noopener noreferrer" 
-                              style={{ 
-                                textDecoration: 'none', 
-                                color: '#ED6008',     
-                              }}
-                              {...props}
-                            >
-                              {children}
-                            </a>
-                          ),
-                          code({ className, children, ...props }) {
-                            const match = /language-(\w+)/.exec(className || '');
-                            const language = match ? match[1] : '';
-                        
-                            return (
-                              <Box 
-                                sx={{ 
-                                  bgcolor: '#282C34', 
-                                  color: '#FFFFFF', 
-                                  padding: 2, 
-                                  borderRadius: '8px',
-                                  position: 'relative',
-                                  cursor: 'pointer',
-                                  overflowY: 'auto', 
-                                  my: 1
-                                }}
-                                onClick={() => copyToClipboard(String(children).replace(/\n$/, ''))}
-                              >
-                                <Typography variant="subtitle2" sx={{ 
-                                  position: 'absolute', 
-                                  top: 4, 
-                                  right: 8, 
-                                  color: '#ffffff88'
-                                }}>
-                                  {language || 'code'} – Click per copiare
-                                </Typography>
-                                <code {...props}>
-                                  {children}
-                                </code>
-                              </Box>
-                            );
-                          }
-                        }}
                       >
                         {contentWithCitations}
                       </ReactMarkdown>

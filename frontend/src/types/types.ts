@@ -45,6 +45,16 @@ export interface Company {
     mimeType: string;
     name: string;
   };
+  // Add missing optional API fields
+  vat_number?: string;
+  company_type?: string;
+  letterhead_info?: string;
+  letterhead_file?: {
+    data?: string;
+    mimeType?: string;
+    name?: string;
+  };
+  next_meeting_date?: string;
 }
 
 export interface Deadline {
@@ -54,6 +64,10 @@ export interface Deadline {
   dueDate: string;
   completed: boolean;
   type: 'TAX' | 'CORPORATE' | 'LEGAL';
+  // Add missing optional API fields
+  company?: string;
+  due_date?: string;
+  category?: string;
 }
 
 export interface GeneratedDocument {

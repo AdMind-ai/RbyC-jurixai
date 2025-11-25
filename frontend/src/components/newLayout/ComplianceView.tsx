@@ -138,9 +138,9 @@ const ComplianceView: React.FC = () => {
   };
 
   return (
-    <div className="w-full h-full p-8 overflow-y-auto animate-fade-in max-w-7xl mx-auto">
+    <div className="w-full h-full p-8 overflow-y-auto animate-fade-in max-w-6xl mx-auto">
       <div className="flex flex-col h-full">
-        <h2 className="text-2xl font-bold text-slate-800 mb-6 border-b border-slate-300 pb-4 shrink-0">Check compliance</h2>
+        <h2 className="text-1xl font-bold text-slate-800 mb-3 border-b border-slate-300 pb-2 shrink-0">Check compliance</h2>
         {!isChatOpen ? (
           <div className="flex-1 flex flex-col items-center justify-center max-w-2xl mx-auto w-full text-center transition-all">
             <h3 className="text-xl text-slate-500 mb-8 leading-relaxed">
@@ -162,12 +162,12 @@ const ComplianceView: React.FC = () => {
                 {file ? <CheckCircle2 size={40} /> : <Upload size={40} />}
               </div>
               {file ? (
-                <div className="mb-4">
-                  <p className="font-bold text-slate-800 text-lg">{file.name}</p>
-                  <p className="text-sm text-slate-500">{(file.size / 1024).toFixed(1)} KB - Pronto per l'analisi</p>
+                <div className="mb-2">
+                  <p className="font-bold text-slate-800 text-sm">{file.name}</p>
+                  <p className="text-xs text-slate-500">{(file.size / 1024).toFixed(1)} KB - Pronto para análise</p>
                 </div>
               ) : (
-                <div className="px-6 py-3 border border-slate-300 rounded-lg text-slate-700 font-small underline decoration-slate-400 underline-offset-4 mb-4">
+                <div className="px-4 py-2 border border-slate-300 rounded-lg text-slate-700 text-sm underline decoration-slate-400 underline-offset-2 mb-2">
                   Carica o trascina il tuo file qui
                   <input
                     type="file"
@@ -180,29 +180,29 @@ const ComplianceView: React.FC = () => {
               )}
               <button
                 onClick={file && !isLoading ? handleAnalyze : undefined}
-                className={`w-64 py-3 font-bold rounded-lg shadow-lg transition-all animate-bounce-in ${file ? 'bg-[#1e3a8a] text-white hover:bg-blue-900' : 'bg-slate-200 text-slate-500 font-medium cursor-not-allowed'}`}
+                className={`w-40 py-3 mt-4 text-sm font-bold rounded-md shadow transition-all animate-bounce-in ${file ? 'bg-[#1e3a8a] text-white hover:bg-blue-900' : 'bg-slate-200 text-slate-500 font-medium cursor-not-allowed'}`}
                 disabled={!file || isLoading}
               >
-                {isLoading ? 'Analisando...' : 'Invia per l\'analisi'}
+                {isLoading ? 'Analisi in corso...' : "Invia per l'analisi"}
               </button>
             </div>
-            <p className="mt-6 text-xs text-slate-400">Supporta il formato .pdf</p>
+            <p className="mt-2 text-xs text-slate-400">Suporta formato .pdf</p>
           </div>
         ) : (
-          <div className="flex-1 bg-white rounded-xl shadow border border-slate-300 overflow-hidden flex flex-col">
-            <div className="p-4 bg-slate-50 border-b border-slate-300 flex justify-between items-center shrink-0">
-              <h3 className="font-bold text-slate-800 flex items-center gap-2"><FileText size={18} /> Report Analisi: {file?.name}</h3>
-              <div className="flex gap-3">
-                <button onClick={handleNewDocument} className="text-sm text-[#1e3a8a] hover:underline">Nuova Analisi</button>
-                <button className="text-sm text-red-500 font-medium flex items-center gap-1"><AlertTriangle size={14} /> Esporta PDF</button>
+          <div className="flex-1 bg-white rounded-lg shadow border border-slate-300 overflow-hidden flex flex-col">
+            <div className="p-2 bg-slate-50 border-b border-slate-300 flex justify-between items-center shrink-0">
+              <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm"><FileText size={16} /> Report: {file?.name}</h3>
+              <div className="flex gap-2">
+                <button onClick={handleNewDocument} className="text-xs text-[#1e3a8a] hover:underline">Nova análise</button>
+                <button className="text-xs text-red-500 font-medium flex items-center gap-1"><AlertTriangle size={12} /> Exportar PDF</button>
               </div>
             </div>
-            <div className="p-8 overflow-y-auto">
-              <div className="markdown-body text-sm leading-relaxed">
-                <h3 className="text-lg font-bold text-slate-800 mb-2">Chat di analisi dei documenti</h3>
-                <p className="text-xs text-slate-400 mb-6">Documenti: {file?.name}</p>
+            <div className="p-4 overflow-y-auto">
+              <div className="markdown-body text-xs leading-relaxed">
+                <h3 className="text-base font-bold text-slate-800 mb-1">Chat de análise</h3>
+                <p className="text-xs text-slate-400 mb-2">Documento: {file?.name}</p>
                 {/* Mensagens do chat - ChatMessageList dentro de box estilizada */}
-                <div className="border border-slate-200 rounded-xl p-6 shadow-sm">
+                <div className="border border-slate-200 rounded-lg p-3 shadow-sm">
                   <ChatMessageList
                     messages={messages}
                     isTyping={isTyping}
@@ -212,23 +212,23 @@ const ComplianceView: React.FC = () => {
                 </div>
               </div>
             </div>
-            <div className="p-4 border-t border-slate-300 bg-white shrink-0">
-              <div className="relative flex items-center gap-2">
+            <div className="p-2 border-t border-slate-300 bg-white shrink-0">
+              <div className="relative flex items-center gap-1">
                 <input
                   type="text"
-                  placeholder="Inserisci la tua domanda..."
-                  className="w-full pl-4 pr-12 py-3 rounded-lg border border-slate-300 outline-none focus:border-[#1e3a8a]"
+                  placeholder="Digite sua pergunta..."
+                  className="w-full pl-3 pr-10 py-2 rounded-md border border-slate-300 outline-none focus:border-[#1e3a8a] text-xs"
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleSend()}
                   disabled={isTyping}
                 />
                 <button
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#1e3a8a]"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[#1e3a8a]"
                   onClick={handleSend}
                   disabled={isTyping || !input.trim()}
                 >
-                  <Send size={20} />
+                  <Send size={16} />
                 </button>
               </div>
             </div>

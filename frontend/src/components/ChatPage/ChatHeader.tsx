@@ -193,10 +193,10 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
   }, []);
 
   return (
-    <div className="w-full h-full p-8 flex flex-col animate-fade-in relative max-w-7xl mx-auto">
-      <div className="flex justify-between items-center border-b border-slate-300 pb-4 mb-4 z-10 bg-[#f8fafc] shrink-0">
+    <div className="w-full h-full p-8 flex flex-col animate-fade-in relative max-w-6xl mx-auto">
+      <div className="flex justify-between items-center border-b border-slate-300 pb-3 z-10 bg-[#f8fafc] shrink-0">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+          <h2 className="text-1xl font-bold text-slate-800 flex items-center gap-2">
             Chat Assistant
             <span className="ml-2 text-xs bg-gradient-to-r from-blue-600 to-purple-600 text-white px-2 py-1 rounded font-mono shadow-sm relative group cursor-pointer">
               GPT-5.1

@@ -60,10 +60,10 @@ const SearchView: React.FC = () => {
                 sx={{
                     display: "flex",
                     justifyContent: "space-between",
-                    marginBottom: "2vh",
+                    px: "10vh",
                 }}
             >
-                <Typography variant="h3" sx={{ marginLeft: "1vw" }}>
+                <Typography variant="h2" sx={{ fontSize: '21px' }}>
                     Ricerca documentale
                 </Typography>
                 <Box
@@ -202,7 +202,7 @@ const SearchView: React.FC = () => {
                 </Dialog>
             </Box>
 
-            <Divider sx={{ mx: 2 }} />
+            <Divider sx={{ mx: 9, mt: 1 }} />
 
             <Box
                 sx={{
@@ -213,6 +213,7 @@ const SearchView: React.FC = () => {
                     flexDirection: "column",
                     marginTop: "1rem",
                     height: "100%",
+                    px: '10vh'
                 }}
             >
                 <DocSearchMessageList
