@@ -1,17 +1,57 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { fetchWithAuth } from '../../api/fetchWithAuth';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { Company, Deadline, CompanyType } from '../../types/types';
 import { Users, Calendar, AlertTriangle, CheckCircle2, Plus, X, List, Grid, Clock, Briefcase, ChevronLeft, ChevronRight } from 'lucide-react';
 
-interface DashboardProps {
-  companies: Company[];
-  deadlines: Deadline[];
-  onAddDeadline: (deadline: Deadline) => void;
-}
-
 const COLORS = ['#3b82f6', '#6366f1', '#8b5cf6', '#ec4899'];
 
-const Dashboard: React.FC<DashboardProps> = ({ companies, deadlines, onAddDeadline }) => {
+const Dashboard: React.FC = () => {
+    const [companies, setCompanies] = useState<Company[]>([]);
+    const [deadlines, setDeadlines] = useState<Deadline[]>([]);
+    // Fetch companies and deadlines from API
+    useEffect(() => {
+        const fetchCompanies = async () => {
+            try {
+                const res = await fetchWithAuth('/companies/', { method: 'GET' });
+                if (res.ok) {
+                    const data = await res.json();
+                    setCompanies(data.map((c: any) => ({
+                        id: c.id.toString(),
+                        name: c.name,
+                        vatNumber: c.vat_number,
+                        type: c.company_type,
+                        address: c.address,
+                        capital: Number(c.capital),
+                        status: c.status,
+                        officers: c.officers || [],
+                        shareholders: c.shareholders || [],
+                        letterheadInfo: c.letterhead_info,
+                        letterheadFile: c.letterhead_file,
+                        nextMeetingDate: c.next_meeting_date,
+                    })));
+                }
+            } catch (err) {}
+        };
+        const fetchDeadlines = async () => {
+            try {
+                const res = await fetchWithAuth('/deadlines/', { method: 'GET' });
+                if (res.ok) {
+                    const data = await res.json();
+                    setDeadlines(data.map((d: any) => ({
+                        id: d.id.toString(),
+                        companyId: d.company.toString(),
+                        title: d.title,
+                        dueDate: d.due_date,
+                        completed: d.completed,
+                        type: d.category,
+                    })));
+                }
+            } catch (err) {}
+        };
+        fetchCompanies();
+        fetchDeadlines();
+    }, []);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
   const [deadlineFilter, setDeadlineFilter] = useState<'upcoming' | 'urgent' | 'completed'>('urgent');
@@ -93,27 +133,63 @@ const Dashboard: React.FC<DashboardProps> = ({ companies, deadlines, onAddDeadli
     { name: 'Legali', value: deadlines.filter(d => d.type === 'LEGAL').length },
   ];
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newDeadline.title && newDeadline.dueDate && newDeadline.companyId) {
-        const deadline: Deadline = {
-            id: Date.now().toString(),
-            companyId: newDeadline.companyId,
-            title: newDeadline.title,
-            dueDate: newDeadline.dueDate,
-            type: newDeadline.type as 'TAX' | 'CORPORATE' | 'LEGAL',
-            completed: false
-        };
-        onAddDeadline(deadline);
-        setIsModalOpen(false);
-        setNewDeadline({ type: 'CORPORATE', completed: false });
-    }
-  };
+    const [errorMsg, setErrorMsg] = useState<string>('');
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setErrorMsg('');
+        if (newDeadline.title && newDeadline.dueDate && newDeadline.companyId) {
+            try {
+                const payload = {
+                    company: Number(newDeadline.companyId),
+                    title: newDeadline.title,
+                    due_date: newDeadline.dueDate,
+                    category: newDeadline.type,
+                    completed: false
+                };
+                console.log('Payload deadline:', payload);
+                const res = await fetchWithAuth('/deadlines/', {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    const d = await res.json();
+                    setDeadlines(prev => [...prev, {
+                        id: d.id.toString(),
+                        companyId: d.company.toString(),
+                        title: d.title,
+                        dueDate: d.due_date,
+                        completed: d.completed,
+                        type: d.category,
+                    }]);
+                    setIsModalOpen(false);
+                    setNewDeadline({ type: 'CORPORATE', completed: false });
+                } else {
+                    const errData = await res.json();
+                    setErrorMsg(errData?.detail || JSON.stringify(errData));
+                }
+            } catch (err) {
+                setErrorMsg('Erro ao adicionar scadenza.');
+            }
+        } else {
+            setErrorMsg('Preencha todos os campos obrigatórios.');
+        }
+    };
 
-  const toggleComplete = (deadline: Deadline) => {
-      deadline.completed = !deadline.completed;
-      onAddDeadline({...deadline}); 
-  };
+    const toggleComplete = async (deadline: Deadline) => {
+        try {
+            const res = await fetchWithAuth(`/deadlines/${deadline.id}/`, {
+                method: 'PUT',
+                body: JSON.stringify({
+                    completed: !deadline.completed
+                })
+            });
+            if (res.ok) {
+                setDeadlines(prev => prev.map(d => d.id === deadline.id ? { ...d, completed: !d.completed } : d));
+            }
+        } catch (err) {
+            // handle error
+        }
+    };
 
   return (
     <div className="w-full h-full p-6 overflow-y-auto animate-fade-in relative">
@@ -453,6 +529,9 @@ const Dashboard: React.FC<DashboardProps> = ({ companies, deadlines, onAddDeadli
                              </button>
                          </div>
                          <form onSubmit={handleSubmit} className="space-y-3">
+                             {errorMsg && (
+                                 <div className="text-red-500 text-xs mb-2">{errorMsg}</div>
+                             )}
                              <div>
                                  <label className="block text-xs font-medium text-slate-700 mb-1">Descrizione</label>
                                  <input 

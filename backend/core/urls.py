@@ -33,6 +33,19 @@ urlpatterns = [
     # Check Compliance
     path('check-compliance', CheckComplianceView.as_view(),
          name='check-compliance'),
+
+    # Deadlines
+    path('deadlines/', DeadlineListCreateView.as_view(), name='deadline-list-create'),
+    path('deadlines/<int:pk>/', DeadlineUpdateView.as_view(), name='deadline-update'),
+     # Company
+     path('companies/', CompanyListCreateView.as_view(), name='company-list-create'),
+     path('companies/<int:pk>/', CompanyUpdateView.as_view(), name='company-update'),
+     # Officer
+     path('officers/', OfficerListCreateView.as_view(), name='officer-list-create'),
+     path('officers/<int:pk>/', OfficerUpdateView.as_view(), name='officer-update'),
+     # Shareholder
+     path('shareholders/', ShareholderListCreateView.as_view(), name='shareholder-list-create'),
+     path('shareholders/<int:pk>/', ShareholderUpdateView.as_view(), name='shareholder-update'),
 ]
 
 urlpatterns += router.urls

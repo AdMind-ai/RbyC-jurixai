@@ -1,7 +1,36 @@
-from django.contrib import admin
+# Importações dos modelos de openai_chat e assistant_thread
 from core.models.openai_chat_models import ChatConversation, ChatMessage
 from core.models.assistant_thread_model import AssistantThread
+from django.contrib import admin
+# ...existing code...
+from core.models.segreteria_societaria.company_model import Company
+from core.models.segreteria_societaria.officer_model import Officer
+from core.models.segreteria_societaria.shareholder_model import Shareholder
+from core.models.segreteria_societaria.deadline import Deadline
 # Register your models here.
+@admin.register(Company)
+class CompanyAdmin(admin.ModelAdmin):
+    list_display = ('id', 'name', 'vat_number', 'company_type', 'status', 'capital')
+    search_fields = ('name', 'vat_number')
+    list_filter = ('company_type', 'status')
+
+@admin.register(Officer)
+class OfficerAdmin(admin.ModelAdmin):
+    list_display = ('id', 'name', 'role', 'company', 'appointed_date', 'expiry_date')
+    search_fields = ('name',)
+    list_filter = ('role', 'company')
+
+@admin.register(Shareholder)
+class ShareholderAdmin(admin.ModelAdmin):
+    list_display = ('id', 'name', 'quota_percentage', 'company')
+    search_fields = ('name',)
+    list_filter = ('company',)
+
+@admin.register(Deadline)
+class DeadlineAdmin(admin.ModelAdmin):
+    list_display = ('id', 'title', 'company', 'due_date', 'completed', 'category')
+    search_fields = ('title',)
+    list_filter = ('company', 'completed', 'category')
 
 
 class ChatMessageInline(admin.StackedInline):
