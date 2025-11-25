@@ -2,12 +2,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, Bot, User, Info } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { Company, Deadline } from '../../types/types';
-
-interface AIAssistantProps {
-  companies: Company[];
-  deadlines: Deadline[];
-}
 
 interface Message {
   id: number;
@@ -15,7 +9,7 @@ interface Message {
   text: string;
 }
 
-const AIAssistant: React.FC<AIAssistantProps> = () => {
+const AIAssistant: React.FC = () => {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([
     { id: 1, sender: 'bot', text: 'Ciao! Sono il tuo assistente legale. Posso darti informazioni sulle società gestite, le scadenze imminenti o le cariche sociali. Chiedimi pure!' }

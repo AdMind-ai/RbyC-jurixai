@@ -16,7 +16,7 @@ const Dashboard: React.FC = () => {
                 const res = await fetchWithAuth('/companies/', { method: 'GET' });
                 if (res.ok) {
                     const data = await res.json();
-                    setCompanies(data.map((c: any) => ({
+                    setCompanies(data.map((c: Company) => ({
                         id: c.id.toString(),
                         name: c.name,
                         vatNumber: c.vat_number,
@@ -31,23 +31,29 @@ const Dashboard: React.FC = () => {
                         nextMeetingDate: c.next_meeting_date,
                     })));
                 }
-            } catch {}
+            } catch (err) {
+                // Handle error if needed
+                console.error('Error fetching companies:', err);
+            }
         };
         const fetchDeadlines = async () => {
             try {
                 const res = await fetchWithAuth('/deadlines/', { method: 'GET' });
                 if (res.ok) {
                     const data = await res.json();
-                    setDeadlines(data.map((d: any) => ({
+                    setDeadlines(data.map((d: Deadline) => ({
                         id: d.id.toString(),
-                        companyId: d.company.toString(),
+                        companyId: d.company?.toString() || d.companyId,
                         title: d.title,
                         dueDate: d.due_date,
                         completed: d.completed,
                         type: d.category,
                     })));
                 }
-            } catch {}
+            } catch (err) {
+                // Handle error if needed
+                console.error('Error fetching deadlines:', err);
+            }
         };
         fetchCompanies();
         fetchDeadlines();
