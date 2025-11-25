@@ -129,6 +129,7 @@ const Chat: React.FC = () => {
             messages={messages}
             isTyping={isTyping}
             isOverview={isOverview}
+            chatColor='#F9F9FB'
           />
           {/* Messages Container */}
           <div className="w-full">

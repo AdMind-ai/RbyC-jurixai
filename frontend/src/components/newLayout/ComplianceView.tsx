@@ -48,20 +48,20 @@ const ComplianceView: React.FC = () => {
         const newConversationId = convData.conversation_id
         setConversationId(newConversationId)
   
-        setIsChatOpen(true)
         setMessages([])
-        setIsTyping(true)
         
         const formData = new FormData()
         formData.append("file", file)
         formData.append("conversation_id", newConversationId)
-  
+        
         const res = await fetchWithAuth("/check-compliance", { method: "POST", body: formData })
         const reader = res.body?.getReader()
         const decoder = new TextDecoder()
         let fullMessage = ""
         
-        setIsOverview(true) 
+        setIsOverview(true)
+        setIsChatOpen(true)
+        setIsTyping(true)
         while (true) {
           const { done, value } = await reader!.read()
           if (done) break
@@ -143,58 +143,68 @@ const ComplianceView: React.FC = () => {
         <h2 className="text-1xl font-bold text-slate-800 mb-3 border-b border-slate-300 pb-2 shrink-0">Check compliance</h2>
         {!isChatOpen ? (
           <div className="flex-1 flex flex-col items-center justify-center max-w-2xl mx-auto w-full text-center transition-all">
-            <h3 className="text-xl text-slate-500 mb-8 leading-relaxed">
-              Carica un documento per l'analisi di conformità. Il sistema verificherà la conformità in base alle regole interne.
-            </h3>
-            <div
-              onDrop={handleFileDrop}
-              onDragOver={handleDragOver}
-              className={`bg-white p-12 rounded-3xl shadow-sm border-2 border-dashed w-full flex flex-col items-center justify-center transition-all cursor-pointer group relative
-              ${file ? 'border-[#1e3a8a] bg-blue-50/30' : 'border-slate-300 hover:border-[#1e3a8a] hover:bg-slate-50'}`}
-            >
-              {file && (
-                <div className="absolute top-4 right-4" onClick={e => { e.stopPropagation(); setFile(null); }}>
-                  <div className="p-1 bg-white rounded-full shadow border hover:bg-red-50 text-red-500"><X size={16} /></div>
-                </div>
-              )}
-              <div className={`w-20 h-20 rounded-full flex items-center justify-center mb-6 shadow-lg transition-transform
-                ${file ? 'bg-green-600 text-white scale-110' : 'bg-[#1e3a8a] text-white group-hover:scale-110'}`}>
-                {file ? <CheckCircle2 size={40} /> : <Upload size={40} />}
+            {isLoading ? (
+              <div className="flex flex-col items-center">
+                <div className="w-16 h-16 border-4 border-slate-200 border-t-[#1e3a8a] rounded-full animate-spin mb-6"></div>
+                <h3 className="text-xl font-bold text-slate-800">Analisi in corso...</h3>
+                <p className="text-slate-500">Sto verificando le clausole contrattuali</p>
               </div>
-              {file ? (
-                <div className="mb-2">
-                  <p className="font-bold text-slate-800 text-sm">{file.name}</p>
-                  <p className="text-xs text-slate-500">{(file.size / 1024).toFixed(1)} KB - Pronto para análise</p>
+            ) : (
+              <>
+                <h3 className="text-xl text-slate-500 mb-8 leading-relaxed">
+                  Carica un documento per l'analisi di conformità. Il sistema verificherà la conformità in base alle regole interne.
+                </h3>
+                <div
+                  onDrop={handleFileDrop}
+                  onDragOver={handleDragOver}
+                  className={`bg-white p-12 rounded-3xl shadow-sm border-2 border-dashed w-full flex flex-col items-center justify-center transition-all cursor-pointer group relative
+                  ${file ? 'border-[#1e3a8a] bg-blue-50/30' : 'border-slate-300 hover:border-[#1e3a8a] hover:bg-slate-50'}`}
+                >
+                  {file && (
+                    <div className="absolute top-4 right-4" onClick={e => { e.stopPropagation(); setFile(null); }}>
+                      <div className="p-1 bg-white rounded-full shadow border hover:bg-red-50 text-red-500"><X size={16} /></div>
+                    </div>
+                  )}
+                  <div className={`w-20 h-20 rounded-full flex items-center justify-center mb-6 shadow-lg transition-transform
+                    ${file ? 'bg-green-600 text-white scale-110' : 'bg-[#1e3a8a] text-white group-hover:scale-110'}`}>
+                    {file ? <CheckCircle2 size={40} /> : <Upload size={40} />}
+                  </div>
+                  {file ? (
+                    <div className="mb-2">
+                      <p className="font-bold text-slate-800 text-sm">{file.name}</p>
+                      <p className="text-xs text-slate-500">{(file.size / 1024).toFixed(1)} KB - Pronto para análise</p>
+                    </div>
+                  ) : (
+                    <div className="px-4 py-2 border border-slate-300 rounded-lg text-slate-700 text-sm underline decoration-slate-400 underline-offset-2 mb-2">
+                      Carica o trascina il tuo file qui
+                      <input
+                        type="file"
+                        accept=".pdf"
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                        style={{ width: '100%', height: '100%' }}
+                        onChange={handleFileInput}
+                      />
+                    </div>
+                  )}
+                  <button
+                    onClick={file && !isLoading ? handleAnalyze : undefined}
+                    className={`w-40 py-3 mt-4 text-sm font-bold rounded-md shadow transition-all animate-bounce-in ${file ? 'bg-[#1e3a8a] text-white hover:bg-blue-900' : 'bg-slate-200 text-slate-500 font-medium cursor-not-allowed'}`}
+                    disabled={!file || isLoading}
+                  >
+                    {"Invia per l'analisi"}
+                  </button>
                 </div>
-              ) : (
-                <div className="px-4 py-2 border border-slate-300 rounded-lg text-slate-700 text-sm underline decoration-slate-400 underline-offset-2 mb-2">
-                  Carica o trascina il tuo file qui
-                  <input
-                    type="file"
-                    accept=".pdf"
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                    style={{ width: '100%', height: '100%' }}
-                    onChange={handleFileInput}
-                  />
-                </div>
-              )}
-              <button
-                onClick={file && !isLoading ? handleAnalyze : undefined}
-                className={`w-40 py-3 mt-4 text-sm font-bold rounded-md shadow transition-all animate-bounce-in ${file ? 'bg-[#1e3a8a] text-white hover:bg-blue-900' : 'bg-slate-200 text-slate-500 font-medium cursor-not-allowed'}`}
-                disabled={!file || isLoading}
-              >
-                {isLoading ? 'Analisi in corso...' : "Invia per l'analisi"}
-              </button>
-            </div>
-            <p className="mt-2 text-xs text-slate-400">Suporta formato .pdf</p>
+                <p className="mt-2 text-xs text-slate-400">Suporta formato .pdf</p>
+              </>
+            )}
           </div>
         ) : (
           <div className="flex-1 bg-white rounded-lg shadow border border-slate-300 overflow-hidden flex flex-col">
             <div className="p-2 bg-slate-50 border-b border-slate-300 flex justify-between items-center shrink-0">
               <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm"><FileText size={16} /> Report: {file?.name}</h3>
               <div className="flex gap-2">
-                <button onClick={handleNewDocument} className="text-xs text-[#1e3a8a] hover:underline">Nova análise</button>
-                <button className="text-xs text-red-500 font-medium flex items-center gap-1"><AlertTriangle size={12} /> Exportar PDF</button>
+                <button onClick={handleNewDocument} className="text-xs text-[#1e3a8a] hover:underline">Nuova Analisi</button>
+                <button className="text-xs text-red-500 font-medium flex items-center gap-1"><AlertTriangle size={12} /> Esporta PDF</button>
               </div>
             </div>
             <div className="p-4 overflow-y-auto">
