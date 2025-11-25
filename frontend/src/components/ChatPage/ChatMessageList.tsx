@@ -18,10 +18,11 @@ interface ChatMessageListProps {
   isTyping: boolean
   isOverview: boolean;
   page?: string;
+  chatColor?: string;
 }
 
 
-const ChatMessageList: React.FC<ChatMessageListProps> = ({ messages, isTyping, isOverview, page }) => {
+const ChatMessageList: React.FC<ChatMessageListProps> = ({ messages, isTyping, isOverview, page, chatColor }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -116,7 +117,7 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({ messages, isTyping, i
                     maxWidth: '95%',
                     px: '1.5rem',
                     py: '1rem',
-                    backgroundColor: msg.sender === 'user' ? '#F9F9FB' : '#F9F9FB',
+                    backgroundColor: msg.sender === 'user' ? '#ffffff' : '#ffffff',
                     borderRadius: '8px',
                     boxShadow: 'none',
                     overflow: 'hidden',
@@ -185,7 +186,7 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({ messages, isTyping, i
                     maxWidth: '95%',
                     px: '1.5rem',
                     py: '1rem',
-                    backgroundColor: msg.sender === 'user' ? '#F9F9FB' : '#F9F9FB',
+                    backgroundColor: msg.sender === 'user' ? chatColor || 'white' : chatColor || 'white',
                     borderRadius: '8px',
                     boxShadow: 'none',
                     overflow: 'hidden',

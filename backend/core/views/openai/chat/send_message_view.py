@@ -116,6 +116,7 @@ class OpenAISendMessageView(APIView):
                     reasoning={
                         "effort": "low"
                     },
+                    tools=[{ "type": "web_search_preview" }],
                     include=["reasoning.encrypted_content", "web_search_call.action.sources"],
                     timeout=600,
                 )
