@@ -1,9 +1,11 @@
 
 import React, { useState, useRef } from 'react';
+import { marked } from 'marked';
 import { Company } from '../../types/types';
 import { Sparkles, FileText, Copy, RefreshCw, AlertCircle, Upload, X, File as FileIcon, FileDown } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { fetchWithAuth } from '../../api/fetchWithAuth';
+import { geminiService } from '../../services/geminiService';
 
 
 interface AttachedFile {
@@ -64,6 +66,7 @@ const DocumentGenerator: React.FC = () => {
       }
 
       const reader = new FileReader();
+      console.log('File MIME type:', file.type);
       reader.onloadend = () => {
         const base64String = (reader.result as string).split(',')[1];
         setAttachedFiles(prev => [...prev, {
@@ -84,23 +87,28 @@ const DocumentGenerator: React.FC = () => {
   const handleGenerate = async () => {
     // Removed mandatory company check
     if (!docType && !details.trim()) {
-      setError('Se non selezioni un tipo di documento, devi fornire delle istruzioni nei dettagli.');
-      return;
+        setError('Se non selezioni un tipo di documento, devi fornire delle istruzioni nei dettagli.');
+        return;
     }
-
+    
     setError('');
     setIsLoading(true);
     setGeneratedContent('');
 
-
-    const result = "Simulated generated document content"
+    const company = selectedCompanyId ? companies.find(c => c.id === selectedCompanyId) || null : null;
+    
+    const result = await geminiService.generateDocument(docType, company, details, attachedFiles);
     setGeneratedContent(result);
 
     setIsLoading(false);
   };
 
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(generatedContent);
+    // Converte Markdown para HTML e extrai texto plano
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = marked.parse(generatedContent) as string;
+    const plainText = tempDiv.innerText;
+    navigator.clipboard.writeText(plainText);
   };
 
   const downloadFile = (format: 'doc' | 'txt') => {
@@ -111,15 +119,23 @@ const DocumentGenerator: React.FC = () => {
     let extension = 'txt';
 
     if (format === 'doc') {
-      // Simple HTML wrap for Word to interpret
+      // Converte Markdown para HTML para Word
+      const htmlContent = marked.parse(generatedContent);
       content = `
-          <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-          <head><meta charset='utf-8'><title>Documento</title></head>
-          <body>${generatedContent.replace(/\n/g, '<br>')}</body>
-          </html>
-        `;
+        <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+        <head><meta charset='utf-8'><title>Documento</title></head>
+        <body>${htmlContent}</body>
+        </html>
+      `;
       mimeType = 'application/msword';
       extension = 'doc';
+    } else {
+      // Para TXT, remove marcações Markdown e converte para texto plano
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = marked.parse(generatedContent) as string;
+      content = tempDiv.innerText;
+      mimeType = 'text/plain';
+      extension = 'txt';
     }
 
     const blob = new Blob([content], { type: mimeType });
