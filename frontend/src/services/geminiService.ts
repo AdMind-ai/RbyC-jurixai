@@ -18,6 +18,13 @@ export interface ChatResponse {
   sources: ChatSource[];
 }
 
+interface GroundingChunk {
+  web?: {
+    title?: string;
+    uri?: string;
+  };
+}
+
 class GeminiService {
   private ai: GoogleGenAI | null = null;
 
@@ -216,7 +223,7 @@ class GeminiService {
       const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
 
       if (groundingChunks) {
-        groundingChunks.forEach((chunk) => {
+        groundingChunks.forEach((chunk: GroundingChunk) => {
           if (chunk.web && typeof chunk.web.uri === 'string') {
             sources.push({
               title: chunk.web.title || 'Fonte Web',
