@@ -1,4 +1,6 @@
 import React, { useState, useRef } from 'react';
+import { marked } from 'marked';
+import jsPDF from 'jspdf';
 import { Upload, CheckCircle2, X, FileText, AlertTriangle, Send } from 'lucide-react';
 // Lógica migrada de DocCheck
 import { toast } from 'react-toastify';
@@ -204,7 +206,52 @@ const ComplianceView: React.FC = () => {
               <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm"><FileText size={16} /> Report: {file?.name}</h3>
               <div className="flex gap-2">
                 <button onClick={handleNewDocument} className="text-xs text-[#1e3a8a] hover:underline">Nuova Analisi</button>
-                <button className="text-xs text-red-500 font-medium flex items-center gap-1"><AlertTriangle size={12} /> Esporta PDF</button>
+                <button
+                  className="text-xs text-red-500 font-medium flex items-center gap-1"
+                  onClick={async () => {
+                    const firstAIMessage = messages.find(m => m.sender === 'ai');
+                    if (!firstAIMessage) {
+                      toast.error('Nenhuma resposta do AI encontrada.');
+                      return;
+                    }
+                    // Adiciona CSS customizado para o PDF
+                    const customStyles = `
+                      <style>
+                        body { font-family: 'Arial', sans-serif; color: #222; margin: 0; padding: 0; }
+                        .pdf-content { padding-top: 5mm; padding-bottom: 5mm; }
+                        h1 { font-size: 2em; margin-bottom: 0.5em; color: #1e3a8a; }
+                        h2 { font-size: 1.5em; margin-bottom: 0.5em; color: #1e3a8a; }
+                        h3 { font-size: 1.2em; margin-bottom: 0.5em; color: #1e3a8a; }
+                        p, li { font-size: 1em; line-height: 1.6; margin-bottom: 0.5em; }
+                        ul, ol { margin-left: 1.5em; }
+                        code, pre { background: #f4f4f4; font-size: 0.95em; border-radius: 4px; padding: 2px 6px; }
+                        blockquote { border-left: 4px solid #1e3a8a; padding-left: 1em; color: #555; margin: 1em 0; }
+                        table { border-collapse: collapse; width: 100%; margin-bottom: 1em; }
+                        th, td { border: 1px solid #ccc; padding: 6px 10px; font-size: 0.95em; }
+                        th { background: #e5e7eb; }
+                      </style>
+                    `;
+                    const htmlContent = customStyles + `<div class='pdf-content'>` + marked.parse(firstAIMessage.content) + `</div>`;
+                    const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+                    // Cria elemento temporário para renderizar HTML
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = htmlContent;
+                    document.body.appendChild(tempDiv);
+                    await doc.html(tempDiv, {
+                      x: 10,
+                      y: 0,
+                      width: 180,
+                      windowWidth: 800,
+                      margin: [30, 8, 30, 8], // top, right, bottom, left
+                      callback: function () {
+                        doc.save(`${file?.name || 'report'}.pdf`);
+                        document.body.removeChild(tempDiv);
+                      }
+                    });
+                  }}
+                >
+                  <AlertTriangle size={12} /> Esporta PDF
+                </button>
               </div>
             </div>
             <div className="p-4 overflow-y-auto">

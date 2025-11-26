@@ -1,7 +1,10 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import { fetchWithAuth } from '../../api/fetchWithAuth';
 import { Send, Bot, User, Info } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { geminiService } from '../../services/geminiService';
+import { Company, Deadline } from '../../types/types';
 
 interface Message {
   id: number;
@@ -9,21 +12,38 @@ interface Message {
   text: string;
 }
 
+
 const AIAssistant: React.FC = () => {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([
     { id: 1, sender: 'bot', text: 'Ciao! Sono il tuo assistente legale. Posso darti informazioni sulle società gestite, le scadenze imminenti o le cariche sociali. Chiedimi pure!' }
   ]);
   const [isTyping, setIsTyping] = useState(false);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [deadlines, setDeadlines] = useState<Deadline[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
-
+  // Busca dados do backend ao montar
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    // Buscar companies
+    fetchWithAuth('/companies')
+      .then(res => res.json())
+      .then(data => setCompanies(data))
+      .catch(() => setCompanies([]));
+    // Buscar deadlines
+    fetchWithAuth('/deadlines')
+      .then(res => res.json())
+      .then(data => setDeadlines(data))
+      .catch(() => setDeadlines([]));
+  }, []);
+
 
   const handleSend = async () => {
     if (!input.trim()) return;
@@ -33,8 +53,20 @@ const AIAssistant: React.FC = () => {
     setInput('');
     setIsTyping(true);
 
+    // Prepara dados de contexto para a AI
+    const contextData = JSON.stringify({
+      companies: companies.map((c: Company) => ({
+         name: c.name,
+         type: c.type,
+         vat: c.vatNumber,
+         officers: c.officers,
+         shareholders: c.shareholders,
+         nextMeeting: c.nextMeetingDate
+      })),
+      deadlines: deadlines.filter((d: Deadline) => !d.completed)
+    });
 
-    const responseText = ""
+    const responseText = await geminiService.chatWithLegalAssistant(userMsg.text, contextData);
 
     const botMsg: Message = { id: Date.now() + 1, sender: 'bot', text: responseText };
     setMessages(prev => [...prev, botMsg]);
