@@ -25,6 +25,7 @@ interface GroundingChunk {
   };
 }
 
+
 class GeminiService {
   private ai: GoogleGenAI | null = null;
 
