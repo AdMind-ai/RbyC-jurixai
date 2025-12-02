@@ -1,11 +1,17 @@
 
 import React, { useState, useRef } from 'react';
-import { marked } from 'marked';
 import { Company } from '../../types/types';
-import { Sparkles, FileText, Copy, RefreshCw, AlertCircle, Upload, X, File as FileIcon, FileDown } from 'lucide-react';
+import { Sparkles, FileText, RefreshCw, AlertCircle, Upload, X, File as FileIcon, FileDown } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { fetchWithAuth } from '../../api/fetchWithAuth';
 import { geminiService } from '../../services/geminiService';
+import { Viewer, Worker } from '@react-pdf-viewer/core';
+import '@react-pdf-viewer/core/lib/styles/index.css';
+import { defaultLayoutPlugin } from '@react-pdf-viewer/default-layout';
+import '@react-pdf-viewer/default-layout/lib/styles/index.css';
+import { zoomPlugin } from '@react-pdf-viewer/zoom';
+import '@react-pdf-viewer/zoom/lib/styles/index.css';
+import '../../styles/DocumentGeneratorViewer.css';
 
 
 interface AttachedFile {
@@ -50,10 +56,15 @@ const DocumentGenerator: React.FC = () => {
   const [details, setDetails] = useState<string>('');
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [generatedContent, setGeneratedContent] = useState<string>('');
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // react-pdf-viewer plugin instance
+  const defaultLayoutPluginInstance = defaultLayoutPlugin();
+  const zoomPluginInstance = zoomPlugin();
+  const { ZoomInButton, ZoomOutButton, CurrentScale } = zoomPluginInstance;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -100,53 +111,30 @@ const DocumentGenerator: React.FC = () => {
     const result = await geminiService.generateDocument(docType, company, details, attachedFiles);
     setGeneratedContent(result);
 
-    setIsLoading(false);
-  };
-
-  const copyToClipboard = () => {
-    // Converte Markdown para HTML e extrai texto plano
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = marked.parse(generatedContent) as string;
-    const plainText = tempDiv.innerText;
-    navigator.clipboard.writeText(plainText);
-  };
-
-  const downloadFile = (format: 'doc' | 'txt') => {
-    if (!generatedContent) return;
-
-    let content = generatedContent;
-    let mimeType = 'text/plain';
-    let extension = 'txt';
-
-    if (format === 'doc') {
-      // Converte Markdown para HTML para Word
-      const htmlContent = marked.parse(generatedContent);
-      content = `
-        <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-        <head><meta charset='utf-8'><title>Documento</title></head>
-        <body>${htmlContent}</body>
-        </html>
-      `;
-      mimeType = 'application/msword';
-      extension = 'doc';
-    } else {
-      // Para TXT, remove marcações Markdown e converte para texto plano
-      const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = marked.parse(generatedContent) as string;
-      content = tempDiv.innerText;
-      mimeType = 'text/plain';
-      extension = 'txt';
+    // Now request backend to render PDF combining company layout and generated content
+    try {
+      const payload = { company_id: company ? company.id : null, markdown: result };
+      const res = await fetchWithAuth('/documents/generate-pdf/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res && res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        // Revoke previous if exists
+        if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+        setPdfUrl(url);
+      } else {
+        const errText = await res.text();
+        setError('Errore nella generazione PDF: ' + errText);
+      }
+    } catch (err) {
+      console.error('Error creating PDF:', err);
+      setError('Errore nella generazione del PDF.');
     }
 
-    const blob = new Blob([content], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `documento_${new Date().toISOString().slice(0, 10)}.${extension}`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    setIsLoading(false);
   };
 
   return (
@@ -156,7 +144,7 @@ const DocumentGenerator: React.FC = () => {
           <Sparkles className="text-purple-600" />
           Generatore Documenti AI
         </h2>
-        <p className="text-slate-500 text-sm">Redazione automatica di bozze legali con Gemini 2.5 Flash</p>
+        <p className="text-slate-500 text-sm">Redazione automatica di bozze legali</p>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0">
@@ -266,39 +254,48 @@ const DocumentGenerator: React.FC = () => {
 
         {/* Preview Panel */}
         <div className="lg:w-2/3 bg-slate-50 rounded-lg shadow-inner border border-slate-300 p-4 flex flex-col relative overflow-hidden">
-          {generatedContent && (
+          {pdfUrl && (
             <div className="absolute top-3 right-3 flex gap-2 z-10">
-              <button
-                onClick={() => downloadFile('doc')}
-                className="p-1.5 bg-white hover:bg-blue-50 text-blue-600 rounded border border-blue-200 shadow-sm text-xs"
-                title="Scarica Word"
-              >
-                <FileDown size={15} /> <span className="text-xs font-bold ml-1">DOC</span>
-              </button>
-              <button
-                onClick={() => downloadFile('txt')}
-                className="p-1.5 bg-white hover:bg-slate-100 text-slate-600 rounded border border-slate-200 shadow-sm text-xs"
-                title="Scarica TXT"
-              >
-                <FileDown size={15} /> <span className="text-xs font-bold ml-1">TXT</span>
-              </button>
-              <button
-                onClick={copyToClipboard}
-                className="p-1.5 bg-white hover:bg-slate-100 text-slate-600 rounded border border-slate-200 shadow-sm text-xs"
-                title="Copia"
-              >
-                <Copy size={15} />
-              </button>
+              <a href={pdfUrl} download={`${docType || 'doc'}_${new Date().toISOString().slice(0,10)}.pdf`} className="p-1.5 bg-white hover:bg-blue-50 text-blue-600 rounded border border-blue-200 shadow-sm text-xs">
+                <FileDown size={15} /> <span className="text-xs font-bold ml-1">PDF</span>
+              </a>
             </div>
           )}
 
-          <div className="flex-1 overflow-auto bg-white rounded-lg border border-slate-200 p-5 shadow-sm font-serif text-slate-800 leading-relaxed text-sm">
-            {generatedContent ? (
-              <div className="markdown-body">
+          <div className="flex-1 overflow-auto bg-white rounded-lg border border-slate-200 p-3 shadow-sm text-slate-800 text-sm">
+            {pdfUrl ? (
+              <div className="h-full">
+                <div className="pdf-preview-card">
+                  <div className="pdf-preview-header">
+                    <div className="pdf-preview-title">
+                      <span>Anteprima PDF</span>
+                    </div>
+                    <div className="pdf-preview-actions">
+                      <div className="flex items-center gap-2">
+                        <div className="pdf-zoom-controls">
+                          <ZoomOutButton />
+                          <span style={{ margin: '0 8px', fontWeight: 600 }}><CurrentScale /></span>
+                          <ZoomInButton />
+                        </div>
+                      </div>
+                      <a className="btn secondary" href={pdfUrl} target="_blank" rel="noreferrer">Apri</a>
+                    </div>
+                  </div>
+                  <div className="pdf-preview-body">
+                    <Worker workerUrl={new URL('pdfjs-dist/build/pdf.worker.min.js', import.meta.url).toString()}>
+                      <div style={{ height: '72vh' }}>
+                        <Viewer fileUrl={pdfUrl} plugins={[defaultLayoutPluginInstance, zoomPluginInstance]} />
+                      </div>
+                    </Worker>
+                  </div>
+                </div>
+              </div>
+            ) : generatedContent ? (
+              <div className="markdown-body p-4">
                 <ReactMarkdown>{generatedContent}</ReactMarkdown>
               </div>
             ) : (
-              <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-3">
+              <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-3 p-6">
                 <FileText size={38} className="opacity-20" />
                 <p className="text-center max-w-md text-xs">
                   Seleziona una società (opzionale), carica eventuali documenti e clicca su "Genera Bozza".

@@ -2,12 +2,14 @@
 import React, { useState, useRef, useEffect, FormEvent } from 'react';
 import { fetchWithAuth } from '../../api/fetchWithAuth';
 import { Company, Role, CompanyType, Officer, Shareholder, Deadline } from '../../types/types';
+import { toast } from 'react-toastify';
 import { Search, Building, User, Calendar, ShieldCheck, Plus, X, Trash2, Upload, Edit, Clock, Building2 } from 'lucide-react';
 
 
 const CompanyList: React.FC = () => {
     const [companies, setCompanies] = useState<Company[]>([]);
     const [deadlines, setDeadlines] = useState<Deadline[]>([]);
+    const [isLoadingCompanies, setIsLoadingCompanies] = useState(false);
 
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
@@ -16,6 +18,10 @@ const CompanyList: React.FC = () => {
     const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
     const [isDeadlineModalOpen, setIsDeadlineModalOpen] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
+    // Delete confirmation modal state
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState<Company | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     // New/Edit Company Form State
     const [step, setStep] = useState<number>(1);
@@ -38,6 +44,35 @@ const CompanyList: React.FC = () => {
 
     const letterheadInputRef = useRef<HTMLInputElement>(null);
 
+    type LetterheadShape = Company['letterheadFile'] | string | { name?: string; url?: string } | null;
+
+    const getLetterheadName = (lf: LetterheadShape) => {
+        if (!lf) return null;
+        if (typeof lf === 'string') return lf.split('/').pop();
+        if (typeof lf === 'object' && 'name' in lf && lf.name) return lf.name;
+        if (typeof lf === 'object' && 'url' in lf && lf.url) return lf.url.split('/').pop();
+        return null;
+    };
+
+    // API shapes (snake_case) returned by backend
+    type ApiOfficer = { id?: number | string; name: string; role: string; appointed_date?: string; appointedDate?: string; expiry_date?: string; expiryDate?: string };
+    type ApiShareholder = { id?: number | string; name: string; quota_percentage?: number; quotaPercentage?: number };
+    type ApiCompany = {
+        id: number | string;
+        name: string;
+        vat_number?: string;
+        company_type?: string;
+        address?: string;
+        capital?: number | string;
+        status?: string;
+        officers?: ApiOfficer[];
+        shareholders?: ApiShareholder[];
+        letterhead_file?: string | null;
+        letterhead_filename?: string;
+        letterhead_info?: string;
+        next_meeting_date?: string;
+    };
+
     const filteredCompanies = companies.filter(c =>
         c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         c.vatNumber.includes(searchTerm)
@@ -56,6 +91,37 @@ const CompanyList: React.FC = () => {
         setNewCompany(JSON.parse(JSON.stringify(selectedCompany))); // Deep copy
         setStep(1);
         setIsCompanyModalOpen(true);
+    };
+
+    const handleDeleteCompany = async (companyId?: string) => {
+        const id = companyId ?? deleteTarget?.id;
+        if (!id) return;
+        setIsDeleting(true);
+        try {
+            const res = await fetchWithAuth(`/companies/${id}/`, { method: 'DELETE' });
+            if (res && (res.status === 204 || res.ok)) {
+                setCompanies(prev => prev.filter(c => c.id !== id));
+                if (selectedCompany && selectedCompany.id === id) setSelectedCompany(null);
+                toast.success('Società eliminata con successo');
+            } else {
+                const body = await res.text();
+                console.error('Failed to delete company', res.status, body);
+                toast.error('Impossibile eliminare la società. Verifica i permessi.');
+            }
+        } catch (err) {
+            console.error('Error deleting company', err);
+            toast.error('Errore durante l\'eliminazione della società.');
+        } finally {
+            setIsDeleting(false);
+            setIsDeleteModalOpen(false);
+            setDeleteTarget(null);
+        }
+    };
+
+    const confirmDeleteCompany = (company?: Company) => {
+        if (!company) return;
+        setDeleteTarget(company);
+        setIsDeleteModalOpen(true);
     };
 
     // Atualiza o status de completed da deadline
@@ -77,88 +143,113 @@ const CompanyList: React.FC = () => {
     };
 
     const handleSaveCompany = async () => {
-        if (newCompany.name && newCompany.vatNumber) {
+        // Only require company name (Ragione Sociale) to create a new company
+        if (newCompany.name) {
             let res;
-            // Se houver arquivo, usar FormData
-            if (newCompany.letterheadFile && newCompany.letterheadFile.data) {
-                const formData = new FormData();
-                formData.append('name', newCompany.name);
-                formData.append('vat_number', newCompany.vatNumber);
-                formData.append('company_type', newCompany.type || CompanyType.SRL);
-                formData.append('address', newCompany.address || '');
-                formData.append('capital', String(newCompany.capital || 0));
-                formData.append('status', newCompany.status || 'Active');
-                if (newCompany.letterheadInfo) formData.append('letterhead_info', newCompany.letterheadInfo);
-                if (newCompany.nextMeetingDate) formData.append('next_meeting_date', newCompany.nextMeetingDate);
-                // Officers
-                (newCompany.officers || []).forEach((o, idx) => {
-                    formData.append(`officers[${idx}][name]`, o.name || '');
-                    formData.append(`officers[${idx}][role]`, o.role || '');
-                    formData.append(`officers[${idx}][appointed_date]`, o.appointedDate || '');
-                    if (o.expiryDate) formData.append(`officers[${idx}][expiry_date]`, o.expiryDate);
+            // Prepare payload without file first (JSON)
+            const payload = {
+                name: newCompany.name,
+                vat_number: newCompany.vatNumber,
+                company_type: newCompany.type,
+                address: newCompany.address,
+                capital: newCompany.capital,
+                status: newCompany.status,
+                letterhead_info: newCompany.letterheadInfo,
+                next_meeting_date: newCompany.nextMeetingDate,
+                officers: newCompany.officers?.map(o => ({
+                    name: o.name,
+                    role: o.role,
+                    appointed_date: o.appointedDate,
+                    expiry_date: o.expiryDate || null
+                })) || [],
+                shareholders: newCompany.shareholders?.map(s => ({
+                    name: s.name,
+                    quota_percentage: s.quotaPercentage
+                })) || [],
+            };
+
+            if (isEditing && newCompany.id) {
+                // Update company without file first
+                res = await fetchWithAuth(`/companies/${newCompany.id}/`, {
+                    method: 'PUT',
+                    body: JSON.stringify(payload)
                 });
-                // Shareholders
-                (newCompany.shareholders || []).forEach((s, idx) => {
-                    formData.append(`shareholders[${idx}][name]`, s.name || '');
-                    formData.append(`shareholders[${idx}][quota_percentage]`, String(s.quotaPercentage || 0));
-                });
-                // File
-                // Converter base64 para Blob
-                const byteString = atob(newCompany.letterheadFile.data);
-                const mimeType = newCompany.letterheadFile.mimeType;
-                const ab = new ArrayBuffer(byteString.length);
-                const ia = new Uint8Array(ab);
-                for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
-                const file = new File([ab], newCompany.letterheadFile.name, { type: mimeType });
-                formData.append('letterhead_file', file);
-                if (isEditing && newCompany.id) {
-                    res = await fetchWithAuth(`/companies/${newCompany.id}/`, {
-                        method: 'PUT',
-                        body: formData
-                    });
-                } else {
-                    res = await fetchWithAuth('/companies/', {
-                        method: 'POST',
-                        body: formData
-                    });
-                }
             } else {
-                // Sem arquivo, enviar JSON normal
-                const payload = {
-                    name: newCompany.name,
-                    vat_number: newCompany.vatNumber,
-                    company_type: newCompany.type,
-                    address: newCompany.address,
-                    capital: newCompany.capital,
-                    status: newCompany.status,
-                    letterhead_info: newCompany.letterheadInfo,
-                    next_meeting_date: newCompany.nextMeetingDate,
-                    officers: newCompany.officers?.map(o => ({
-                        name: o.name,
-                        role: o.role,
-                        appointed_date: o.appointedDate,
-                        expiry_date: o.expiryDate || null
-                    })) || [],
-                    shareholders: newCompany.shareholders?.map(s => ({
-                        name: s.name,
-                        quota_percentage: s.quotaPercentage
-                    })) || [],
-                };
-                if (isEditing && newCompany.id) {
-                    res = await fetchWithAuth(`/companies/${newCompany.id}/`, {
-                        method: 'PUT',
-                        body: JSON.stringify(payload)
-                    });
-                } else {
-                    res = await fetchWithAuth('/companies/', {
-                        method: 'POST',
-                        body: JSON.stringify(payload)
-                    });
-                }
+                // Create company without file
+                res = await fetchWithAuth('/companies/', {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                });
             }
+
             if (res && res.ok) {
                 const c = await res.json();
                 const companyId = c.id;
+                // If there is a letterhead file, upload it in a separate PATCH multipart request
+                // If the client-side `newCompany.letterheadFile` contains base64 data (fresh upload),
+                // upload it as multipart. If it's already normalized to {name,url}, skip upload.
+                if (
+                    newCompany.letterheadFile &&
+                    typeof newCompany.letterheadFile === 'object' &&
+                    'data' in newCompany.letterheadFile &&
+                    newCompany.letterheadFile.data
+                ) {
+                    const formData = new FormData();
+                    // convert base64 -> File
+                    const base64data = newCompany.letterheadFile.data as string;
+                    const byteString = atob(base64data);
+                    const mimeType = newCompany.letterheadFile.mimeType || 'application/octet-stream';
+                    const filename = newCompany.letterheadFile.name || 'letterhead';
+                    const ab = new ArrayBuffer(byteString.length);
+                    const ia = new Uint8Array(ab);
+                    for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+                    const file = new File([ab], filename, { type: mimeType });
+                    formData.append('letterhead_file', file);
+
+                    try {
+                        const uploadRes = await fetchWithAuth(`/companies/${companyId}/`, {
+                            method: 'PATCH',
+                            body: formData
+                        });
+                        if (uploadRes && uploadRes.ok) {
+                            // update company response with returned data
+                            const updated = await uploadRes.json();
+                            // reflect letterhead file in c
+                            c.letterhead_file = updated.letterhead_file || c.letterhead_file;
+                        } else {
+                            console.warn('Letterhead upload failed', uploadRes);
+                        }
+                    } catch (err) {
+                        console.error('Error uploading letterhead:', err);
+                    }
+                }
+                // Normalize letterhead_file: API returns a URL string or null. If user uploaded
+                // a file earlier in this flow, newCompany.letterheadFile may be an object with
+                // `name` and `data`. We want `letterheadFile` on the client to be an object
+                // { name, url } when possible so the UI can show the filename.
+                type ApiLetterheadUpload = { data?: string; mimeType?: string; name?: string } | null;
+                const normalizeLetterhead = (apiValue: string | null | undefined, originalUpload: ApiLetterheadUpload | undefined, apiFilename?: string) => {
+                    if (!apiValue && !originalUpload && !apiFilename) return null;
+                    if (apiFilename) {
+                        return { name: apiFilename, url: apiValue || null };
+                    }
+                    if (typeof apiValue === 'string') {
+                        try {
+                            const url = apiValue;
+                            const parts = url.split('/');
+                            const filename = parts[parts.length - 1] || url;
+                            return { name: decodeURIComponent(filename), url };
+                        } catch (err) {
+                            console.error('Error decoding letterhead filename:', err);
+                            return { name: apiValue, url: apiValue };
+                        }
+                    }
+                    if (originalUpload && originalUpload.name) {
+                        return { name: originalUpload.name, url: null };
+                    }
+                    return null;
+                };
+
                 const company: Company = {
                     id: c.id.toString(),
                     name: c.name,
@@ -167,38 +258,77 @@ const CompanyList: React.FC = () => {
                     address: c.address,
                     capital: Number(c.capital),
                     status: c.status,
-                    officers: c.officers || [],
-                    shareholders: c.shareholders || [],
+                    officers: (c.officers || []).map((o: { id?: number | string; name: string; role: string; appointed_date?: string; appointedDate?: string; expiry_date?: string; expiryDate?: string }) => ({
+                        id: o.id ? o.id.toString() : undefined,
+                        name: o.name,
+                        role: (o.role as Role) || Role.AMMINISTRATORE_UNICO,
+                        appointedDate: o.appointed_date || o.appointedDate || '',
+                        expiryDate: o.expiry_date || o.expiryDate || ''
+                    })),
+                    shareholders: (c.shareholders || []).map((s: { id?: number | string; name: string; quota_percentage?: number; quotaPercentage?: number }) => ({
+                        id: s.id ? s.id.toString() : undefined,
+                        name: s.name,
+                        quotaPercentage: Number(s.quota_percentage ?? s.quotaPercentage ?? 0)
+                    })),
                     letterheadInfo: c.letterhead_info,
-                    letterheadFile: c.letterhead_file,
+                    letterheadFile: normalizeLetterhead(c.letterhead_file ?? null, newCompany.letterheadFile, c.letterhead_filename),
                     nextMeetingDate: c.next_meeting_date,
                 };
                 // Adiciona sócios
                 if (newCompany.shareholders && newCompany.shareholders.length > 0) {
                     for (const sh of newCompany.shareholders) {
-                        await fetchWithAuth('/shareholders/', {
-                            method: 'POST',
-                            body: JSON.stringify({
-                                company: companyId,
-                                name: sh.name,
-                                quota_percentage: sh.quotaPercentage
-                            })
-                        });
+                        const shTyped = sh as Partial<Shareholder> & { quota_percentage?: number };
+                        const quota = Number(shTyped.quotaPercentage ?? shTyped.quota_percentage ?? 0);
+                        if (shTyped.id) {
+                            await fetchWithAuth(`/shareholders/${shTyped.id}/`, {
+                                method: 'PATCH',
+                                body: JSON.stringify({
+                                    company: companyId,
+                                    name: shTyped.name,
+                                    quota_percentage: quota
+                                })
+                            });
+                        } else {
+                            await fetchWithAuth('/shareholders/', {
+                                method: 'POST',
+                                body: JSON.stringify({
+                                    company: companyId,
+                                    name: shTyped.name,
+                                    quota_percentage: quota
+                                })
+                            });
+                        }
                     }
                 }
                 // Adiciona cariche sociali
                 if (newCompany.officers && newCompany.officers.length > 0) {
                     for (const off of newCompany.officers) {
-                        await fetchWithAuth('/officers/', {
-                            method: 'POST',
-                            body: JSON.stringify({
-                                company: companyId,
-                                name: off.name,
-                                role: off.role,
-                                appointed_date: off.appointedDate,
-                                expiry_date: off.expiryDate || null
-                            })
-                        });
+                        const offTyped = off as Partial<Officer> & { appointed_date?: string; expiry_date?: string };
+                        const appointed = offTyped.appointedDate ?? offTyped.appointed_date ?? '';
+                        const expiry = offTyped.expiryDate ?? offTyped.expiry_date ?? null;
+                        if (offTyped.id) {
+                            await fetchWithAuth(`/officers/${offTyped.id}/`, {
+                                method: 'PATCH',
+                                body: JSON.stringify({
+                                    company: companyId,
+                                    name: offTyped.name,
+                                    role: offTyped.role,
+                                    appointed_date: appointed,
+                                    expiry_date: expiry
+                                })
+                            });
+                        } else {
+                            await fetchWithAuth('/officers/', {
+                                method: 'POST',
+                                body: JSON.stringify({
+                                    company: companyId,
+                                    name: offTyped.name,
+                                    role: offTyped.role,
+                                    appointed_date: appointed,
+                                    expiry_date: expiry
+                                })
+                            });
+                        }
                     }
                 }
                 // Adiciona scadenze
@@ -206,8 +336,10 @@ const CompanyList: React.FC = () => {
                 if (isEditing) {
                     setCompanies(prev => prev.map(comp => comp.id === company.id ? company : comp));
                     setSelectedCompany(company);
+                    toast.success('Modifiche salvate con successo');
                 } else {
                     setCompanies(prev => [...prev, company]);
+                    toast.success('Società creata con successo');
                 }
                 setIsCompanyModalOpen(false);
             }
@@ -240,11 +372,30 @@ const CompanyList: React.FC = () => {
     // Fetch companies from API
     useEffect(() => {
         const fetchCompanies = async () => {
+            setIsLoadingCompanies(true);
             try {
                 const res = await fetchWithAuth('/companies/', { method: 'GET' });
                 if (res.ok) {
                     const data = await res.json();
-                    setCompanies(data.map((c: Company) => ({
+                    type ApiLetterhead = string | null | { name?: string; url?: string };
+                    const normalizeLetterhead = (apiValue: ApiLetterhead, apiFilename?: string) => {
+                        if (!apiValue && !apiFilename) return null;
+                        if (apiFilename) return { name: apiFilename, url: apiValue || null };
+                        if (typeof apiValue === 'string') {
+                            try {
+                                const url = apiValue;
+                                const parts = url.split('/');
+                                const filename = parts[parts.length - 1] || url;
+                                return { name: decodeURIComponent(filename), url };
+                            } catch (err) {
+                                console.error('Error decoding letterhead filename:', err);
+                                return { name: apiValue, url: apiValue };
+                            }
+                        }
+                        return apiValue;
+                    };
+
+                    setCompanies(data.map((c: ApiCompany) => ({
                         id: c.id.toString(),
                         name: c.name,
                         vatNumber: c.vat_number,
@@ -252,17 +403,29 @@ const CompanyList: React.FC = () => {
                         address: c.address,
                         capital: Number(c.capital),
                         status: c.status,
-                        officers: c.officers || [],
-                        shareholders: c.shareholders || [],
+                        officers: (c.officers || []).map((o: { id?: number | string; name: string; role: string; appointed_date?: string; appointedDate?: string; expiry_date?: string; expiryDate?: string }) => ({
+                            id: o.id ? o.id.toString() : undefined,
+                            name: o.name,
+                            role: (o.role as Role) || Role.AMMINISTRATORE_UNICO,
+                            appointedDate: o.appointed_date || o.appointedDate || '',
+                            expiryDate: o.expiry_date || o.expiryDate || ''
+                        })),
+                        shareholders: (c.shareholders || []).map((s: { id?: number | string; name: string; quota_percentage?: number; quotaPercentage?: number }) => ({
+                            id: s.id ? s.id.toString() : undefined,
+                            name: s.name,
+                            quotaPercentage: Number(s.quota_percentage ?? s.quotaPercentage ?? 0)
+                        })),
                         letterheadInfo: c.letterhead_info,
-                        letterheadFile: c.letterhead_file,
+                        letterheadFile: normalizeLetterhead(c.letterhead_file ?? null, c.letterhead_filename),
                         nextMeetingDate: c.next_meeting_date,
                     })));
                 }
             } catch (err) {
                 // Handle error if needed
                 console.error('Error fetching companies:', err);
-             }
+            } finally {
+                setIsLoadingCompanies(false);
+            }
         };
         fetchCompanies();
     }, []);
@@ -304,26 +467,27 @@ const CompanyList: React.FC = () => {
 
     const addOfficer = () => {
         if (tempOfficer.name && tempOfficer.appointedDate) {
-            const officer: Officer = {
-                id: Date.now().toString(),
+            const officer = {
+                // do not set a persistent `id` for newly created items;
+                // backend will return the real id after creation
                 name: tempOfficer.name,
                 role: tempOfficer.role || Role.AMMINISTRATORE_UNICO,
                 appointedDate: tempOfficer.appointedDate,
                 expiryDate: tempOfficer.expiryDate || ''
-            };
-            setNewCompany({ ...newCompany, officers: [...(newCompany.officers || []), officer] });
+            } as Partial<Officer>;
+            setNewCompany(prev => ({ ...(prev || {}), officers: [...(prev?.officers || []), officer] } as Partial<Company>));
             setTempOfficer({ role: Role.AMMINISTRATORE_UNICO, name: '', appointedDate: '', expiryDate: '' });
         }
     };
 
     const addShareholder = () => {
         if (tempShareholder.name) {
-            const sh: Shareholder = {
-                id: Date.now().toString(),
+            const sh: Partial<Shareholder> = {
+                // do not set an id here; backend will assign one
                 name: tempShareholder.name,
                 quotaPercentage: Number(tempShareholder.quotaPercentage)
             };
-            setNewCompany({ ...newCompany, shareholders: [...(newCompany.shareholders || []), sh] });
+            setNewCompany(prev => ({ ...(prev || {}), shareholders: [...(prev?.shareholders || []), sh] } as Partial<Company>));
             setTempShareholder({ name: '', quotaPercentage: 0 });
         }
     };
@@ -380,41 +544,60 @@ const CompanyList: React.FC = () => {
             <div className="flex-1 flex gap-4 overflow-hidden">
                 {/* List Side */}
                 <div className={`bg-white rounded-lg shadow-sm border border-slate-300 flex-1 overflow-auto ${selectedCompany ? 'hidden lg:block lg:w-1/2' : 'w-full'}`}>
-                    <table className="w-full text-left">
-                        <thead className="bg-slate-50 sticky top-0 z-10 border-b border-slate-200">
-                            <tr>
-                                <th className="p-2 font-semibold text-slate-600 text-xs">Ragione Sociale</th>
-                                <th className="p-2 font-semibold text-slate-600 text-xs">Forma Giuridica</th>
-                                <th className="p-2 font-semibold text-slate-600 text-xs">P. IVA</th>
-                                <th className="p-2 font-semibold text-slate-600 text-xs">Stato</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-200">
-                            {filteredCompanies.map(company => (
-                                <tr
-                                    key={company.id}
-                                    onClick={() => setSelectedCompany(company)}
-                                    className={`cursor-pointer transition-colors ${selectedCompany?.id === company.id ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
-                                >
-                                    <td className="p-2 font-medium text-slate-800 text-sm">{company.name}</td>
-                                    <td className="p-2 text-slate-600 text-xs">
-                                        <span className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px] font-semibold">{company.type}</span>
-                                    </td>
-                                    <td className="p-2 text-slate-600 font-mono text-xs">{company.vatNumber}</td>
-                                    <td className="p-2">
-                                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium border
-                                            ${company.status === 'Active' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>
-                                            {company.status === 'Active' ? 'Attiva' : company.status}
-                                        </span>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                    {filteredCompanies.length === 0 && (
-                        <div className="p-8 text-center text-slate-400 text-sm">
-                            Nessuna società trovata.
+                    {isLoadingCompanies ? (
+                        <div className="flex items-center justify-center p-8">
+                            <div className="w-16 h-16 border-4 border-slate-200 border-t-[#1e3a8a] rounded-full animate-spin"></div>
                         </div>
+                    ) : (
+                        <>
+                            <table className="w-full text-left">
+                                <thead className="bg-slate-50 sticky top-0 z-10 border-b border-slate-200">
+                                    <tr>
+                                        <th className="p-2 font-semibold text-slate-600 text-xs">Ragione Sociale</th>
+                                        <th className="p-2 font-semibold text-slate-600 text-xs">Forma Giuridica</th>
+                                        <th className="p-2 font-semibold text-slate-600 text-xs">P. IVA</th>
+                                        <th className="p-2 font-semibold text-slate-600 text-xs">Stato</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-200">
+                                    {filteredCompanies.map(company => (
+                                        <tr
+                                            key={company.id}
+                                            onClick={() => setSelectedCompany(company)}
+                                            className={`cursor-pointer transition-colors ${selectedCompany?.id === company.id ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
+                                        >
+                                            <td className="p-2 font-medium text-slate-800 text-sm">{company.name}</td>
+                                            <td className="p-2 text-slate-600 text-xs">
+                                                <span className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px] font-semibold">{company.type}</span>
+                                            </td>
+                                            <td className="p-2 text-slate-600 font-mono text-xs">{company.vatNumber}</td>
+                                            <td className="p-2">
+                                                <div className="flex items-center justify-between">
+                                                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium border
+                                                        ${company.status === 'Active' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-amber-100 text-amber-700 border-amber-200'}`}>
+                                                        {company.status === 'Active' ? 'Attiva' : company.status}
+                                                    </span>
+                                                    {!selectedCompany && (
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); confirmDeleteCompany(company); }}
+                                                            className="ml-3 p-1.5 text-red-600 hover:bg-red-50 rounded-full transition-colors border border-transparent hover:border-red-100"
+                                                            title="Elimina Società"
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                            {filteredCompanies.length === 0 && (
+                                <div className="p-8 text-center text-slate-400 text-sm">
+                                    Nessuna società trovata.
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
 
@@ -430,6 +613,13 @@ const CompanyList: React.FC = () => {
                                 title="Modifica Società"
                             >
                                 <Edit size={14} />
+                            </button>
+                            <button
+                                onClick={() => confirmDeleteCompany(selectedCompany ?? undefined)}
+                                className="p-1.5 text-red-600 hover:bg-red-50 rounded-full transition-colors border border-transparent hover:border-red-100"
+                                title="Elimina Società"
+                            >
+                                <Trash2 size={14} />
                             </button>
                             <button
                                 onClick={() => setSelectedCompany(null)}
@@ -513,12 +703,10 @@ const CompanyList: React.FC = () => {
                                     {selectedCompany.letterheadFile && (
                                         <div className="flex items-center gap-2 text-xs text-[#1e3a8a] mb-1">
                                             <Upload size={12} />
-                                            File Caricato: {selectedCompany.letterheadFile.name}
+                                            File Caricato: {getLetterheadName(selectedCompany.letterheadFile)}
                                         </div>
                                     )}
-                                    {selectedCompany.letterheadInfo && (
-                                        <p className="text-xs text-slate-600 italic line-clamp-3">{selectedCompany.letterheadInfo}</p>
-                                    )}
+                                    
                                 </div>
                             )}
 
@@ -529,8 +717,8 @@ const CompanyList: React.FC = () => {
                                 </h4>
                                 {selectedCompany.officers.length > 0 ? (
                                     <div className="space-y-2">
-                                        {selectedCompany.officers.map(officer => (
-                                            <div key={officer.id} className="border border-slate-200 rounded-lg p-3 flex justify-between items-center hover:border-blue-200 transition-colors">
+                                        {selectedCompany.officers.map((officer, idx) => (
+                                            <div key={officer.id ?? `off-${idx}`} className="border border-slate-200 rounded-lg p-3 flex justify-between items-center hover:border-blue-200 transition-colors">
                                                 <div>
                                                     <p className="font-medium text-slate-800">{officer.name}</p>
                                                     <p className="text-xs text-[#1e3a8a] font-medium">{officer.role}</p>
@@ -552,9 +740,9 @@ const CompanyList: React.FC = () => {
                                 </h4>
                                 {selectedCompany.shareholders.length > 0 ? (
                                     <div className="space-y-2">
-                                        {selectedCompany.shareholders.map(sh => (
-                                            <div key={sh.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded border border-transparent hover:border-slate-200 border-b-slate-100 last:border-b-0">
-                                                <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-600 border border-purple-200 flex items-center justify-center font-bold text-xs">
+                                        {selectedCompany.shareholders.map((sh, idx) => (
+                                            <div key={sh.id ?? `sh-${idx}`} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded border border-transparent hover:border-slate-200 border-b-slate-100 last:border-b-0">
+                                                <div className="w-12 h-12 rounded-full bg-purple-100 text-purple-600 border border-purple-200 flex items-center justify-center font-bold text-xs">
                                                     {sh.quotaPercentage}%
                                                 </div>
                                                 <span className="text-slate-700 font-medium">{sh.name}</span>
@@ -606,7 +794,7 @@ const CompanyList: React.FC = () => {
                                             <input type="text" className="w-full p-2 border border-slate-300 rounded-lg" value={newCompany.name || ''} onChange={e => setNewCompany({ ...newCompany, name: e.target.value })} />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-slate-700 mb-1">Partita IVA *</label>
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">Partita IVA</label>
                                             <input type="text" className="w-full p-2 border border-slate-300 rounded-lg" value={newCompany.vatNumber || ''} onChange={e => setNewCompany({ ...newCompany, vatNumber: e.target.value })} />
                                         </div>
                                         <div>
@@ -816,6 +1004,25 @@ const CompanyList: React.FC = () => {
                                 Salva Scadenza
                             </button>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {isDeleteModalOpen && deleteTarget && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+                    <div className="bg-white rounded-xl p-4 w-full max-w-md shadow-2xl border border-slate-200">
+                        <div className="flex justify-between items-center mb-2">
+                            <h3 className="text-base font-bold text-slate-800">Conferma eliminazione</h3>
+                            <button onClick={() => { setIsDeleteModalOpen(false); setDeleteTarget(null); }} className="text-slate-400 hover:text-slate-600">
+                                <X size={16} />
+                            </button>
+                        </div>
+                        <p className="text-sm text-slate-600">Sei sicuro di voler eliminare <strong>{deleteTarget.name}</strong>? Questa operazione è irreversibile e rimuoverà tutti i dati collegati.</p>
+                        <div className="mt-4 flex justify-end gap-2">
+                            <button onClick={() => { setIsDeleteModalOpen(false); setDeleteTarget(null); }} className="px-3 py-1.5 bg-slate-100 rounded text-sm">Annulla</button>
+                            <button onClick={() => handleDeleteCompany()} disabled={isDeleting} className="px-3 py-1.5 bg-red-600 text-white rounded text-sm font-semibold">{isDeleting ? 'Eliminando...' : 'Elimina Società'}</button>
+                        </div>
                     </div>
                 </div>
             )}

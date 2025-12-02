@@ -103,18 +103,18 @@ class GeminiService {
       }
     });
 
-    // Add Letterhead File if exists and company is selected, and has valid data
-    if (
-      company &&
-      company.letterheadFile &&
-      company.letterheadFile.data
-    ) {
-      parts.push({
-        inlineData: {
-          mimeType: getSafeMimeType(company.letterheadFile.mimeType),
-          data: company.letterheadFile.data
-        }
-      });
+    // Add Letterhead File if exists and company is selected, and has valid base64 data
+    if (company && company.letterheadFile && typeof company.letterheadFile === 'object' && 'data' in company.letterheadFile) {
+      type LocalLetterhead = { data?: string; mimeType?: string; name?: string };
+      const lf = company.letterheadFile as LocalLetterhead;
+      if (lf.data && typeof lf.data === 'string') {
+        parts.push({
+          inlineData: {
+            mimeType: getSafeMimeType(lf.mimeType),
+            data: lf.data
+          }
+        });
+      }
     }
 
     console.log('Generating document with parts:', parts);

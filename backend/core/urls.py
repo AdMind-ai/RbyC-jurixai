@@ -40,6 +40,8 @@ urlpatterns = [
      # Company
      path('companies/', CompanyListCreateView.as_view(), name='company-list-create'),
      path('companies/<int:pk>/', CompanyUpdateView.as_view(), name='company-update'),
+     path('companies/letterhead-proxy/', CompanyLetterheadProxyView.as_view(), name='company-letterhead-proxy'),
+     path('documents/generate-pdf/', GenerateDocumentPDFView.as_view(), name='generate-document-pdf'),
      # Officer
      path('officers/', OfficerListCreateView.as_view(), name='officer-list-create'),
      path('officers/<int:pk>/', OfficerUpdateView.as_view(), name='officer-update'),
