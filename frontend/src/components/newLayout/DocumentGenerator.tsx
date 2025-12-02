@@ -13,7 +13,6 @@ import { zoomPlugin } from '@react-pdf-viewer/zoom';
 import '@react-pdf-viewer/zoom/lib/styles/index.css';
 import '../../styles/DocumentGeneratorViewer.css';
 // Vite: import pdf.worker as an asset so dev server serves it correctly
-// eslint-disable-next-line import/no-unresolved
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.js?url';
 
 
