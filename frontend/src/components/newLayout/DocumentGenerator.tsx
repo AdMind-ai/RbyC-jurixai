@@ -12,6 +12,8 @@ import '@react-pdf-viewer/default-layout/lib/styles/index.css';
 import { zoomPlugin } from '@react-pdf-viewer/zoom';
 import '@react-pdf-viewer/zoom/lib/styles/index.css';
 import '../../styles/DocumentGeneratorViewer.css';
+// Vite: import pdf.worker as an asset so dev server serves it correctly
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.js?url';
 
 
 interface AttachedFile {
@@ -109,7 +111,11 @@ const DocumentGenerator: React.FC = () => {
     const company = selectedCompanyId ? companies.find(c => c.id === selectedCompanyId) || null : null;
     
     const result = await geminiService.generateDocument(docType, company, details, attachedFiles);
-    setGeneratedContent(result);
+    // Clear previous pdf preview while generating
+    if (pdfUrl) {
+      URL.revokeObjectURL(pdfUrl);
+      setPdfUrl(null);
+    }
 
     // Now request backend to render PDF combining company layout and generated content
     try {
@@ -123,15 +129,18 @@ const DocumentGenerator: React.FC = () => {
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         // Revoke previous if exists
-        if (pdfUrl) URL.revokeObjectURL(pdfUrl);
         setPdfUrl(url);
       } else {
         const errText = await res.text();
         setError('Errore nella generazione PDF: ' + errText);
+        // show markdown fallback so user can inspect the content if PDF failed
+        setGeneratedContent(result);
       }
     } catch (err) {
       console.error('Error creating PDF:', err);
       setError('Errore nella generazione del PDF.');
+      // show markdown fallback on exception
+      setGeneratedContent(result);
     }
 
     setIsLoading(false);
@@ -282,7 +291,7 @@ const DocumentGenerator: React.FC = () => {
                     </div>
                   </div>
                   <div className="pdf-preview-body">
-                    <Worker workerUrl={new URL('pdfjs-dist/build/pdf.worker.min.js', import.meta.url).toString()}>
+                    <Worker workerUrl={pdfWorkerUrl as string}>
                       <div style={{ height: '72vh' }}>
                         <Viewer fileUrl={pdfUrl} plugins={[defaultLayoutPluginInstance, zoomPluginInstance]} />
                       </div>
