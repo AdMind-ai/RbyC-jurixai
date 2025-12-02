@@ -13,7 +13,7 @@ from .extract_content_view import ExtractContentView
 from .quickdoc_view import QuickDocGenerateView
 from .check_compliance_view import CheckComplianceView
 from .segretaria_societaria.deadline_view import DeadlineListCreateView, DeadlineUpdateView
-from .segretaria_societaria.company_view import CompanyListCreateView, CompanyUpdateView
+from .segretaria_societaria.company_view import CompanyListCreateView, CompanyUpdateView, CompanyLetterheadProxyView, GenerateDocumentPDFView
 from .segretaria_societaria.officer_view import OfficerListCreateView, OfficerUpdateView
 from .segretaria_societaria.shareholder_view import ShareholderListCreateView, ShareholderUpdateView
 
@@ -37,4 +37,6 @@ __all__ = [
     'OfficerUpdateView',
     'ShareholderListCreateView',
     'ShareholderUpdateView',
+    'CompanyLetterheadProxyView',
+    'GenerateDocumentPDFView',
 ]

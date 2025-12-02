@@ -15,17 +15,21 @@ class Company(models.Model):
         INACTIVE = 'Inactive', _('Inattiva')
 
     name = models.CharField(max_length=255, verbose_name=_("Ragione Sociale"))
-    vat_number = models.CharField(max_length=50, unique=True, verbose_name=_("Partita IVA"))
+    # Make VAT number optional for initial creation (only name required)
+    vat_number = models.CharField(max_length=50, unique=False, null=True, blank=True, verbose_name=_("Partita IVA"))
     company_type = models.CharField(
         max_length=20, 
         choices=CompanyType.choices, 
         default=CompanyType.SRL,
         verbose_name=_("Tipo Società")
     )
-    address = models.TextField(verbose_name=_("Sede Legale"))
+    address = models.TextField(null=True, blank=True, verbose_name=_("Sede Legale"))
     capital = models.DecimalField(
-        max_digits=15, 
-        decimal_places=2, 
+        max_digits=15,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        default=0,
         verbose_name=_("Capitale Sociale")
     )
     status = models.CharField(

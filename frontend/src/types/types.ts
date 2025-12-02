@@ -40,11 +40,17 @@ export interface Company {
   nextMeetingDate?: string;
   status: 'Active' | 'Liquidation' | 'Inactive';
   letterheadInfo?: string; // Text details
-  letterheadFile?: { // File details (PDF/Image)
-    data: string; // base64
-    mimeType: string;
-    name: string;
-  };
+  letterheadFile?:
+    | { // File details (PDF/Image) when freshly uploaded from client
+        data: string; // base64
+        mimeType: string;
+        name: string;
+      }
+    | { // Normalized shape when API returns a URL
+        name: string;
+        url?: string | null;
+      }
+    | null;
   // Add missing optional API fields
   vat_number?: string;
   company_type?: string;
