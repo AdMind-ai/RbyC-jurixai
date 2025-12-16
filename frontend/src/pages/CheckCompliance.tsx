@@ -277,7 +277,7 @@ const CheckCompliance: React.FC = () => {
           Analisi in corso...
         </h3>
         <p className="text-slate-500 text-lg text-center">
-          Jurix AI sta analizzando l'intero documento.
+          Analizzando l'intero documento.
         </p>
       </div>
     )
@@ -344,7 +344,7 @@ const CheckCompliance: React.FC = () => {
                       handleDownloadChoice('pdf')
                       setDownloadMenuOpen(false)
                     }}
-                    className="w-full text-left px-4 py-2 hover:bg-slate-50"
+                    className="w-full text-left text-sm px-4 py-2 hover:bg-slate-50"
                   >
                     Scarica PDF
                   </button>
@@ -353,7 +353,7 @@ const CheckCompliance: React.FC = () => {
                       handleDownloadChoice('word')
                       setDownloadMenuOpen(false)
                     }}
-                    className="w-full text-left px-4 py-2 hover:bg-slate-50"
+                    className="w-full text-left text-sm px-4 py-2 hover:bg-slate-50"
                   >
                     Scarica Word
                   </button>
