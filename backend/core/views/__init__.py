@@ -9,9 +9,12 @@ from .openai import (OpenAIConversationViewSet,
                      SaveConversationView,
                      ConversationForChatView)
 
+from .company_document_layout_view import CompanyDocumentLayoutView, CompanyDocumentLayoutDetailView
+from .draft_document.generate_document_view import DraftDocumentView, DraftDocumentFileView
 from .extract_content_view import ExtractContentView
 from .quickdoc_view import QuickDocGenerateView
 from .check_compliance_view import CheckComplianceView
+from .s3_upload_view import S3UploadView, S3TokenView
 from .segretaria_societaria.deadline_view import DeadlineListCreateView, DeadlineUpdateView
 from .segretaria_societaria.company_view import CompanyListCreateView, CompanyUpdateView, CompanyLetterheadProxyView, GenerateDocumentPDFView
 from .segretaria_societaria.officer_view import OfficerListCreateView, OfficerUpdateView
@@ -39,4 +42,10 @@ __all__ = [
     'ShareholderUpdateView',
     'CompanyLetterheadProxyView',
     'GenerateDocumentPDFView',
+    'DraftDocumentView',
+    'DraftDocumentFileView',
+    'CompanyDocumentLayoutView',
+    'CompanyDocumentLayoutDetailView',
+    'S3UploadView',
+    'S3TokenView',
 ]

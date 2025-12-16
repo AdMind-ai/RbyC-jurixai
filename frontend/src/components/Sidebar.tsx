@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { 
   LayoutDashboard, 
   Building2, 
@@ -14,10 +14,13 @@ import {
   LogOut
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { AuthContext } from '../context/AuthContext';
+import Logo from '../assets/logo.png';
 
 const routeMap = {
   home: '/',
   search: '/search',
+  draft: '/draft-document',
   compliance: '/compliance',
   'chat-general': '/chat-general',
   accessi: '/accessi',
@@ -37,6 +40,12 @@ const segreteriaTabs: { key: RouteKey; label: string; icon: React.ReactElement }
 ];
 
 const Sidebar: React.FC = () => {
+  const auth = useContext(AuthContext);
+  const userName = auth?.user?.name || "User";
+  const userInitial = userName.charAt(0).toUpperCase();
+  const userRole = auth?.user?.is_admin ? "Amministratore" : "Standard";
+
+
   const navigate = useNavigate();
   const location = useLocation();
   const [isSegreteriaOpen, setIsSegreteriaOpen] = useState(false);
@@ -62,17 +71,16 @@ const Sidebar: React.FC = () => {
     }
   };
 
+  const handleLogout = () => {
+    auth?.logout();
+    navigate("/login");
+  };
+
   return (
     <div className="w-64 bg-[#1e3a8a] text-white h-screen flex flex-col fixed left-0 top-0 shadow-2xl z-20 border-r border-blue-900">
       {/* Logo Section */}
       <div className="p-6 border-b border-blue-800 bg-[#172554]">
-        <div className="flex items-center gap-2 mb-1">
-           <span className="text-3xl font-light tracking-tight">Re<span className="font-bold">fink</span></span>
-        </div>
-        <div className="flex items-center gap-1">
-            <div className="h-px w-8 bg-[#15803d]"></div>
-            <p className="text-[10px] uppercase tracking-wider text-slate-300">Powered by <span className="font-bold text-white">CONSILIA</span></p>
-        </div>
+        <img src={Logo} alt="Refink Logo" className="w-32 mx-auto" />
       </div>
 
       {/* Navigation */}
@@ -103,6 +111,18 @@ const Sidebar: React.FC = () => {
         >
           <Search size={20} />
           <span className="font-medium text-sm">Ricerca documentale</span>
+        </button>
+        
+        <button
+          onClick={() => handleNav('draft')}
+          className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
+            location.pathname === routeMap['draft']
+              ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
+              : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
+          }`}
+        >
+          <FileText size={20} />
+          <span className="font-medium text-sm">Draft Document</span>
         </button>
 
         <button
@@ -189,11 +209,11 @@ const Sidebar: React.FC = () => {
           className="flex items-center gap-3 cursor-pointer hover:bg-[#1e3a8a] p-2 rounded-lg transition-colors"
         >
           <div className="w-9 h-9 bg-[#15803d] rounded-full flex items-center justify-center text-white font-bold text-sm shadow-sm border-2 border-blue-900">
-            R
+            {userInitial}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-white truncate">rbyc_admin</p>
-            <p className="text-[9px] text-blue-300 truncate">Amministratore</p>
+            <p className="text-sm font-medium text-white truncate">{userName}</p>
+            <p className="text-[12px] text-blue-300 truncate">{userRole}</p>
           </div>
           {isUserMenuOpen ? <ChevronDown size={16} className="text-blue-300" /> : <ChevronRight size={16} className="text-blue-300" />}
         </div>
@@ -201,7 +221,7 @@ const Sidebar: React.FC = () => {
         {isUserMenuOpen && (
           <div className="mt-2 space-y-1 animate-fade-in">
             <button 
-              onClick={() => console.log('Logout clicked')}
+              onClick={handleLogout}
               className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-red-300 hover:text-white hover:bg-red-500/20 rounded-lg transition-colors"
             >
               <LogOut size={14} />
@@ -220,4 +240,3 @@ const Sidebar: React.FC = () => {
 };
 
 export default Sidebar;
- 

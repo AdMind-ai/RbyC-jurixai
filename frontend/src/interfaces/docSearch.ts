@@ -4,11 +4,18 @@ export interface Message {
 }
 
 export interface ApiMessage {
-  id: number;
-  conversation: string;
-  content: string;
-  created_at: string;
-  is_user: boolean;
+  id: number
+  conversation: string
+  content: string
+  created_at: string
+  is_user: boolean
+  // Optional citations saved on the message (from backend ChatMessage.citations)
+  citations?: Array<{
+    id?: string
+    title?: string
+    url?: string
+    type?: string
+  }>
 }
 
 export interface Chat {

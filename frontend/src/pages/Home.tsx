@@ -1,99 +1,84 @@
-import React from 'react'
-import { Box, Typography } from '@mui/material'
-import Layout from '../layouts/Layout'
-import HomeCard from '../components/cards/HomeCard'
-
-// Importação dos ícones
-// import TranslatorIcon from '../assets/icons/sidebar/translator-icon.svg'
-import ComplianceIcon from '../assets/icons/sidebar/compliance-icon.svg'
-import DocIcon from '../assets/icons/sidebar/doc-icon.svg'
-import SearchIcon from '../assets/icons/sidebar/search-icon.svg'
-import ConsultantIcon from '../assets/icons/sidebar/consultant-icon.svg'
-
-
-const cards = [
-  {
-    title: 'Ricerca documentale',
-    description:
-      '',
-      icon: SearchIcon,
-    path: '/doc-search',
-  },
-  {
-    title: 'Check compliance',
-    description:
-    '',
-    icon: ComplianceIcon,
-    path: '/check-compliance'
-  },
-  // {
-  //   title: 'Traduttore documenti',
-  //   description:
-  //     'Assistente virtuale rapido, sicuro e totalmente privato per ottenere risposte immediatamente anche su informazioni price sensitive non ancora pubbliche.',
-  //   icon: TranslatorIcon,
-  //   path: '/doc-translator',
-  // },
-  {
-    title: 'Chat Assistant',
-    description:
-    '',
-    icon: ConsultantIcon,
-    path: '/chat-assistant',
-  },
-  {
-    title: 'QuickDoc Creator',
-    description:
-    '',
-    icon: DocIcon,
-    path: '/quick-doc',
-  },
-]
+import React from 'react';
+import { Search, ShieldCheck, Bot, Briefcase, FileText } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const Home: React.FC = () => {
-  return (
-    <Layout>
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
-          alignItems: 'center',
-          overflow: 'auto',
-          height: '100%',
-          width: '100%',
-        }}
-      >
-        <Typography variant="h3" sx={{ textAlign: 'center', padding: '0px 0px', paddingTop: '4vh' }}>
-          Cosa vuoi fare oggi?
-        </Typography>
-        <Box
-          sx={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            justifyContent: 'center',
-            padding: 'calc(2.5vh) calc(3vh) calc(4vh) calc(3vh)',
-            // overflow: 'auto',
-            height: '84%',
-            width: '100%',
-            // backgroundColor: 'blue',
-            gap: 0.5,
-          }}
-        >
-          {cards.map((card, index) => (
-            <Box key={index} sx={{ padding: '15px 15px' }}>
-              <HomeCard
-                title={card.title}
-                description={card.description}
-                icon={card.icon}
-                path={card.path}
-                // isDisabled={card.disable ? card.disable : false}
-              />
-            </Box>
-          ))}
-        </Box>
-      </Box>
-    </Layout>
-  )
-}
+  const navigate = useNavigate();
 
-export default Home
+  const cards = [
+    {
+      id: 'search',
+      title: 'Ricerca documentale',
+      icon: Search,
+      desc: 'Cerca e analizza documenti nell\'intero archivio dello studio. Supporta ricerca semantica e full-text.',
+      action: '/search',
+    },
+    {
+      title: 'Draft Document',
+      desc: 'Crea bozze professionali partendo da template e istruzioni aziendali.',
+      icon: FileText,
+      action: '/draft-document',
+      disable: false,
+    },
+    {
+      id: 'compliance',
+      title: 'Check compliance',
+      icon: ShieldCheck,
+      desc: 'Verifica la conformità normativa dei documenti caricati rispetto alle policy interne e GDPR.',
+      action: '/compliance'
+    },
+    {
+      id: 'chat',
+      title: 'Chat Assistant',
+      icon: Bot,
+      desc: 'Interfaccia diretta con i modelli LLM per supporto generico, stesura mail e brainstorming.',
+      action: '/chat-general'
+    },
+    {
+      id: 'segreteria',
+      title: 'Segreteria Societaria',
+      icon: Briefcase,
+      desc: 'Gestione completa di scadenze, verbali, anagrafiche societarie e libro soci.',
+      action: '/segreteria/dashboard'
+    }
+  ];
+
+  return (
+    <div className="w-full h-full p-8 overflow-y-auto animate-fade-in">
+      <div className="flex flex-col h-full items-center justify-center">
+        <h1 className="text-3xl font-bold text-slate-800 mb-12">Cosa vuoi fare oggi?</h1>
+
+        <div className="flex flex-wrap justify-center gap-6 w-full max-w-7xl mx-auto">
+          {cards.map((card) => {
+            const Icon = card.icon;
+            return (
+              <div
+                key={card.id}
+                className="bg-white w-full sm:w-1/2 md:w-1/3 max-w-[380px] p-6 rounded-2xl shadow-sm border border-slate-300 hover:shadow-xl hover:border-[#1e3a8a]/20 transition-all duration-300 flex flex-col items-start group min-h-[140px]"
+              >
+                <div className="w-12 h-12 rounded-xl bg-blue-50 text-[#1e3a8a] flex items-center justify-center mb-4 group-hover:bg-[#1e3a8a] group-hover:text-white transition-colors shrink-0 border border-blue-100">
+                  <Icon size={24} strokeWidth={1.5} />
+                </div>
+                <h3 className="text-lg font-bold text-slate-800 mb-3 group-hover:text-[#1e3a8a] transition-colors shrink-0">
+                  {card.title}
+                </h3>
+                <p className="text-slate-500 text-sm leading-relaxed mb-5 flex-1">
+                  {card.desc}
+                </p>
+
+                <button
+                  onClick={() => navigate(card.action)}
+                  className="w-full py-2 bg-[#1e3a8a] text-white rounded-lg font-semibold text-xs uppercase tracking-wide hover:bg-blue-900 transition-colors shadow-md shadow-blue-900/20 mt-auto shrink-0"
+                >
+                  VAI ALLA FUNZIONE
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Home;
