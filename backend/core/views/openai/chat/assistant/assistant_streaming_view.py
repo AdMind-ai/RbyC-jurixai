@@ -1,137 +1,36 @@
 from django.conf import settings
-import warnings
+from core.utils.common import safe_load_json
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
-from django.http import StreamingHttpResponse
-# from rest_framework.response import Response
-from openai import AssistantEventHandler, OpenAI
-from typing_extensions import override
+from rest_framework.response import Response
+from openai import OpenAI
 from rest_framework import serializers
+import logging
+from typing import Any, Dict, Optional
 
 # Functions
 from core.utils.assistants import *
-from core.views.openai.chat.assistant.tool_call_dispatcher import dispatch_tool_call
+from core.utils.s3_utils import get_presigned_urls
 
 from core.models.openai_chat_models import ChatConversation, ChatMessage
 from core.models.assistant_thread_model import AssistantThread
 from django.db import transaction
 
-# Suprimindo warnings irrelevantes
-warnings.filterwarnings("ignore", category=DeprecationWarning)
-
 client = OpenAI(api_key=settings.OPENAI_KEY)
-
-
-def cancel_active_run_if_exists(thread_id):
-    runs = client.beta.threads.runs.list(thread_id=thread_id)
-    for run in runs.data:
-        if run.status in ("in_progress", "queued", "requires_action"):
-            print(f"Cancelling ACTIVE run: {run.id}")
-            client.beta.threads.runs.cancel(thread_id=thread_id, run_id=run.id)
-            break
-
+logger = logging.getLogger(__name__)
 
 class AssistantMessageSerializer(serializers.Serializer):
     thread_id = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     content = serializers.CharField(required=True, allow_blank=False)
 
-
-class DjangoStreamingEventHandler(AssistantEventHandler):
-    """
-    Herda a lógica do seu handler, mas armazena a saída em buffers e gera via yield
-    """
-
-    def __init__(self):
-        super().__init__()
-        self._buffer = []
-        self._citations = []
-
-    @override
-    def on_text_created(self, text) -> None:
-        # if text:
-        #     self._buffer.append(text)
-        pass
-
-    @override
-    def on_text_delta(self, delta, snapshot):
-        if delta.value:
-            self._buffer.append(delta.value)
-
-    @override
-    def on_tool_call_created(self, tool_call):
-        txt = f"\n[assistant tool_call: {tool_call.type}]"
-        try:
-            txt += f" - {tool_call.function.name}\n"
-        except Exception:
-            txt += "\n"
-        print(txt, flush=True)
-        # self._buffer.append(txt)
-
-    @override
-    def on_message_done(self, message) -> None:
-        message_content = message.content[0].text
-
-        msg_val = message_content.value.strip()
-        # self._buffer.append("\n" + message_content.value + "\n")
-        # Só adicione ao buffer se não está lá (evita duplicata caso stream funcione normalmente)
-
-        print("BUFFER>>>", self._buffer, "<<<")
-        print(msg_val, flush=True)
-        # annotations = message_content.annotations
-        # for index, annotation in enumerate(annotations):
-        #     # Substitui texto citado por [index]
-        #     message_content.value = message_content.value.replace(
-        #         annotation.text, f"[{index}]"
-        #     )
-        #     if file_citation := getattr(annotation, "file_citation", None):
-        #         cited_file = client.files.retrieve(file_citation.file_id)
-        #         self._citations.append(f"[{index}] {cited_file.filename}")
-
-        # # Ao final, adiciona texto e citações (se houver)
-        # self._buffer.append("\n" + message_content.value + "\n")
-        # if self._citations:
-        #     self._buffer.append("\n".join(self._citations) + "\n")
-
-    @override
-    def on_event(self, event):
-        # Se for necessário executar uma função tool_call
-        if event.event == 'thread.run.requires_action':
-            run_id = event.data.id
-            self.handle_requires_action(event.data, run_id)
-
-    def handle_requires_action(self, data, run_id):
-        tool_outputs = []
-
-        for tool in data.required_action.submit_tool_outputs.tool_calls:
-            dispatch_tool_call(tool, tool_outputs)
-
-        self.submit_tool_outputs(tool_outputs, run_id)
-
-    def submit_tool_outputs(self, tool_outputs, run_id):
-        # Stream dos outputs das tools (pode ser englobado no buffer também se necessário)
-        with client.beta.threads.runs.submit_tool_outputs_stream(
-            thread_id=self.current_run.thread_id,
-            run_id=self.current_run.id,
-            tool_outputs=tool_outputs,
-            event_handler=DjangoStreamingEventHandler(),
-        ) as stream:
-            for text in stream.text_deltas:
-                self._buffer.append(text)
-
-    def pop_buffer(self):
-        # Método auxiliar para retirar tudo da fila e enviar pro stream do Django
-        while self._buffer:
-            yield self._buffer.pop(0)
-
-
 class AssistantStreamingView(APIView):
-    """
-    View que transmite a resposta do assistente por streaming,
-    com suporte a tool calls, file search, etc.
-    """
     permission_classes = [IsAuthenticated]
     serializer_class = AssistantMessageSerializer
 
+
+    # -----------------------------------------------------
+    #            STREAMING OPENAI + MCP
+    # -----------------------------------------------------
     def post(self, request, *args, **kwargs):
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -139,132 +38,163 @@ class AssistantStreamingView(APIView):
         prompt = serializer.validated_data["content"]
         thread_id = serializer.validated_data["thread_id"]
 
+        # ------------------------------------------
+        #   SETUP CONVERSA
+        # ------------------------------------------
         with transaction.atomic():
-            assistant_thread = None
-
             if thread_id:
                 assistant_thread = AssistantThread.objects.filter(thread_id=thread_id).first()
                 if not assistant_thread:
-                    # thread_id inválido → criar novo registro
                     conversation_openai = client.conversations.create()
-                    print(conversation_openai)
-                    assistant_thread = AssistantThread.objects.create(thread_id=conversation_openai.id, active=True)
+                    assistant_thread = AssistantThread.objects.create(
+                        thread_id=conversation_openai.id, active=True
+                    )
             else:
-                # cria thread local, id será preenchido depois
                 conversation_openai = client.conversations.create()
-                print(conversation_openai)
-                assistant_thread = AssistantThread.objects.create(thread_id=conversation_openai.id, active=True)
+                assistant_thread = AssistantThread.objects.create(
+                    thread_id=conversation_openai.id, active=True
+                )
 
-            # cria ou reaproveita conversa local (ChatConversation)
-            if assistant_thread and assistant_thread.conversation:
+            if assistant_thread.conversation:
                 conversation = assistant_thread.conversation
             else:
-                # cria nova conversa local
                 user = request.user
                 ChatConversation.objects.filter(user=user, is_new=True).delete()
                 conversation = ChatConversation.objects.create(
-                    user=user,
-                    name="New Chat",
-                    is_new=True
+                    user=user, name="New Chat", is_new=True
                 )
                 assistant_thread.conversation = conversation
                 assistant_thread.save(update_fields=["conversation"])
 
-        # salva a mensagem do usuário
         ChatMessage.objects.create(
-            conversation=conversation,
-            content=prompt,
-            is_user=True
+            conversation=conversation, content=prompt, is_user=True
         )
 
-        # cancel_active_run_if_exists(thread_id)
-
-        def openai_stream():
-            full_ai_message = ""
-
-            with client.responses.create(
-                prompt = { "id": settings.OPENAI_PROMPT_ID_RBYC },
-                input=[
-                    {
-                        "role": "user",
-                        "content": [{"type": "input_text", "text": prompt}]
-                    }
-                ],
+        # --------------------------------------------------------
+        #       STREAM DE RESPOSTA DA OPENAI
+        # --------------------------------------------------------
+        try:
+            response = client.responses.create(
+                prompt={"id": settings.OPENAI_PROMPT_ID_RICERCA_DOCUMENTALE},
+                input=prompt,
                 conversation=assistant_thread.thread_id,
-                tools=[
-                    {
-                        "type": "file_search",
-                        "vector_store_ids": [settings.VECTOR_STORE_ID_RBYC]
-                    }
-                ],
-                stream=True,
-                include=["web_search_call.action.sources"],
-                timeout=600,
-            ) as stream:
-                handler = DjangoStreamingEventHandler()
-                print("Stream started", flush=True)
-                for event in stream:
-                    if event.type == "response.output_text.delta":
-                        chunk = event.delta
-                        full_ai_message += chunk
-                        yield chunk
-                    # elif event.type == "response.completed":
-                    #     new_conversation_id = event.response.conversation
-                # stream.until_done()
-                print("Stream ended", flush=True)
+                tools=[{
+                    "type": "mcp",
+                    "server_label": 'bcand',
+                    "server_description": "Ferramenta para listar documentos do S3",
+                    "server_url": "https://mcp-server-ricerca-rbyc.onrender.com/sse",
+                    "allowed_tools": ["list_documents", "get_document"],
+                    "require_approval": "never",
+                }],
+                store=True,
+                timeout=900,
+            )
+        except Exception as e:
+            logger.exception("Erro ao chamar OpenAI Responses API: %s", e)
+            return Response({"error": "Erro ao chamar o serviço de respostas externo."}, status=502)
 
-            # salva a resposta da IA
-            ChatMessage.objects.create(
-                conversation=conversation,
-                content=full_ai_message,
-                is_user=False
+        # Log raw output_text for debugging
+        try:
+            raw_output = getattr(response, 'output_text', None)
+        except Exception:
+            raw_output = str(response)
+
+        logger.debug("RESPOSTA ASSISTANT (raw): %s", raw_output)
+
+        # safe_load_json may return dict or other types — handle both robustly
+        try:
+            jsonRes: Optional[Any] = safe_load_json(raw_output)
+        except Exception:
+            logger.exception("Falha ao parsear response.output_text como JSON; usando fallback de texto cru.")
+            jsonRes = None
+
+        # Derive the response text and keys in a fault-tolerant way
+        response_text = ''
+        response_keys = []
+
+        if isinstance(jsonRes, dict):
+            # common case: assistant returned a dict
+            response_text = (
+                jsonRes.get('response')
+                or jsonRes.get('output_text')
+                or jsonRes.get('text')
+                or raw_output
             )
 
-        return StreamingHttpResponse(openai_stream(), content_type="text/plain")
+            # If the assistant provided an explicit 'keys' list, use it.
+            if 'keys' in jsonRes and isinstance(jsonRes['keys'], (list, tuple)):
+                response_keys = list(jsonRes['keys'])
+            else:
+                # fallback: use dict keys (may include other fields)
+                try:
+                    response_keys = list(jsonRes.keys())
+                except Exception:
+                    response_keys = []
 
+        elif jsonRes is None:
+            response_text = raw_output or ''
+            response_keys = []
+        else:
+            # object-like response (previous code path)
+            response_text = getattr(jsonRes, 'response', None) or getattr(jsonRes, 'output_text', None) or str(jsonRes)
+            try:
+                response_keys = list(getattr(jsonRes, 'keys', [])())
+            except Exception:
+                response_keys = []
 
-# class AssistantLawConsultantView(APIView):
-#     """
-#     Endpoint para consultas jurídicas com o assistente.
-#     """
-#     serializer_class = AssistantMessageSerializer
+        # Ensure response_text is always a string (avoid saving None to DB)
+        if response_text is None:
+            response_text = ''
+        elif not isinstance(response_text, str):
+            response_text = str(response_text)
 
-#     def post(self, request, *args, **kwargs):
-#         serializer = self.serializer_class(data=request.data)
-#         serializer.is_valid(raise_exception=True)
+        logger.debug("JSON RESPOSTA ASSISTANT (parsed): %s", response_text)
+        logger.debug("JSON RESPOSTA ASSISTANT keys: %s", response_keys)
 
-#         prompt = serializer.validated_data["content"]
-#         thread_id = serializer.validated_data["thread_id"]
+        # Attempt to fetch presigned URLs for any document-like keys returned by the assistant
+        documents_urls = {}
+        if response_keys:
+            try:
+                documents_urls = get_presigned_urls(response_keys)
+            except Exception as e:
+                logger.exception("Erro ao recuperar URLs S3: %s", e)
 
-#         if not thread_id:
-#             return Response({"error": "thread_id is required"}, status=400)
+        # Normalize documents_urls into a list suitable for ChatMessage.citations (JSONField)
+        # Each item: { id, title, url, type }
+        citations_list = []
+        try:
+            for idx, (key, url) in enumerate((documents_urls or {}).items()):
+                parts = str(key).split('/') if key else [str(key)]
+                filename = parts[-1] if parts else str(key)
+                ext_match = None
+                try:
+                    import re
 
-#         cancel_active_run_if_exists(thread_id)
-        
-#         def openai_stream():
-#             _ = client.beta.threads.messages.create(
-#                 thread_id=thread_id,
-#                 role="user",
-#                 content=prompt,
-#             )
-#             handler = DjangoStreamingEventHandler()
-#             # São yields que serão enviados p/ StreamingHttpResponse
-            
-#             with client.beta.threads.runs.stream(
-#                 thread_id=thread_id,
-#                 assistant_id=settings.OPENAI_ASSISTANT_ID_RBYC_LAW_CONSULTANT,
-#                 event_handler=handler,
-#             ) as stream:
-#                 print("Stream started", flush=True)
-#                 for _ in stream:
-#                     for chunk in handler.pop_buffer():
-#                         print(chunk, end="", flush=True)
-#                         yield chunk
-#                 for chunk in handler.pop_buffer():
-#                     yield chunk
-#                 stream.until_done()
-#                 print("Stream ended", flush=True)
-                
-#         print("Starting streaming response for law consultant", flush=True)
+                    m = re.search(r"\.([0-9a-zA-Z]+)(?:\?|$)", filename)
+                    ext_match = m.group(1).lower() if m else ''
+                except Exception:
+                    ext_match = ''
 
-#         return StreamingHttpResponse(openai_stream(), content_type="text/plain")
+                citations_list.append({
+                    'id': f"{idx}-{filename}",
+                    'title': filename,
+                    'url': url,
+                    'type': ext_match,
+                })
+        except Exception:
+            logger.exception("Erro ao normalizar documents_urls para citations_list")
+
+        # Persist message (store the plain text that will be shown to users) along with citations
+        ChatMessage.objects.create(
+            conversation=conversation,
+            content=response_text,
+            is_user=False,
+            citations=citations_list,
+        )
+
+        res = {
+            "response_text": response_text,
+            "documents_urls": documents_urls,
+        }
+
+        return Response(res)

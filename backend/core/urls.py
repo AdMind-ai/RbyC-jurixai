@@ -20,6 +20,17 @@ urlpatterns = [
          name='extract-file-content'),
     path('quickdoc/generate/', QuickDocGenerateView.as_view(),
          name='quickdoc-generate'),
+    
+    # Company Document Layout (draft document)
+    path('company/document-layout/', CompanyDocumentLayoutView.as_view(),
+         name='company-document-layout'),
+    path('company/document-layout/<int:pk>/', CompanyDocumentLayoutDetailView.as_view(),
+         name='company-document-layout-detail'),
+    
+    # Draft document generation (OpenAI)
+    path('openai/draft/generate/', DraftDocumentView.as_view(), name='draft-document'),
+    path('openai/draft/export/', DraftDocumentFileView.as_view(), name='draft-document-file'),
+    
     # Chat with assistant
     path('openai/chat/assistant/send-message',
          AssistantStreamingView.as_view(), name='openai-chat-assistant-send-message'),
@@ -27,9 +38,7 @@ urlpatterns = [
          name='openai-chat-assistant-thread'),
     path('openai/chat/assistant/save-conversation', SaveConversationView.as_view(),
          name='openai-chat-assistant-save-conversation'),
-    # Law consultant
-#     path('openai/chat/assistant/law-consultant', AssistantLawConsultantView.as_view(),
-#          name='openai-chat-assistant-law-consultant')
+   
     # Check Compliance
     path('check-compliance', CheckComplianceView.as_view(),
          name='check-compliance'),
@@ -48,6 +57,9 @@ urlpatterns = [
      # Shareholder
      path('shareholders/', ShareholderListCreateView.as_view(), name='shareholder-list-create'),
      path('shareholders/<int:pk>/', ShareholderUpdateView.as_view(), name='shareholder-update'),
+     # S3 upload
+     path('uploads/s3/token/', S3TokenView.as_view(), name='s3-upload-token'),
+     path('uploads/s3/', S3UploadView.as_view(), name='s3-upload'),
 ]
 
 urlpatterns += router.urls

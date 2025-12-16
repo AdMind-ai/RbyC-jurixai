@@ -1,8 +1,8 @@
 import React, { useContext } from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider, AuthContext } from './context/AuthContext';
-import Sidebar from './components/newLayout/Sidebar';
 import AppRoutes from './routes';
+import Sidebar from './components/Sidebar';
 const AppContent: React.FC = () => {
   const { token } = useContext(AuthContext) || {};
   return (
@@ -10,7 +10,7 @@ const AppContent: React.FC = () => {
       {token && <Sidebar />}
       <div className={token ? "flex-1 flex flex-col ml-64 h-screen" : "flex-1 flex flex-col h-screen"}>
         {/* Main Content Area - Full Height, No Header */}
-        <main className="flex-1 overflow-hidden relative w-full h-full">
+        <main className="flex-1 overflow-y-auto relative w-full h-full">
           <AppRoutes />
         </main>
       </div>

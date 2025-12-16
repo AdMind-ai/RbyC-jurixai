@@ -7,6 +7,7 @@ from core.models.segreteria_societaria.company_model import Company
 from core.models.segreteria_societaria.officer_model import Officer
 from core.models.segreteria_societaria.shareholder_model import Shareholder
 from core.models.segreteria_societaria.deadline import Deadline
+from core.models.draft_document.company_document_layout import CompanyDocumentLayout
 # Register your models here.
 @admin.register(Company)
 class CompanyAdmin(admin.ModelAdmin):
@@ -63,3 +64,10 @@ class AssistantThreadAdmin(admin.ModelAdmin):
     list_display = ("thread_id", "conversation", "created_at", "active")
     list_filter = ("active", "created_at")
     search_fields = ("thread_id",)
+
+
+@admin.register(CompanyDocumentLayout)
+class CompanyDocumentLayoutAdmin(admin.ModelAdmin):
+    list_display = ('id', 'name', 'document_title', 'created_at', 'updated_at')
+    search_fields = ('name', 'document_title')
+    readonly_fields = ('created_at', 'updated_at')

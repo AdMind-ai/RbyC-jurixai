@@ -1,660 +1,298 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useState, useEffect } from 'react';
 import { api } from '../api/api';
-import {
-  Box, Typography, Avatar, Button,
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
-  Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText, TextField,
-  IconButton, Link, Tooltip, TableSortLabel, TableFooter, TablePagination, 
-  InputAdornment,
-  MenuItem,
-  Select
-} from '@mui/material';
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import WarningAmberIcon from '@mui/icons-material/WarningAmber';
-import CloseIcon from '@mui/icons-material/Close';
-import SearchIcon from '@mui/icons-material/Search';
-import Layout from '../layouts/Layout';
-import { toast } from "react-toastify";
+import { Search, Plus, Trash2, Shield } from 'lucide-react';
+import { AppUser } from '../types/types';
 
-export interface Member {
-  id: number;
-  name: string;
-  email: string;
-  avatar: string;
-  createdAt: string;    
-  modifiedAt: string;   
-  is_company_admin?: boolean; 
+// API user mapping helper
+type ApiUser = {
+    id: string | number;
+    username: string;
+    email: string;
+    is_company_admin?: boolean;
+    is_editor?: boolean;
+    createdAt?: string;
+    modifiedAt?: string;
+};
+function mapApiUser(u: ApiUser): AppUser {
+    let role: 'Admin' | 'Editor' | 'Viewer' = 'Viewer';
+    if (u.is_company_admin) role = 'Admin';
+    else if (u.is_editor) role = 'Editor';
+    return {
+        id: u.id.toString(),
+        name: u.username,
+        email: u.email,
+        role,
+        createdDate: u.createdAt ? new Date(u.createdAt).toLocaleDateString('it-IT') : '',
+        lastModified: u.modifiedAt ? new Date(u.modifiedAt).toLocaleDateString('it-IT') : '',
+        avatarColor: '#' + Math.floor(Math.random() * 16777215).toString(16)
+    };
 }
 
-export interface MemberApi {
-  id: number;
-  username: string; 
-  email: string;
-  is_company_admin?: boolean;
-  createdAt: string;    
-  modifiedAt: string;   
-}
+import { AuthContext } from '../context/AuthContext';
+import { useContext } from 'react';
 
-
-function getColorFromName(name: string) {
-  // Gera uma cor "aleatória" mas sempre igual para o mesmo nome
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  let color = '#';
-  for (let i = 0; i < 3; i++) {
-    color += ('00' + ((hash >> (i * 8)) & 0xff).toString(16)).slice(-2);
-  }
-  return color;
-}
-
-// Funções auxiliares
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('it-IT');
-}
-
-// Tipos para sorting
-type Order = 'asc' | 'desc';
-type ColumnKey = keyof Omit<Member, "avatar" | "password">; 
-
-// config de colunas para sort e titles
-const columns: {
-  key: ColumnKey;
-  label: string;
-  sortable?: boolean;
-  render?: (member: Member) => React.ReactNode;
-  align?: "left" | "right" | "center";
-}[] = [
-  {
-    key: "name", label: "Nome", sortable: true,
-    render: (m: Member) => (
-      <Box sx={{display:'flex',alignItems:'center',gap:2}}>
-        <Avatar
-          sx={{
-            bgcolor: getColorFromName(m.name),
-            color: "#fff",
-            width: 40,
-            height: 40,
-            fontWeight: 700,
-            fontSize: '1.3rem'
-          }}
-          src={undefined} 
-        >
-          {m.name ? m.name[0].toUpperCase() : '?'}
-        </Avatar>
-        <span style={{fontSize: '16px'}}>{m.name}</span>
-      </Box>
-    )
-  },
-  {
-    key: "is_company_admin", label: "Ruolo", sortable: false, align: "center",
-      render: (m: Member) => (
-        <span style={{
-            padding: '3px 8px',
-            borderRadius: '12px',
-            fontWeight: 'bold',
-            background: m.is_company_admin ? '#EDF7ED' : '#F6F7FB',
-            color: m.is_company_admin ? '#2BA52B' : '#606B75',
-            fontSize: 14
-          }}>
-          {m.is_company_admin ? "Admin" : "Standard"}
-        </span>
-      )
-  },
-  {
-    key: "email", label: "Email", sortable: true,
-  },
-  {
-    key: "createdAt", label: "Creato il", sortable: true,
-    render: m => formatDate(m.createdAt),
-    align: "center",
-  },
-  {
-    key: "modifiedAt", label: "Ultima modifica", sortable: true,
-    render: m => formatDate(m.modifiedAt),
-    align: "center",
-  }
-];
-
-
-// Main component
 const TeamManagement: React.FC = () => {
-  // Data
-  const [members, setMembers] = useState<Member[]>([]);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const rolesArray = ['Admin', 'Standard'];
-  // Sorting
-  const [orderBy, setOrderBy] = useState<ColumnKey>("name");
-  const [order, setOrder] = useState<Order>("asc");
-  // Pagination
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(5);
-  // Search
-  const [search, setSearch] = useState("");
+    const [users, setUsers] = useState<AppUser[]>([]);
+    const { user: currentUser } = useContext(AuthContext) || {};
+    const isAdmin = currentUser && currentUser.is_admin === true;
+    // Password modal state
+    // const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+    // const [passwordUser, setPasswordUser] = useState<AppUser|null>(null);
+    // const [newPassword, setNewPassword] = useState('');
 
-  // Modal states
-  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
-  const [passwordMember, setPasswordMember] = useState<Member | null>(null);
-  const [newPassword, setNewPassword] = useState('');
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [deleteMemberId, setDeleteMemberId] = useState<number | null>(null);
-  const [deleteMemberName, setDeleteMemberName] = useState<string | null>(null);
-  const [addModalOpen, setAddModalOpen] = useState(false);
-  const [newUser, setNewUser] = useState({
-    name:'', email:'', avatar:'', password:'', role: ''
-  });
+    // Delete modal state
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [deleteUser, setDeleteUser] = useState<AppUser | null>(null);
 
 
-  // Fetch members and admin status
-  useEffect(() => {
-    fetchMembers();
+    // Fetch users from API
+    useEffect(() => {
+        fetchUsers();
+    }, []);
 
-    api.get('/auth/users/me/')
-      .then(res => setIsAdmin(res.data.is_company_admin === true));
-  }, []);
+    const fetchUsers = async () => {
+        try {
+            const res = await api.get('/auth/users/');
+            setUsers(res.data.map(mapApiUser));
+        } catch {
+            setUsers([]);
+        }
+    };
+    const [searchTerm, setSearchTerm] = useState('');
+    const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Fetch members
-  function fetchMembers() {
-    api.get('/auth/users/')
-      .then(res => {
-        console.log(res.data);
-        const mappedMembers = res.data.map((user: MemberApi) => ({
-          id: user.id,
-          name: user.username,
-          email: user.email,
-          avatar: "", 
-          createdAt: user.createdAt,
-          modifiedAt: user.modifiedAt,
-          is_company_admin: user.is_company_admin || false,
-        }));
-        setMembers(mappedMembers);
-      })
-      .catch((err) => {
-      alert(err); 
-      setMembers([])
-      });
-  }
+    // New User Form State
+    const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'Admin' });
 
+    const filteredUsers = users.filter(u =>
+        u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        u.email.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
-  // Sorting handlers
-  function handleSort(column: ColumnKey) {
-    if (orderBy === column) setOrder(prev=>prev==="asc"?"desc":"asc");
-    else {
-      setOrderBy(column);
-      setOrder("asc");
-    }
-  }
-  const sortedData = useMemo(() => {
-    const arr = [...members];
-    arr.sort((a, b) => {
-      const valA = a[orderBy];
-      const valB = b[orderBy];
-      // Proteção contra undefined:
-      if (valA === undefined && valB === undefined) return 0;
-      if (valA === undefined) return 1;
-      if (valB === undefined) return -1;
+    // Pagination state
+    const [page, setPage] = useState(0);
+    const rowsPerPage = 6;
 
-      if (orderBy === "createdAt" || orderBy === "modifiedAt") {
-        return (order === "asc" ? 1 : -1) * (valA > valB ? 1 : -1);
-      }
-      if (typeof valA === "string" && typeof valB === "string") {
-        return (order === "asc" ? 1 : -1) * valA.localeCompare(valB);
-      }
-      // fallback:
-      if (valA === valB) return 0;
-      return (order === "asc" ? 1 : -1) * (valA > valB ? 1 : -1);
-    });
-    return arr;
-  }, [members, orderBy, order]);
+    const paginatedUsers = filteredUsers.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
-  // Search filter
-  const filteredData = useMemo(()=>
-    sortedData.filter(m =>
-      m.name.toLowerCase().includes(search.toLowerCase()) ||
-      m.email.toLowerCase().includes(search.toLowerCase())
-    ),
-  [sortedData, search]);
+    const totalPages = Math.ceil(filteredUsers.length / rowsPerPage);
 
-  // Pagination
-  const paginatedData = useMemo(()=>filteredData.slice(page*rowsPerPage, page*rowsPerPage+rowsPerPage), [filteredData, page, rowsPerPage]);
+    const handleAddUser = async () => {
+        if (newUser.name && newUser.email && newUser.password) {
+            try {
+                await api.post('/auth/users/', {
+                    username: newUser.name,
+                    email: newUser.email,
+                    password: newUser.password,
+                    is_company_admin: newUser.role === 'Admin',
+                });
+                setIsModalOpen(false);
+                setNewUser({ name: '', email: '', password: '', role: 'Admin' });
+                fetchUsers();
+            } catch {
+                alert('Errore durante l\'aggiunta dell\'utente.');
+            }
+        }
+    };
 
-  // ------ Table Actions -----
-  
-  // Password reset modal handlers
-  function openPasswordModal(member: Member) {
-    setPasswordMember(member);
-    setNewPassword('');
-    setPasswordModalOpen(true);
-  }
-  function closePasswordModal() {
-    setPasswordModalOpen(false);
-    setPasswordMember(null);
-  }
-  function handlePasswordChange() {
-    if (!passwordMember) return;
-    api.post(`/auth/users/${passwordMember.id}/set_password/`, {
-      password: newPassword
-    })
-    .then(() => {
-      closePasswordModal();
-      setPasswordMember(null);
-      toast.success(`Password di ${passwordMember.name} aggiornata con successo!`);
-      fetchMembers();
-    })
-    .catch((err) => {
-      alert(err);
-      closePasswordModal();
-    });
-  }
+    const handleDelete = async () => {
+        if (!deleteUser) return;
+        try {
+            await api.delete(`/auth/users/${deleteUser.id}/`);
+            setIsDeleteModalOpen(false);
+            setDeleteUser(null);
+            fetchUsers();
+        } catch {
+            alert('Errore durante l\'eliminazione dell\'utente.');
+        }
+    };
 
-  // Delete member modal handlers
-  function openDeleteModal(member: Member) {
-    setDeleteMemberId(member.id);
-    setDeleteMemberName(member.name);
-    setDeleteModalOpen(true);
-  }
-  function cancelDelete() {
-    setDeleteModalOpen(false);
-    setDeleteMemberId(null);
-    setDeleteMemberName(null);
-  }
-  function confirmDelete() {
-    if (!deleteMemberId) return;
-    api.delete(`/auth/users/${deleteMemberId}/`)
-      .then(() => {
-        fetchMembers();
-        setDeleteModalOpen(false);
-        setDeleteMemberId(null);
-        setDeleteMemberName(null);
-        toast.success(`Utente ${deleteMemberName} eliminato con successo!`);
-      })
-      .catch((err) => {
-        alert(err);
-      });
-    
-  }
+    return (
+        <div className="w-full h-full p-8 flex flex-col animate-fade-in relative max-w-6xl mx-auto">
+            <div className="flex justify-between items-center mb-4">
+                <h2 className="text-3xl font-bold text-slate-800">Membri e accesso</h2>
+                <button
+                    onClick={() => setIsModalOpen(true)}
+                    className="border border-green-600 text-green-700 hover:bg-green-50 px-6 py-2.5 rounded-lg font-medium flex items-center gap-2 transition-colors bg-white shadow-sm text-sm"
+                >
+                    <Plus size={20} /> Aggiungi membro
+                </button>
+            </div>
 
-  // Add user modal handlers
-  function openAddModal() {
-    setAddModalOpen(true);
-    setNewUser({name:'', email:'', avatar:'', password:'', role: ''});
-  }
-  function closeAddModal() { setAddModalOpen(false); }
-  function handleAddUser() {
-    api.post("/auth/users/", {
-      username: newUser.name, 
-      email: newUser.email,
-      password: newUser.password,
-      is_company_admin: newUser.role === 'Admin' ? true : false,
-    })
-      .then(() => {
-        toast.success(`Utente ${newUser.name} aggiunto con successo!`);
-        fetchMembers();
-        setAddModalOpen(false);
-      })
-      .catch(err => {
-        // Isso mostra a mensagem do backend DRF
-        alert(JSON.stringify(err.response.data))
-        // ou console.log(err.response?.data)
-      })
+            {/* Search Bar */}
+            <div className="bg-white rounded-lg border border-slate-300 shadow-sm p-1 flex items-center mb-4">
+                <div className="p-2 text-slate-400">
+                    <Search size={18} />
+                </div>
+                <input
+                    type="text"
+                    placeholder="Ricerca per nome o email..."
+                    className="flex-1 p-1 outline-none text-slate-700 placeholder:text-slate-400 text-sm"
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                />
+            </div>
 
-    
-  }
-  
+            {/* Table */}
+            <div className="bg-white rounded-lg shadow-sm border border-slate-300 overflow-hidden flex-1">
+                <table className="w-full text-left border-collapse">
+                    <thead className="bg-slate-50/50 border-b border-slate-200">
+                        <tr>
+                            <th className="p-4 font-medium text-slate-500 text-sm">Nome ↑</th>
+                            <th className="p-4 font-medium text-slate-500 text-sm">Ruolo</th>
+                            <th className="p-4 font-medium text-slate-500 text-sm">Email</th>
+                            <th className="p-4 font-medium text-slate-500 text-sm">Creato il</th>
+                            <th className="p-4 font-medium text-slate-500 text-sm">Ultima modifica</th>
+                            <th className="p-4"></th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                        {paginatedUsers.map(user => (
+                            <tr key={user.id} className="hover:bg-slate-50 transition-colors group">
+                                <td className="p-5 flex items-center gap-4">
+                                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-xs" style={{ backgroundColor: user.avatarColor }}>
+                                        {user.name.charAt(0).toUpperCase()}
+                                    </div>
+                                    <span className="font-medium text-slate-800 text-sm">{user.name}</span>
+                                </td>
+                                <td className="p-4">
+                                    <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded font-bold text-[10px] uppercase tracking-wide border border-green-200">
+                                        {user.role}
+                                    </span>
+                                </td>
+                                <td className="p-3 text-slate-600 text-sm">{user.email}</td>
+                                <td className="p-3 text-slate-600 tabular-nums text-xs">{user.createdDate}</td>
+                                <td className="p-3 text-slate-600 tabular-nums text-xs">{user.lastModified}</td>
+                                <td className="p-3 text-right flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    {isAdmin && (
+                                        <button className="text-slate-400 hover:text-blue-600 text-xs font-medium" onClick={() => null}>Reimposta password</button>
+                                    )}
+                                    {isAdmin && user.role !== 'Admin' && (
+                                        <button onClick={() => { setDeleteUser(user); setIsDeleteModalOpen(true); }} className="text-slate-400 hover:text-red-500">
+                                            <Trash2 size={16} />
+                                        </button>
+                                    )}
+                                    {/* Delete Confirmation Modal */}
+                                    {isDeleteModalOpen && deleteUser && (
+                                        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
+                                            <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-sm transform transition-all scale-100 border border-slate-200">
+                                                <h3 className="text-xl font-bold text-center text-slate-800 mb-6 flex items-center justify-center gap-2">
+                                                    <span className="text-red-500">&#9888;</span> Conferma richiesta <span className="text-red-500">&#9888;</span>
+                                                </h3>
+                                                <div className="text-center text-slate-700 mb-4 text-base">
+                                                    Vuoi davvero eliminare l’utente <strong>{deleteUser.name}</strong>?<br />
+                                                    Una volta eliminato, non sarà possibile recuperarlo.
+                                                </div>
+                                                <div className="flex gap-2 mt-6">
+                                                    <button
+                                                        onClick={handleDelete}
+                                                        className="flex-1 py-2 bg-red-500 text-white font-bold rounded-md hover:bg-red-600 transition-colors text-sm"
+                                                    >
+                                                        Elimina utente
+                                                    </button>
+                                                    <button
+                                                        onClick={() => { setIsDeleteModalOpen(false); setDeleteUser(null); }}
+                                                        className="flex-1 py-2 text-[#1e3a8a] font-bold hover:bg-blue-50 rounded-md transition-colors text-sm"
+                                                    >
+                                                        Annulla
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
 
-  // Pagination handlers
-  function handleChangePage(
-    _e: React.MouseEvent<HTMLButtonElement> | null,
-    newPage: number
-  ) {
-    setPage(newPage);
-  }
-  function handleChangeRowsPerPage(event: React.ChangeEvent<HTMLInputElement>) {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
-  }
-
-  return (
-    <Layout>
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'auto',
-          height: '100%',
-          width: '100%',
-        }}
-      >
-        {/* Title and Add Member */}
-        <Box sx={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          marginBottom: 2,
-          alignItems:'center',
-          padding: 'calc(3vh) calc(3vh) 0 calc(3vh)',
-          mx: '1vw',
-        }}>
-          <Typography variant="h2">
-            Membri e accesso
-          </Typography>
-          {isAdmin && (
-            <Button
-              variant="outlined"
-              color="secondary"
-              sx={{ width: '190px' }}
-              onClick={openAddModal}
-            >
-              + Aggiungi membro
-            </Button>
-          )}
-        </Box>
-        {/* Searcher */}
-        <Box sx={{ width: '95%', mx:"auto", mb:2.5 }}>
-          <TextField
-            variant="outlined"
-            placeholder="Ricerca per nome o email..."
-            value={search}
-            onChange={e=>{ setSearch(e.target.value); setPage(0);}}
-            fullWidth
-            size="small"
-            sx={{
-              '& .MuiInputBase-input': {
-                fontSize: 16,       
-                py: 1,             
-              }
-            }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start"><SearchIcon /></InputAdornment>
-              ),
-            }}
-          />
-        </Box>
-
-        {/* MAIN CONTENT - Members Table */}
-        <Box sx={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'flex-start',
-          width: '100%',
-        }}>
-          <TableContainer component={Paper} sx={{ width: '95%', borderRadius: 3, boxShadow: 3, bgcolor: '#fff' }}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  {columns.map(col => (
-                    <TableCell
-                      key={col.key}
-                      align={col.align || "left"}
-                      sortDirection={orderBy === col.key ? order : false}
-                      sx={{ color: 'grey', fontSize: '16px' }}
+            <div className="flex justify-between items-center gap-2 mt-2 text-xs text-slate-500">
+                <div className="flex items-center gap-2">
+                    <span>Righe per pagina: 6</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <button
+                        className="px-2 py-0.5 border rounded text-xs bg-white border-slate-300 disabled:opacity-50"
+                        onClick={() => setPage(page - 1)}
+                        disabled={page === 0}
                     >
-                      {col.sortable ? (
-                        <TableSortLabel
-                          active={orderBy===col.key}
-                          direction={orderBy===col.key ? order : "asc"}
-                          onClick={()=>handleSort(col.key)}
-                        >
-                          {col.label}
-                        </TableSortLabel>
-                      ) : col.label}
-                    </TableCell>
-                  ))}
-                  <TableCell align="right"></TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {paginatedData.map((member) => (
-                  <TableRow key={member.id}>
-                    {columns.map(col => (
-                      <TableCell
-                        key={col.key}
-                        align={col.align || "left"}
-                        sx={{ fontSize:"16px" }}
-                      >
-                        {col.render ? col.render(member) : member[col.key as keyof Member]}
-                      </TableCell>
-                    ))}
-                    <TableCell align="right">
-                      {isAdmin && (
-                        <Link 
-                          sx={{ cursor: 'pointer', fontSize: '16px', color:'grey', marginRight:2 }}
-                          component="button"
-                          onClick={()=>openPasswordModal(member)}
-                          underline="hover"
-                        >
-                          Reimposta password
-                        </Link>
-                      )}
-                      {isAdmin && (
-                        <Tooltip title={member.is_company_admin ? "Impossibile eliminare admin" : "Elimina membro"}>
-                          <span>
-                            <IconButton
-                              color="error"
-                              onClick={member.is_company_admin
-                                ? undefined
-                                : () => openDeleteModal(member)}
-                              disabled={member.is_company_admin}
-                              sx={{
-                                color: member.is_company_admin ? '#aaa' : '#d32f2f',
-                                cursor: member.is_company_admin ? 'not-allowed' : 'pointer'
-                              }}
+                        &lt;
+                    </button>
+                    <span>{page + 1} / {totalPages || 1}</span>
+                    <button
+                        className="px-2 py-0.5 border rounded text-xs bg-white border-slate-300 disabled:opacity-50"
+                        onClick={() => setPage(page + 1)}
+                        disabled={page + 1 >= totalPages}
+                    >
+                        &gt;
+                    </button>
+                </div>
+                <span>{filteredUsers.length === 0 ? "Nessun membro" : `${page * rowsPerPage + 1}–${Math.min((page + 1) * rowsPerPage, filteredUsers.length)} di ${filteredUsers.length}`}</span>
+            </div>
+
+            {/* Modal */}
+            {isModalOpen && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
+                    <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-sm transform transition-all scale-100 border border-slate-200">
+                        <h3 className="text-xl font-bold text-center text-slate-800 mb-6">Aggiungi nuovo membro</h3>
+
+                        <div className="space-y-3">
+                            <input
+                                type="text"
+                                placeholder="Nome"
+                                className="w-full p-2 rounded-md border border-slate-300 bg-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm"
+                                value={newUser.name}
+                                onChange={e => setNewUser({ ...newUser, name: e.target.value })}
+                            />
+                            <input
+                                type="email"
+                                placeholder="Email"
+                                className="w-full p-2 rounded-md border border-slate-300 bg-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm"
+                                value={newUser.email}
+                                onChange={e => setNewUser({ ...newUser, email: e.target.value })}
+                            />
+                            <input
+                                type="password"
+                                placeholder="Password"
+                                className="w-full p-2 rounded-md border border-slate-300 bg-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm"
+                                value={newUser.password}
+                                onChange={e => setNewUser({ ...newUser, password: e.target.value })}
+                            />
+                            <div className="relative">
+                                <select
+                                    className="w-full p-2 rounded-md border border-slate-300 bg-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all appearance-none text-sm"
+                                    value={newUser.role}
+                                    onChange={e => setNewUser({ ...newUser, role: e.target.value })}
+                                >
+                                    <option value="Admin">Admin</option>
+                                    <option value="Standard">Standard</option>
+                                </select>
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                                    <Shield size={14} className="text-slate-400" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-2 mt-6">
+                            <button
+                                onClick={handleAddUser}
+                                className="flex-1 py-2 bg-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-300 transition-colors text-sm"
                             >
-                              <DeleteOutlineIcon sx={{
-                                fontSize: 25,
-                                color: member.is_company_admin ? '#aaa' : undefined
-                              }}/>
-                            </IconButton>
-                          </span>
-                        </Tooltip>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {filteredData.length===0 && (
-                  <TableRow>
-                    <TableCell colSpan={columns.length+1} align="center" sx={{fontStyle:'italic', fontSize:'16px' }}>Nessun utente</TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-              <TableFooter>
-                <TableRow>
-                  <TablePagination
-                    count={filteredData.length}
-                    page={page}
-                    onPageChange={handleChangePage}
-                    rowsPerPage={rowsPerPage}
-                    onRowsPerPageChange={handleChangeRowsPerPage}
-                    labelRowsPerPage="Righe per pagina:"
-                    rowsPerPageOptions={[5,10,25]}
-                    sx={{
-                      '& .MuiTablePagination-selectLabel': { fontSize: 14 },
-                      '& .MuiTablePagination-displayedRows': { fontSize: 16 },
-                      '& .MuiSelect-select': { fontSize: 14, paddingY: 0.5 },
-                      '& .MuiIconButton-root': { fontSize: 14 }
-                    }}
-                    slotProps={{
-                      select: {
-                        MenuProps: {
-                          PaperProps: {
-                            sx: {
-                              fontSize: 14, 
-                              '& .MuiMenuItem-root': {
-                                fontSize: 14
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }}
-                  />
-                </TableRow>
-              </TableFooter>
-            </Table>
-          </TableContainer>
-        </Box>
-
-        {/* DIALOG CHANGE PASSWORD */}
-        <Dialog open={passwordModalOpen} onClose={closePasswordModal}>
-          <DialogTitle sx={{display: 'flex', alignItems:'center', fontWeight:'bold', justifyContent:'center', mt:2, fontSize:'24px'}}>
-            Reimposta password
-          </DialogTitle>
-          <DialogContent>
-            <DialogContentText sx={{ mb:2, mx:2 }}>
-              Inserisci la nuova password per <strong>{passwordMember?.name}</strong>
-            </DialogContentText>
-            <TextField
-              autoFocus
-              label="Nuova password"
-              type="password"
-              fullWidth
-              value={newPassword}
-              size="small"
-              onChange={e=>setNewPassword(e.target.value)}
-              sx={{
-                mb: 1,
-                '& .MuiInputBase-input': {
-                  fontSize: 14,           
-                },
-                '& .MuiInputLabel-root': {
-                  fontSize: 16      
-                },
-              }}
-            />
-          </DialogContent>
-          <DialogActions sx={{ justifyContent:'center', pb:2 }}>
-            <Button variant="contained" color="primary" 
-              onClick={handlePasswordChange}
-              disabled={!newPassword}>
-              Conferma
-            </Button>
-            <Button onClick={closePasswordModal}>Annulla</Button>
-          </DialogActions>
-        </Dialog>
-
-        {/* DIALOG CONFIRM DELETE */}
-        <Dialog open={deleteModalOpen} onClose={cancelDelete}>
-          <DialogTitle sx={{ display: 'flex', alignItems: 'center', fontWeight: 'bold', justifyContent: 'center', mt:2, fontSize:'26px' }}>
-            <Box sx={{display: 'flex', alignItems: 'center'}}>
-              <WarningAmberIcon sx={{ color: '#000', mr: 1}}/>
-              Conferma richiesta
-              <WarningAmberIcon sx={{ color: '#000', ml: 1}}/>
-            </Box>
-            <IconButton onClick={cancelDelete} sx={{ position: 'absolute', top:10, right:10 }} >
-              <CloseIcon sx={{color:'#000'}} />
-            </IconButton>
-          </DialogTitle>
-          <DialogContent>
-            <DialogContentText sx={{ color: 'black', textAlign: 'center', fontSize:'20px', my:0.5, mx:1 }}>
-              Vuoi davvero eliminare l’utente <strong>{deleteMemberName}</strong>?
-              <br /> Una volta eliminato, non sarà possibile recuperarlo.
-            </DialogContentText>
-          </DialogContent>
-          <DialogActions sx={{justifyContent: 'center', pb:2.5, mb:2}}>
-            <Button variant="contained" onClick={confirmDelete}
-              sx={{ bgcolor: '#d32f2f', color: '#fff', py:2.6, '&:hover': {bgcolor: '#c62828'} }} 
-            >
-              Elimina utente
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        {/* MODAL ADD USER */}
-        <Dialog open={addModalOpen} onClose={closeAddModal}>
-          <DialogTitle sx={{ fontWeight: 'bold', fontSize:'22px', textAlign:'center', mt:1, mx:8 }}>
-            Aggiungi nuovo membro
-          </DialogTitle>
-          <DialogContent>
-            <Box sx={{display:'flex', flexDirection:'column', gap:2, pt:1}}>
-              <TextField label="Nome" value={newUser.name} onChange={e=>setNewUser({...newUser, name: e.target.value})} 
-                size="small"
-                sx={{
-                    '& .MuiInputBase-input': {
-                      fontSize: 16,     
-                    },
-                    '& .MuiInputLabel-root': {
-                      fontSize: 16       
-                    },
-                  }}
-              />
-              <TextField label="Email" value={newUser.email} onChange={e=>setNewUser({...newUser, email: e.target.value})} 
-                size="small"
-                sx={{
-                    '& .MuiInputBase-input': {
-                      fontSize: 16,     
-                    },
-                    '& .MuiInputLabel-root': {
-                      fontSize: 16       
-                    },
-                  }}
-              />
-              <TextField label="Password" type="password" value={newUser.password} onChange={e=>setNewUser({...newUser, password: e.target.value})} 
-                size="small"
-                sx={{
-                    '& .MuiInputBase-input': {
-                      fontSize: 16,     
-                    },
-                    '& .MuiInputLabel-root': {
-                      fontSize: 16       
-                    },
-                  }}
-              />
-              <Select
-                value={newUser.role}
-                onChange={e => setNewUser({ ...newUser, role: e.target.value as string })}
-                displayEmpty
-                fullWidth
-                size="small"
-                sx={{
-                  fontSize: 14,
-                  '& .MuiSelect-select': { fontSize: 14 },
-                  '& .MuiInputLabel-root': { fontSize: 14 }
-                }}
-                renderValue={(selected) => selected ? selected : "Seleziona ruolo"}
-                MenuProps={{
-                  PaperProps: {
-                    sx: {
-                      fontSize: 14,
-                      '& .MuiMenuItem-root': {
-                        fontSize: 14
-                      }
-                    }
-                  }
-                }}
-              >
-                {rolesArray.map(role =>
-                  <MenuItem key={role} value={role}>{role}</MenuItem>
-                )}
-              </Select>
-              {/* <TextField label="URL Avatar (opzionale)" value={newUser.avatar} onChange={e=>setNewUser({...newUser, avatar: e.target.value})} 
-                size="small"
-                sx={{
-                    '& .MuiInputBase-input': {
-                      fontSize: 16,     
-                    },
-                    '& .MuiInputLabel-root': {
-                      fontSize: 16,
-                    },
-                  }}
-              /> */}
-            </Box>
-          </DialogContent>
-          <DialogActions sx={{justifyContent:'center', pb:2}}>
-            <Button
-              variant="contained"
-              color="secondary"
-              onClick={handleAddUser}
-              disabled={!newUser.name || !newUser.email || !newUser.password}
-            >
-              Aggiungi
-            </Button>
-            <Button onClick={closeAddModal}>Annulla</Button>
-          </DialogActions>
-        </Dialog>
-      </Box>
-    </Layout>
-  );
+                                Aggiungi
+                            </button>
+                            <button
+                                onClick={() => setIsModalOpen(false)}
+                                className="flex-1 py-2 text-[#1e3a8a] font-bold hover:bg-blue-50 rounded-md transition-colors text-sm"
+                            >
+                                Annulla
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
 };
 
 export default TeamManagement;

@@ -1,16 +1,17 @@
 // routes.tsx
 import { Navigate, Route, Routes } from 'react-router-dom'
-import Home from './components/newLayout/Home'
+import Home from './pages/Home'
 import Login from './pages/Login'
 import PrivateRoute from './components/PrivateRoute'
-import UserAccess from './components/newLayout/UserAccess'
-import Dashboard from './components/newLayout/Dashboard'
-import CompanyList from './components/newLayout/CompanyList'
-import DocumentGenerator from './components/newLayout/DocumentGenerator'
-import AIAssistant from './components/newLayout/AIAssistant'
-import SearchView from './components/newLayout/SearchView'
-import ComplianceView from './components/newLayout/ComplianceView'
+import Dashboard from './components/SegreteriaSocietaria/Dashboard'
+import CompanyList from './components/SegreteriaSocietaria/CompanyList'
+import DocumentGenerator from './components/SegreteriaSocietaria/DocumentGenerator'
 import Chat from './pages/Chat'
+import DocSearch from './pages/DocSearch'
+import TeamManagement from './pages/TeamManagement'
+import CheckCompliance from './pages/CheckCompliance'
+import AIAssistant from './components/SegreteriaSocietaria/AIAssistant'
+import { DraftDocument } from './pages/DraftDocument'
 
 const AppRoutes = () => {
 
@@ -24,12 +25,13 @@ const AppRoutes = () => {
           <Route path="/" element={<Home />} />
 
           {/* Tools Routes */}
-          <Route path="/search" element={<SearchView />} />
-          <Route path="/compliance" element={<ComplianceView />} />
+          <Route path="/search" element={<DocSearch />} />
+          <Route path="/draft-document" element={<DraftDocument />} />
+          <Route path="/compliance" element={<CheckCompliance />} />
           <Route path="/chat-general" element={<Chat />} />
 
           {/* Access Routes */}
-          <Route path="/accessi" element={<UserAccess />} />
+          <Route path="/accessi" element={<TeamManagement />} />
 
           {/* Segreteria Societaria Sub-routes */}
           <Route path="/segreteria">

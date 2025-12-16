@@ -10,9 +10,9 @@ import '@react-pdf-viewer/core/lib/styles/index.css';
 import { defaultLayoutPlugin } from '@react-pdf-viewer/default-layout';
 import '@react-pdf-viewer/default-layout/lib/styles/index.css';
 import { zoomPlugin } from '@react-pdf-viewer/zoom';
-import '@react-pdf-viewer/zoom/lib/styles/index.css';
 import '../../styles/DocumentGeneratorViewer.css';
 // Vite: import pdf.worker as an asset so dev server serves it correctly
+import '@react-pdf-viewer/zoom/lib/styles/index.css';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.js?url';
 
 

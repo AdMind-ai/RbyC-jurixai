@@ -25,6 +25,20 @@ interface GroundingChunk {
   };
 }
 
+export interface DocumentSegment {
+  id: string;
+  text: string;
+  issue?: ComplianceIssue; // Optional: only if this segment has a problem
+}
+
+export interface ComplianceIssue {
+  title: string;
+  status: 'NON_CONFORME' | 'BORDERLINE' | 'CONFORME' | 'CORRETTO' | 'IGNORATO';
+  description: string;
+  referenceNorm: string;
+  suggestion: string;
+}
+
 
 class GeminiService {
   private ai: GoogleGenAI | null = null;
@@ -248,5 +262,126 @@ class GeminiService {
     }
   }
 }
+
+// MCP Server Configuration
+const MCP_CONFIG = {
+  label: "checkc-compliance-jurix",
+  url: "https://mcp-server-check-compliance-latest.onrender.com/sse",
+  auth: "none"
+};
+
+export const analyzeCompliance = async (
+  files: { mimeType: string; data: string }[],
+  norms: string[]
+): Promise<DocumentSegment[]> => {
+  try {
+    const ai = new GoogleGenAI({ apiKey: API_KEY });
+    const modelId = 'gemini-2.5-flash';
+    
+    // -------------------------------------------------------------
+    // MCP / Custom Database Logic
+    // -------------------------------------------------------------
+    let mcpContextInstruction = "";
+
+    if (norms.includes("Database customizzato")) {
+        console.log(`Connecting to Custom MCP Database [${MCP_CONFIG.label}] at ${MCP_CONFIG.url}...`);
+        
+        mcpContextInstruction = `
+        IMPORTANTE: L'utente ha selezionato un database personalizzato "${MCP_CONFIG.label}".
+        Devi verificare la conformità rispetto alle policy interne tipicamente ospitate su: ${MCP_CONFIG.url}.
+        Simula le seguenti policy interne rigorose:
+        1. Data Retention (max 5 anni).
+        2. Foro Competente (solo Milano).
+        3. Limite Responsabilità Fornitori (max 100% valore contratto).
+        Segnala ogni violazione di queste regole.
+        `;
+    }
+
+    // Updated Prompt to enforce Italian language
+    const prompt = `
+      Agisci come un Senior Compliance Officer.
+      Obiettivo: Ricostruire il testo del documento fornito in un array JSON di "segmenti" (paragrafi/clausole) e analizzarne la conformità.
+      
+      ${mcpContextInstruction}
+
+      Per OGNI segmento:
+      1. 'text': Il contenuto testuale del paragrafo (mantieni lingua originale del testo).
+      2. 'issue': Analizza se questo testo viola le seguenti normative: ${norms.join(', ')}. 
+         Se valido/conforme, 'issue' è null. 
+         Se invalido/rischioso, fornisci un oggetto con:
+         - 'title': Titolo breve del problema (IN ITALIANO, es. "Mancata Data Retention").
+         - 'status': "NON_CONFORME" (Critico) o "BORDERLINE" (Avviso).
+         - 'description': Spiegazione del perché è un problema (IN ITALIANO).
+         - 'referenceNorm': Riferimento normativo violato.
+         - 'suggestion': Riscrittura del testo per renderlo conforme (IN ITALIANO).
+
+      Assicurati che l'output copra l'INTERO contenuto del documento in sequenza.
+      IMPORTANTE: TUTTI i campi di commento (description, suggestion, title) DEVONO ESSERE IN ITALIANO.
+    `;
+
+    type ContentPart = { text: string } | { inlineData: { mimeType: string; data: string } };
+    const parts: ContentPart[] = [{ text: prompt }];
+    files.forEach(file => {
+      parts.push({
+        inlineData: {
+          mimeType: file.mimeType,
+          data: file.data
+        }
+      });
+    });
+
+    const response = await ai.models.generateContent({
+      model: modelId,
+      contents: { parts },
+      config: {
+        responseMimeType: "application/json",
+      },
+    });
+
+    if (response.text) {
+        const rawData: unknown = JSON.parse(response.text);
+
+        // Normalize to array of items with expected shape
+        type DocumentSegmentInput = {
+          text: string;
+          issue?: Partial<ComplianceIssue> | null;
+        };
+
+        const segmentsArray: DocumentSegmentInput[] = Array.isArray(rawData)
+          ? rawData as DocumentSegmentInput[]
+          : ((rawData as { segments?: DocumentSegmentInput[] }).segments ?? []);
+
+        return segmentsArray.map((item: DocumentSegmentInput, index: number) => ({
+          id: `seg-${index}`,
+          text: item.text,
+          issue: item.issue ? {
+            title: item.issue.title ?? '',
+            status: (item.issue.status as ComplianceIssue['status']) ?? 'BORDERLINE',
+            description: item.issue.description ?? '',
+            referenceNorm: item.issue.referenceNorm ?? '',
+            suggestion: item.issue.suggestion ?? ''
+          } : undefined
+        }));
+    }
+    return [];
+
+  } catch (error) {
+    console.error("Gemini Compliance Error:", error);
+    // Fallback error
+    return [
+      {
+        id: 'err-1',
+        text: "Errore durante l'analisi del documento. Impossibile recuperare il testo.",
+        issue: {
+            title: 'Analisi Fallita',
+            status: 'BORDERLINE',
+            description: 'Impossibile completare l\'analisi automatica. Riprova.',
+            referenceNorm: 'System',
+            suggestion: ''
+        }
+      }
+    ];
+  }
+};
 
 export const geminiService = new GeminiService();
