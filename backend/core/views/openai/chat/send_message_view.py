@@ -114,7 +114,7 @@ class OpenAISendMessageView(APIView):
                     store=True,
                     stream=True,
                     reasoning={
-                        "effort": "low"
+                        "effort": "medium"
                     },
                     tools=[{ "type": "web_search_preview" }],
                     include=["reasoning.encrypted_content", "web_search_call.action.sources"],
