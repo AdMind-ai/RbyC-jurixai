@@ -54,7 +54,7 @@ const Home: React.FC = () => {
             return (
               <div
                 key={card.id}
-                className="bg-white w-full sm:w-1/2 md:w-1/3 max-w-[380px] p-6 rounded-2xl shadow-sm border border-slate-300 hover:shadow-xl hover:border-[#1e3a8a]/20 transition-all duration-300 flex flex-col items-start group min-h-[140px]"
+                className="bg-white w-full sm:w-1/3 md:w-1/3 max-w-[330px] p-6 rounded-2xl shadow-sm border border-slate-300 hover:shadow-xl hover:border-[#1e3a8a]/20 transition-all duration-300 flex flex-col items-start group min-h-[130px]"
               >
                 <div className="w-12 h-12 rounded-xl bg-blue-50 text-[#1e3a8a] flex items-center justify-center mb-4 group-hover:bg-[#1e3a8a] group-hover:text-white transition-colors shrink-0 border border-blue-100">
                   <Icon size={24} strokeWidth={1.5} />

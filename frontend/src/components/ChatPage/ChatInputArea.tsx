@@ -157,7 +157,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps & { messages: Message[] }> = ({
             </div>
             <h3 className="text-xl font-bold text-slate-800 text-center">Come posso esserti utile?</h3>
             <p className="text-slate-500 mt-2 mb-6 text-center max-w-md text-sm">
-              Sono potenziato da <strong>GPT-5.1</strong>. Posso cercare sul web per normative aggiornate, analizzare documenti allegati e rispondere a quesiti complessi.
+              Sono potenziato da <strong>GPT-5.2 pro</strong>. Posso cercare sul web per normative aggiornate, analizzare documenti allegati e rispondere a quesiti complessi.
             </p>
           </div>
           <div className="w-full max-w-2xl">

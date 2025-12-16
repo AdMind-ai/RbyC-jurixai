@@ -48,9 +48,9 @@ interface ChatHeaderProps {
 }
 
 const modelDescriptions: Record<string, { name: string, desc: string }> = {
-  "GPT-5.1": {
-    name: "GPT-5.1:",
-    desc: "GPT-5.1 is the leading model for encoding, reasoning, and agency tasks across all domains."
+  "GPT-5.2 pro": {
+    name: "GPT-5.2 pro:",
+    desc: "GPT-5.2 pro is the leading model for encoding, reasoning, and agency tasks across all domains."
   }
 }
 
@@ -69,7 +69,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
   const [openDeleteModal, setOpenDeleteModal] = useState(false);
   const [newChatName, setNewChatName] = useState('');
 
-  const modelOfChat = "GPT-5.1";
+  const modelOfChat = "GPT-5.2 pro";
 
   const handleSaveClick = () => {
     setOpenSaveModal(true);
@@ -199,7 +199,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
           <h2 className="text-1xl font-bold text-slate-800 flex items-center gap-2">
             Chat Assistant
             <span className="ml-2 text-xs bg-gradient-to-r from-blue-600 to-purple-600 text-white px-2 py-1 rounded font-mono shadow-sm relative group cursor-pointer">
-              GPT-5.1
+              GPT-5.2 pro
               <span
                 className="absolute left-1/2 -translate-x-1/2 mt-2 z-20 hidden group-hover:flex px-3 py-2 bg-white text-slate-800 text-xs rounded-lg shadow-xl border border-slate-200 w-56 text-center break-words font-normal"
                 style={{ wordBreak: 'break-word', whiteSpace: 'pre-line', lineHeight: '1.5' }}
