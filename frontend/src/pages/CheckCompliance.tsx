@@ -37,9 +37,7 @@ const NORMS = [
 const CheckCompliance: React.FC = () => {
   const navigate = useNavigate()
   const [step, setStep] = useState<Step>('UPLOAD')
-  const [selectedNorms, setSelectedNorms] = useState<string[]>([
-    'GDPR (General Data Protection Regulation)',
-  ])
+  const [selectedNorms, setSelectedNorms] = useState<string[]>([])
   const [files, setFiles] = useState<
     { name: string; type: string; data: string }[]
   >([])
@@ -629,14 +627,14 @@ const CheckCompliance: React.FC = () => {
               Carica o trascina il tuo file qui
             </h4>
             <p className="text-slate-500 font-light text-sm">
-              Accettati solo PDF e Word (.doc, .docx).
+              Accettati solo PDF (.pdf) 
             </p>
             <input
               ref={fileInputRef}
               type="file"
               className="hidden"
               onChange={handleFileChange}
-              accept=".pdf,.doc,.docx,.txt"
+              accept=".pdf"
             />
           </div>
 
@@ -690,7 +688,7 @@ const CheckCompliance: React.FC = () => {
           <div className="mt-8 flex justify-center">
             <button
               onClick={handleStartAnalysis}
-              disabled={files.length === 0}
+              disabled={files.length === 0 || selectedNorms.length === 0}
               className="bg-[#1E3A8A] text-white px-8 py-4 rounded-md text-sm text-base shadow-lg hover:bg-blue-900 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
             >
               AVVIA ANALISI

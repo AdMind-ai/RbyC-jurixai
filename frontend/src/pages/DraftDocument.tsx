@@ -334,7 +334,7 @@ export const DraftDocument: React.FC = () => {
       payload.word_letterhead_base64 = ''
     }
 
-    ;(async () => {
+    ; (async () => {
       try {
         const res = await fetchWithAuth('/company/document-layout/', {
           method: 'POST',
@@ -396,21 +396,19 @@ export const DraftDocument: React.FC = () => {
           <div className="flex space-x-8">
             <button
               onClick={() => setActiveTab('GENERATE')}
-              className={`pb-3 text-sm font-medium border-b-2 transition-all tracking-wide ${
-                activeTab === 'GENERATE'
+              className={`pb-3 text-sm font-medium border-b-2 transition-all tracking-wide ${activeTab === 'GENERATE'
                   ? 'border-slate-900 text-slate-900'
                   : 'border-transparent text-slate-400 hover:text-slate-600'
-              }`}
+                }`}
             >
               WORKSPACE
             </button>
             <button
               onClick={() => setActiveTab('ADD_COMPANY')}
-              className={`pb-3 text-sm font-medium border-b-2 transition-all tracking-wide ${
-                activeTab === 'ADD_COMPANY'
+              className={`pb-3 text-sm font-medium border-b-2 transition-all tracking-wide ${activeTab === 'ADD_COMPANY'
                   ? 'border-slate-900 text-slate-900'
                   : 'border-transparent text-slate-400 hover:text-slate-600'
-              }`}
+                }`}
             >
               AGGIUNGI AZIENDA
             </button>
@@ -459,18 +457,16 @@ export const DraftDocument: React.FC = () => {
                         className="w-full pl-10 border border-slate-300 rounded-md px-3 py-2 text-sm bg-slate-50 focus:bg-white focus:ring-1 focus:ring-slate-400 focus:border-slate-400 outline-none transition-all appearance-none text-slate-700 font-medium"
                       >
                         <option value="">Personalizzato / Altro</option>
-                        <option value="NDA">
-                          Non-Disclosure Agreement (NDA)
-                        </option>
-                        <option value="Contratto di Servizi">
-                          Contratto di Servizi
-                        </option>
-                        <option value="Lettera di Incarico">
-                          Lettera di Incarico
-                        </option>
-                        <option value="Parere Legale">
-                          Parere Legale Pro Veritate
-                        </option>
+                        <option value="Addendum Contrattuale">Ad dendum Contrattuale</option>
+                        <option value="Contratto di Servizi">Contratto di Servizi</option>
+                        <option value="Diffida ad Adempiere">Diffida ad Adempiere</option>
+                        <option value="Lettera di Convocazione">Lettera di Convocazione</option>
+                        <option value="Lettera di Incarico">Lettera di Incarico</option>
+                        <option value="NDA">Non-Disclosure Agreement (NDA)</option>
+                        <option value="Parere Legale">Parere Legale</option>
+                        <option value="Parere Legale">Parere Legale Pro Veritate</option>
+                        <option value="Verbale Assemblea Ordinaria">Verbale Assemblea Ordinaria</option>
+                        <option value="Verbale Consiglio di Amministrazione">Verbale CdA</option>
                       </select>
                     </div>
                   </div>

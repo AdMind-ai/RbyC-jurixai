@@ -30,7 +30,7 @@ class OpenAISendMessageView(APIView):
 
         content = serializer.validated_data.get('content', '')
         file = serializer.validated_data.get('file', None)
-        model = request.data.get('model', 'gpt-5.1')
+        model = request.data.get('model', 'gpt-5.2-pro')
 
         # logger.debug(
         #     f"Received data - Content: {content}, Model: {model}, User: {user}, conversation_id: {conversation_id}, file: {file}")

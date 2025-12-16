@@ -1,6 +1,7 @@
 from docx import Document
 from io import BytesIO
 import base64
+import re
 
 
 def create_word_with_template(content: str, title: str, letterhead_base64: str = None):
@@ -39,12 +40,19 @@ def create_word_with_template(content: str, title: str, letterhead_base64: str =
                 run = p.add_run(title)
                 run.bold = True
 
-        for paragraph in str(content or '').split('\n\n'):
-            for line in paragraph.split('\n'):
-                text = line.strip()
-                if text:
-                    doc.add_paragraph(text)
-            doc.add_paragraph('')
+        # Split content into paragraphs on blank lines, then collapse any internal
+        # line breaks within a paragraph into single spaces so long lines that
+        # were wrapped do not become separate paragraphs in the .docx.
+        content_str = str(content or '').strip()
+        if content_str:
+            paragraphs = re.split(r'\n\s*\n', content_str)
+            for para in paragraphs:
+                # Remove empty lines and trim each line, then join with space.
+                lines = [ln.strip() for ln in para.splitlines() if ln.strip()]
+                if not lines:
+                    continue
+                text = ' '.join(lines)
+                doc.add_paragraph(text)
 
         buf = BytesIO()
         doc.save(buf)
