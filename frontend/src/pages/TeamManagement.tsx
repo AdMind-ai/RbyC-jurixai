@@ -95,6 +95,7 @@ const TeamManagement: React.FC = () => {
                 setIsModalOpen(false);
                 setNewUser({ name: '', email: '', password: '', role: 'Admin' });
                 fetchUsers();
+                toast.success('Utente aggiunto con successo.');
             } catch {
                 toast.error('Errore durante l\'aggiunta dell\'utente.');
             }
@@ -108,8 +109,9 @@ const TeamManagement: React.FC = () => {
             setIsDeleteModalOpen(false);
             setDeleteUser(null);
             fetchUsers();
+            toast.success('Utente eliminato con successo.');
         } catch {
-            alert('Errore durante l\'eliminazione dell\'utente.');
+            toast.error('Errore durante l\'eliminazione dell\'utente.');
         }
     };
 
