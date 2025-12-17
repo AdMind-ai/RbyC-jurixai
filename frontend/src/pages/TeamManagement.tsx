@@ -30,6 +30,7 @@ function mapApiUser(u: ApiUser): AppUser {
 
 import { AuthContext } from '../context/AuthContext';
 import { useContext } from 'react';
+import { toast } from 'react-toastify';
 
 const TeamManagement: React.FC = () => {
     const [users, setUsers] = useState<AppUser[]>([]);
@@ -43,6 +44,11 @@ const TeamManagement: React.FC = () => {
     // Delete modal state
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [deleteUser, setDeleteUser] = useState<AppUser | null>(null);
+    // Password modal state
+    const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+    const [passwordUser, setPasswordUser] = useState<AppUser | null>(null);
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
 
 
     // Fetch users from API
@@ -90,7 +96,7 @@ const TeamManagement: React.FC = () => {
                 setNewUser({ name: '', email: '', password: '', role: 'Admin' });
                 fetchUsers();
             } catch {
-                alert('Errore durante l\'aggiunta dell\'utente.');
+                toast.error('Errore durante l\'aggiunta dell\'utente.');
             }
         }
     };
@@ -107,16 +113,44 @@ const TeamManagement: React.FC = () => {
         }
     };
 
+    const handleResetPassword = async () => {
+        if (!passwordUser) return;
+        if (newPassword.length < 6) {
+            toast.error('La password deve contenere almeno 6 caratteri.');
+            return;
+        }
+        if (newPassword !== confirmPassword) {
+            toast.error('Le password non corrispondono.');
+            return;
+        }
+        try {
+            await api.post(`/auth/users/${passwordUser.id}/set_password/`, { password: newPassword });
+            setIsPasswordModalOpen(false);
+            setPasswordUser(null);
+            setNewPassword('');
+            setConfirmPassword('');
+            toast.success('Password aggiornata con successo.');
+            fetchUsers();
+        } catch (err) {
+            console.error(err);
+            toast.error('Errore durante l\'aggiornamento della password.');
+        }
+    };
+
     return (
         <div className="w-full h-full p-8 flex flex-col animate-fade-in relative max-w-6xl mx-auto">
             <div className="flex justify-between items-center mb-4">
                 <h2 className="text-3xl font-bold text-slate-800">Membri e accesso</h2>
-                <button
-                    onClick={() => setIsModalOpen(true)}
-                    className="border border-green-600 text-green-700 hover:bg-green-50 px-6 py-2.5 rounded-lg font-medium flex items-center gap-2 transition-colors bg-white shadow-sm text-sm"
-                >
-                    <Plus size={20} /> Aggiungi membro
-                </button>
+                {isAdmin ? (
+                    <button
+                        onClick={() => setIsModalOpen(true)}
+                        className="border border-green-600 text-green-700 hover:bg-green-50 px-6 py-2.5 rounded-lg font-medium flex items-center gap-2 transition-colors bg-white shadow-sm text-sm"
+                    >
+                        <Plus size={20} /> Aggiungi membro
+                    </button>
+                ) : (
+                    <div className="text-sm text-slate-500 italic">Solo amministratori possono aggiungere membri</div>
+                )}
             </div>
 
             {/* Search Bar */}
@@ -165,7 +199,7 @@ const TeamManagement: React.FC = () => {
                                 <td className="p-3 text-slate-600 tabular-nums text-xs">{user.lastModified}</td>
                                 <td className="p-3 text-right flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                     {isAdmin && (
-                                        <button className="text-slate-400 hover:text-blue-600 text-xs font-medium" onClick={() => null}>Reimposta password</button>
+                                        <button className="text-slate-400 hover:text-blue-600 text-xs font-medium" onClick={() => { setPasswordUser(user); setIsPasswordModalOpen(true); }}>Reimposta password</button>
                                     )}
                                     {isAdmin && user.role !== 'Admin' && (
                                         <button onClick={() => { setDeleteUser(user); setIsDeleteModalOpen(true); }} className="text-slate-400 hover:text-red-500">
@@ -192,6 +226,45 @@ const TeamManagement: React.FC = () => {
                                                     </button>
                                                     <button
                                                         onClick={() => { setIsDeleteModalOpen(false); setDeleteUser(null); }}
+                                                        className="flex-1 py-2 text-[#1e3a8a] font-bold hover:bg-blue-50 rounded-md transition-colors text-sm"
+                                                    >
+                                                        Annulla
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Password Reset Modal */}
+                                    {isPasswordModalOpen && passwordUser && (
+                                        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
+                                            <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-sm transform transition-all scale-100 border border-slate-200">
+                                                <h3 className="text-xl font-bold text-center text-slate-800 mb-4">Reimposta password per <span className="text-slate-600">{passwordUser.name}</span></h3>
+                                                <div className="space-y-3">
+                                                    <input
+                                                        type="password"
+                                                        placeholder="Nuova password"
+                                                        className="w-full p-2 rounded-md border border-slate-300 bg-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm"
+                                                        value={newPassword}
+                                                        onChange={e => setNewPassword(e.target.value)}
+                                                    />
+                                                    <input
+                                                        type="password"
+                                                        placeholder="Conferma password"
+                                                        className="w-full p-2 rounded-md border border-slate-300 bg-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm"
+                                                        value={confirmPassword}
+                                                        onChange={e => setConfirmPassword(e.target.value)}
+                                                    />
+                                                </div>
+                                                <div className="flex gap-2 mt-6">
+                                                    <button
+                                                        onClick={handleResetPassword}
+                                                        className="flex-1 py-2 bg-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-300 transition-colors text-sm"
+                                                    >
+                                                        Aggiorna
+                                                    </button>
+                                                    <button
+                                                        onClick={() => { setIsPasswordModalOpen(false); setPasswordUser(null); setNewPassword(''); setConfirmPassword(''); }}
                                                         className="flex-1 py-2 text-[#1e3a8a] font-bold hover:bg-blue-50 rounded-md transition-colors text-sm"
                                                     >
                                                         Annulla
@@ -265,7 +338,7 @@ const TeamManagement: React.FC = () => {
                                     value={newUser.role}
                                     onChange={e => setNewUser({ ...newUser, role: e.target.value })}
                                 >
-                                    <option value="Admin">Admin</option>
+                                    {isAdmin && <option value="Admin">Admin</option>}
                                     <option value="Standard">Standard</option>
                                 </select>
                                 <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
