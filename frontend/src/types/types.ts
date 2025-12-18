@@ -89,6 +89,7 @@ export interface AppUser {
   name: string;
   role: 'Admin' | 'Editor' | 'Viewer';
   email: string;
+  username: string;
   createdDate: string;
   lastModified: string;
   avatarColor: string; // hex code

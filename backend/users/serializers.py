@@ -14,7 +14,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['username', 'email', 'password', 'is_company_admin']
+        fields = ['username', 'email', 'password', 'is_company_admin', 'first_name', 'last_name']
 
     def create(self, validated_data):
         user = User.objects.create_user(
@@ -22,6 +22,8 @@ class RegisterSerializer(serializers.ModelSerializer):
             email=validated_data.get('email', ''),
             password=validated_data['password'],
             is_company_admin=validated_data.get('is_company_admin', False),
+            first_name=validated_data.get('first_name', ''),
+            last_name=validated_data.get('last_name', ''),
         )
         return user
 
@@ -34,7 +36,7 @@ class CustomUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            "id", "username", "email", "is_company_admin", "createdAt", "modifiedAt"
+            "id", "username", "first_name", "last_name", "email", "is_company_admin", "createdAt", "modifiedAt"
         ]
 
 
@@ -44,5 +46,11 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         data = super().validate(attrs)
         user = self.user
-        data.update({"username": user.username, "email": user.email})
+        data.update({
+            "username": user.username,
+            "email": user.email,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "is_company_admin": getattr(user, "is_company_admin", False),
+        })
         return data

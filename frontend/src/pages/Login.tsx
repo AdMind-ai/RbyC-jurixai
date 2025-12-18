@@ -5,6 +5,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { useTheme } from "@mui/material";
 import { CSSProperties } from "react";
 import { CircularProgress } from "@mui/material";
+import { toast } from "react-toastify";
 
 const Login: React.FC = () => {
   // const [username, setUsername] = useState("");
@@ -25,6 +26,7 @@ const Login: React.FC = () => {
           navigate("/");
         } else {
           navigate("/login");
+          toast.error("Invalid email or password.");
         }
       }
     } catch (error) {
@@ -106,7 +108,7 @@ const Login: React.FC = () => {
           <input
             style={styles.input}
             type="text"
-            placeholder="Username"
+            placeholder="Email"
             onChange={(e) => setUsername(e.target.value)}
           />
           <label style={styles.label}>Password</label>

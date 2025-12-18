@@ -8,6 +8,8 @@ type ApiUser = {
     id: string | number;
     username: string;
     email: string;
+    first_name?: string;
+    last_name?: string;
     is_company_admin?: boolean;
     is_editor?: boolean;
     createdAt?: string;
@@ -17,9 +19,11 @@ function mapApiUser(u: ApiUser): AppUser {
     let role: 'Admin' | 'Editor' | 'Viewer' = 'Viewer';
     if (u.is_company_admin) role = 'Admin';
     else if (u.is_editor) role = 'Editor';
+    const displayName = (u.first_name || u.last_name) ? `${u.first_name || ''} ${u.last_name || ''}`.trim() : u.username;
     return {
         id: u.id.toString(),
-        name: u.username,
+        name: displayName,
+        username: u.username,
         email: u.email,
         role,
         createdDate: u.createdAt ? new Date(u.createdAt).toLocaleDateString('it-IT') : '',
@@ -68,7 +72,9 @@ const TeamManagement: React.FC = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
 
     // New User Form State
-    const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'Admin' });
+    const [newUser, setNewUser] = useState({ username: '', first_name: '', last_name: '', email: '', password: '', role: 'Admin' });
+    const [usernameError, setUsernameError] = useState<string | null>(null);
+    const usernameRegex = /^[\w.@+-]+$/; // letters, numbers and @/./+/-/_
 
     const filteredUsers = users.filter(u =>
         u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -84,16 +90,22 @@ const TeamManagement: React.FC = () => {
     const totalPages = Math.ceil(filteredUsers.length / rowsPerPage);
 
     const handleAddUser = async () => {
-        if (newUser.name && newUser.email && newUser.password) {
+        if (newUser.username && newUser.email && newUser.password) {
+            if (!usernameRegex.test(newUser.username)) {
+                toast.error('Username non valido. Usa solo lettere, numeri e @/./+/-/_');
+                return;
+            }
             try {
                 await api.post('/auth/users/', {
-                    username: newUser.name,
+                    username: newUser.username,
+                    first_name: newUser.first_name,
+                    last_name: newUser.last_name,
                     email: newUser.email,
                     password: newUser.password,
                     is_company_admin: newUser.role === 'Admin',
                 });
                 setIsModalOpen(false);
-                setNewUser({ name: '', email: '', password: '', role: 'Admin' });
+                setNewUser({ username: '', first_name: '', last_name: '', email: '', password: '', role: 'Admin' });
                 fetchUsers();
                 toast.success('Utente aggiunto con successo.');
             } catch {
@@ -174,8 +186,9 @@ const TeamManagement: React.FC = () => {
                 <table className="w-full text-left border-collapse">
                     <thead className="bg-slate-50/50 border-b border-slate-200">
                         <tr>
-                            <th className="p-4 font-medium text-slate-500 text-sm">Nome ↑</th>
+                            <th className="p-4 font-medium text-slate-500 text-sm">Nome</th>
                             <th className="p-4 font-medium text-slate-500 text-sm">Ruolo</th>
+                            <th className="p-4 font-medium text-slate-500 text-sm">Username</th>
                             <th className="p-4 font-medium text-slate-500 text-sm">Email</th>
                             <th className="p-4 font-medium text-slate-500 text-sm">Creato il</th>
                             <th className="p-4 font-medium text-slate-500 text-sm">Ultima modifica</th>
@@ -196,6 +209,7 @@ const TeamManagement: React.FC = () => {
                                         {user.role}
                                     </span>
                                 </td>
+                                <td className="p-3 text-slate-600 text-sm">{user.username}</td>
                                 <td className="p-3 text-slate-600 text-sm">{user.email}</td>
                                 <td className="p-3 text-slate-600 tabular-nums text-xs">{user.createdDate}</td>
                                 <td className="p-3 text-slate-600 tabular-nums text-xs">{user.lastModified}</td>
@@ -315,11 +329,33 @@ const TeamManagement: React.FC = () => {
                         <div className="space-y-3">
                             <input
                                 type="text"
-                                placeholder="Nome"
+                                placeholder="Username (letters, numbers and @/./+/-/_ )"
                                 className="w-full p-2 rounded-md border border-slate-300 bg-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm"
-                                value={newUser.name}
-                                onChange={e => setNewUser({ ...newUser, name: e.target.value })}
+                                value={newUser.username}
+                                onChange={e => {
+                                    const v = e.target.value;
+                                    setNewUser({ ...newUser, username: v });
+                                    if (!usernameRegex.test(v)) setUsernameError('Username non valido');
+                                    else setUsernameError(null);
+                                }}
                             />
+                            {usernameError && <div className="text-xs text-red-500">{usernameError}</div>}
+                            <div className="grid grid-cols-2 gap-2">
+                                <input
+                                    type="text"
+                                    placeholder="Nome (first name)"
+                                    className="w-full p-2 rounded-md border border-slate-300 bg-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm"
+                                    value={newUser.first_name}
+                                    onChange={e => setNewUser({ ...newUser, first_name: e.target.value })}
+                                />
+                                <input
+                                    type="text"
+                                    placeholder="Cognome (last name)"
+                                    className="w-full p-2 rounded-md border border-slate-300 bg-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm"
+                                    value={newUser.last_name}
+                                    onChange={e => setNewUser({ ...newUser, last_name: e.target.value })}
+                                />
+                            </div>
                             <input
                                 type="email"
                                 placeholder="Email"

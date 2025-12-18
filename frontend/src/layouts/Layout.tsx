@@ -33,7 +33,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     navigate("/login");
   };
 
-  const userName = auth?.user?.name || "User";
+  const userName = auth?.user?.username || "User";
   const userInitial = userName.charAt(0).toUpperCase();
 
   return (

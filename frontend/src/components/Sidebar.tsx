@@ -41,8 +41,11 @@ const segreteriaTabs: { key: RouteKey; label: string; icon: React.ReactElement }
 
 const Sidebar: React.FC = () => {
   const auth = useContext(AuthContext);
-  const userName = auth?.user?.name || "User";
-  const userInitial = userName.charAt(0).toUpperCase();
+  const userFirst = auth?.user?.first_name || '';
+  const userLast = auth?.user?.last_name || '';
+  const userName = (userFirst || userLast) ? `${userFirst} ${userLast}`.trim() : (auth?.user?.username || 'User');
+  const usernameOrFirst = userFirst || auth?.user?.username || '';
+  const userInitial = usernameOrFirst ? usernameOrFirst.charAt(0).toUpperCase() : 'U';
   const userRole = auth?.user?.is_admin ? "Amministratore" : "Standard";
 
 
