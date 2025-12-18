@@ -6,7 +6,9 @@ import { toast } from "react-toastify";
 
 interface User {
   email: string;
-  name: string;
+  username: string;
+  first_name?: string;
+  last_name?: string;
   is_admin: boolean;
 }
 
@@ -24,7 +26,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const storedUser = localStorage.getItem("user");
 
   const [token, setToken] = useState<string | null>(storedToken);
-  const [user, setUser] = useState<User | null>(storedUser ? JSON.parse(storedUser) : null);
+  const [user, setUser] = useState<User | null>(storedUser ? JSON.parse(storedUser) as User : null);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -63,10 +65,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
         const userData = await fetchUserData();
 
-        const formattedUser = { email: userData.email, name: userData.username, is_admin: !!userData.is_company_admin };
+        const formattedUser: User = {
+          email: userData.email,
+          username: userData.username,
+          first_name: userData.first_name,
+          last_name: userData.last_name,
+          is_admin: !!userData.is_company_admin,
+        };
 
         setUser(formattedUser);
-
         localStorage.setItem("user", JSON.stringify(formattedUser));
 
         return formattedUser; 
