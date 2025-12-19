@@ -37,7 +37,7 @@ const ResetPassword: React.FC = () => {
 
     try {
       // Some backends expect uid + token + new_password, others token + password.
-      const payload: any = { token }
+      const payload: Partial<Record<'token' | 'uid' | 'new_password' | 'password', string>> = { token }
       if (uid) payload.uid = uid
       // common field names used by various backends
       payload.new_password = password

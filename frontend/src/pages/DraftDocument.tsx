@@ -372,8 +372,8 @@ export const DraftDocument: React.FC = () => {
   return (
     <div className="flex flex-col h-full bg-[#F8FAFC] text-sm">
       {/* Header */}
-      <div className="px-12 py-8 bg-white border-b border-slate-300 flex-shrink-0">
-        <div className="max-w-6xl mx-auto w-full">
+      <div className="px-7 py-8 bg-white border-b border-slate-300 flex-shrink-0">
+        <div className="max-w-7xl mx-auto w-full">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center">
               <button

@@ -8,6 +8,7 @@ import {
   DialogContentText,
   DialogTitle,
   IconButton,
+  Divider,
 } from '@mui/material'
 import { useDocSearch } from '../hooks/useDocSearch'
 import DocSearchMessageList from '../components/DocSearchPage/DocSearchMessageList'
@@ -49,7 +50,7 @@ const DocSearch: React.FC = () => {
         overflow: 'auto',
         height: '100%',
         width: '100%',
-        p: 3
+        px: 5
       }}
     >
       {/* Header */}
@@ -209,6 +210,7 @@ const DocSearch: React.FC = () => {
         </Dialog>
       </Box>
 
+      <Divider sx={{ mx: 3 }} />
       {/* controls moved into header for single-line layout */}
 
       <Box
