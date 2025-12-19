@@ -43,6 +43,9 @@ AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
 AWS_REGION = os.environ.get('AWS_REGION')
 S3_BUCKET_NAME = os.environ.get('S3_BUCKET_NAME')
 
+MAILAPI_API_KEY = os.environ.get('MAILAPI_API_KEY')
+FRONTEND_URL = os.environ.get('FRONTEND_URL')
+
 keys = [
     'OPENAI_KEY',
     'DEEPL_KEY',
@@ -58,6 +61,8 @@ keys = [
     'AWS_SECRET_ACCESS_KEY',
     'AWS_REGION',
     'S3_BUCKET_NAME',
+    'MAILAPI_API_KEY',
+    'FRONTEND_URL',
 ]
 
 missing_keys = [key for key in keys if not os.getenv(key)]

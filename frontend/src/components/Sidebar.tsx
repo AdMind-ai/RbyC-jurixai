@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { 
-  LayoutDashboard, 
-  Building2, 
-  FileText, 
-  Bot, 
-  Search, 
-  ShieldCheck, 
-  Home, 
-  ChevronDown, 
+import {
+  LayoutDashboard,
+  Building2,
+  FileText,
+  Bot,
+  Search,
+  ShieldCheck,
+  Home,
   ChevronRight,
+  ChevronDown,
   Briefcase,
   UserPlus,
   LogOut
@@ -16,6 +16,7 @@ import {
 import { useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import Logo from '../assets/logo.png';
+import CollapsedIcon from '../assets/collapsed-icon.svg';
 
 const routeMap = {
   home: '/',
@@ -32,14 +33,20 @@ const routeMap = {
 
 type RouteKey = keyof typeof routeMap;
 
-const segreteriaTabs: { key: RouteKey; label: string; icon: React.ReactElement }[] = [
-  { key: 'seg-dashboard', label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
-  { key: 'seg-companies', label: 'Società', icon: <Building2 size={16} /> },
-  { key: 'seg-documents', label: 'Documenti AI', icon: <FileText size={16} /> },
-  { key: 'seg-assistant', label: 'Assistente Legale', icon: <Bot size={16} /> },
+type SvgIconComponent = React.ComponentType<React.SVGProps<SVGSVGElement> & { size?: number | string }>;
+
+const segreteriaTabs: { key: RouteKey; label: string; Icon: SvgIconComponent }[] = [
+  { key: 'seg-dashboard', label: 'Dashboard', Icon: LayoutDashboard },
+  { key: 'seg-companies', label: 'Società', Icon: Building2 },
+  { key: 'seg-documents', label: 'Documenti AI', Icon: FileText },
+  { key: 'seg-assistant', label: 'Assistente Legale', Icon: Bot },
 ];
 
-const Sidebar: React.FC = () => {
+type SidebarProps = {
+  onCollapseChange?: (collapsed: boolean) => void;
+};
+
+const Sidebar: React.FC<SidebarProps> = ({ onCollapseChange }) => {
   const auth = useContext(AuthContext);
   const userFirst = auth?.user?.first_name || '';
   const userLast = auth?.user?.last_name || '';
@@ -51,15 +58,21 @@ const Sidebar: React.FC = () => {
 
   const navigate = useNavigate();
   const location = useLocation();
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [isSegreteriaOpen, setIsSegreteriaOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
   // Open Segreteria if current route matches
   useEffect(() => {
-    if (location.pathname.startsWith('/seg-')) {
+    if (location.pathname.startsWith('/segreteria') || location.pathname.startsWith('/seg-')) {
       setIsSegreteriaOpen(true);
     }
   }, [location.pathname]);
+
+  useEffect(() => {
+    // if user navigates to segreteria route while collapsed, keep collapsed state but
+    // ensure segreteria section doesn't auto-expand visually (we keep state as-is)
+  }, [isCollapsed]);
 
   const handleNav = (tab: RouteKey) => {
     const route = routeMap[tab];
@@ -69,10 +82,22 @@ const Sidebar: React.FC = () => {
   const toggleSegreteria = (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsSegreteriaOpen(!isSegreteriaOpen);
-    if (!isSegreteriaOpen && !location.pathname.startsWith('/seg-')) {
+    if (!isSegreteriaOpen && !(location.pathname.startsWith('/segreteria') || location.pathname.startsWith('/seg-'))) {
       navigate(routeMap['seg-dashboard']);
     }
   };
+
+  const toggleCollapse = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsCollapsed(!isCollapsed);
+  };
+
+  useEffect(() => {
+    if (onCollapseChange) onCollapseChange(isCollapsed);
+  }, [isCollapsed, onCollapseChange]);
+
+  const iconSize = isCollapsed ? 24 : 20;
+  const subIconSize = isCollapsed ? 20 : 16;
 
   const handleLogout = () => {
     auth?.logout();
@@ -80,109 +105,131 @@ const Sidebar: React.FC = () => {
   };
 
   return (
-    <div className="w-64 bg-[#1e3a8a] text-white h-screen flex flex-col fixed left-0 top-0 shadow-2xl z-20 border-r border-blue-900">
+    <div className={`${isCollapsed ? 'w-24' : 'w-64'} bg-[#1e3a8a] text-white h-screen flex flex-col fixed left-0 top-0 shadow-2xl z-20 border-r border-blue-900 transition-[width] duration-200`}>
       {/* Logo Section */}
-      <div className="p-6 border-b border-blue-800 bg-[#172554]">
-        <img src={Logo} alt="Refink Logo" className="w-32 mx-auto" />
+      <div className={`relative border-b border-blue-800 bg-[#172554] ${isCollapsed ? 'py-4' : 'p-6'}`}>
+        {!isCollapsed ? (
+          <>
+            <img src={Logo} alt="Refink Logo" className="w-32 mx-auto" />
+            <button
+              onClick={toggleCollapse}
+              title={isCollapsed ? 'Apri sidebar' : 'Comprimi sidebar'}
+              className="absolute right-2 top-2 p-1 rounded-md text-blue-200 hover:text-white hover:bg-blue-800/30 flex items-center justify-center"
+            >
+              <img src={CollapsedIcon} alt="" className="w-5 h-5" />
+            </button>
+          </>
+        ) : (
+          <div className="flex items-center justify-center h-full">
+            <button
+              onClick={toggleCollapse}
+              title={isCollapsed ? 'Apri sidebar' : 'Comprimi sidebar'}
+              className="p-1 rounded-md text-blue-200 hover:text-white hover:bg-blue-800/30 flex items-center justify-center"
+            >
+              <img src={CollapsedIcon} alt="" className="w-5 h-5" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto">
+      <nav className={`flex-1 overflow-y-auto ${isCollapsed ? 'pt-4 px-1' : 'py-6 px-3 space-y-1'}`}>
         <button
           onClick={() => handleNav('home')}
-          className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 mb-4 ${
-            location.pathname === routeMap['home']
+          title={isCollapsed ? 'Home' : undefined}
+          className={`w-full flex items-center gap-3 ${isCollapsed ? 'justify-center py-3' : 'px-4 py-3'} rounded-lg transition-all duration-200 mb-4 ${location.pathname === routeMap['home']
               ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
               : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
-          }`}
+            }`}
         >
-          <Home size={20} />
-          <span className="font-medium text-sm">Home</span>
+          <Home size={iconSize} />
+          <span className={`${isCollapsed ? 'hidden' : 'font-medium text-sm'}`}>Home</span>
         </button>
 
-        <div className="px-4 py-2 text-[11px] font-bold text-blue-300 uppercase tracking-wider opacity-70">
+        <div className={`${isCollapsed ? 'hidden' : 'px-4 py-2 text-[11px] font-bold text-blue-300 uppercase tracking-wider opacity-70'}`}>
           Strumenti
         </div>
 
         <button
           onClick={() => handleNav('search')}
-          className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-            location.pathname === routeMap['search']
+          title={isCollapsed ? 'Ricerca documentale' : undefined}
+          className={`w-full flex items-center gap-3 ${isCollapsed ? 'justify-center py-3' : 'px-4 py-3'} rounded-lg transition-all duration-200 ${location.pathname === routeMap['search']
               ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
               : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
-          }`}
+            }`}
         >
-          <Search size={20} />
-          <span className="font-medium text-sm">Ricerca documentale</span>
+          <Search size={iconSize} />
+          <span className={`${isCollapsed ? 'hidden' : 'font-medium text-sm'}`}>Ricerca documentale</span>
         </button>
-        
+
         <button
           onClick={() => handleNav('draft')}
-          className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-            location.pathname === routeMap['draft']
+          title={isCollapsed ? 'Draft Document' : undefined}
+          className={`w-full flex items-center gap-3 ${isCollapsed ? 'justify-center py-3' : 'px-4 py-3'} rounded-lg transition-all duration-200 ${location.pathname === routeMap['draft']
               ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
               : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
-          }`}
+            }`}
         >
-          <FileText size={20} />
-          <span className="font-medium text-sm">Draft Document</span>
+          <FileText size={iconSize} />
+          <span className={`${isCollapsed ? 'hidden' : 'font-medium text-sm'}`}>Draft Document</span>
         </button>
 
         <button
           onClick={() => handleNav('compliance')}
-          className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-            location.pathname === routeMap['compliance']
+          title={isCollapsed ? 'Check compliance' : undefined}
+          className={`w-full flex items-center gap-3 ${isCollapsed ? 'justify-center py-3' : 'px-4 py-3'} rounded-lg transition-all duration-200 ${location.pathname === routeMap['compliance']
               ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
               : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
-          }`}
+            }`}
         >
-          <ShieldCheck size={20} />
-          <span className="font-medium text-sm">Check compliance</span>
+          <ShieldCheck size={iconSize} />
+          <span className={`${isCollapsed ? 'hidden' : 'font-medium text-sm'}`}>Check compliance</span>
         </button>
 
         <button
           onClick={() => handleNav('chat-general')}
-          className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-            location.pathname === routeMap['chat-general']
+          title={isCollapsed ? 'Chat Assistant' : undefined}
+          className={`w-full flex items-center gap-3 ${isCollapsed ? 'justify-center py-3' : 'px-4 py-3'} rounded-lg transition-all duration-200 ${location.pathname === routeMap['chat-general']
               ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
               : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
-          }`}
+            }`}
         >
-          <Bot size={20} />
-          <span className="font-medium text-sm">Chat Assistant</span>
+          <Bot size={iconSize} />
+          <span className={`${isCollapsed ? 'hidden' : 'font-medium text-sm'}`}>Chat Assistant</span>
         </button>
 
         {/* Dropdown Group */}
         <div>
           <button
             onClick={toggleSegreteria}
-            className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200 ${
-              location.pathname.startsWith('/seg-')
-                ? 'bg-[#172554] text-white'
+            title={isCollapsed ? 'Segreteria Societaria' : undefined}
+            className={`w-full flex items-center ${isCollapsed ? 'justify-center py-3' : 'justify-between px-4 py-3'} rounded-lg transition-all duration-200 ${location.pathname.startsWith('/seg-')
+                || location.pathname.startsWith('/segreteria')
+                ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
                 : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
-            }`}
+              }`}
           >
-            <div className="flex items-center gap-3">
-              <Briefcase size={20} />
-              <span className="font-medium text-sm">Segreteria Societaria</span>
+            <div className={`flex items-center gap-3 ${isCollapsed ? '' : ''}`}>
+              <Briefcase size={iconSize} />
+              <span className={`${isCollapsed ? 'hidden' : 'font-medium text-sm'}`}>Segreteria Societaria</span>
             </div>
-            {isSegreteriaOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+            {!isCollapsed && (isSegreteriaOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />)}
           </button>
 
           {isSegreteriaOpen && (
-            <div className="mt-1 ml-4 space-y-1 border-l border-blue-700 pl-2">
+            <div className={`${isCollapsed ? 'mt-1 ml-0 space-y-1' : 'mt-1 ml-4 space-y-1 border-l border-blue-700 pl-2'}`}>
               {segreteriaTabs.map(tab => (
                 <button
                   key={tab.key}
+                  title={isCollapsed ? tab.label : undefined}
                   onClick={() => handleNav(tab.key)}
-                  className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg text-xs transition-all duration-200 ${
-                    location.pathname === routeMap[tab.key]
+                  className={`w-full flex items-center gap-3 ${isCollapsed ? 'justify-center py-3' : 'px-4 py-2'} rounded-lg text-xs transition-all duration-200 ${location.pathname === routeMap[tab.key]
                       ? 'text-[#4ade80] font-semibold bg-blue-900/50'
                       : 'text-blue-300 hover:text-white'
-                  }`}
+                    }`}
                 >
-                  {tab.icon}
-                  <span className="text-xs font-medium">{tab.label}</span>
+                  <tab.Icon size={subIconSize} />
+                  <span className={`${isCollapsed ? 'hidden' : 'text-xs font-medium'}`}>{tab.label}</span>
                 </button>
               ))}
             </div>
@@ -191,52 +238,56 @@ const Sidebar: React.FC = () => {
       </nav>
 
       {/* Accessi Button */}
-      <div className="px-3 py-2 border-t border-blue-800 bg-[#1e3a8a]">
+      <div className={`border-t border-blue-800 bg-[#1e3a8a] ${isCollapsed ? 'py-2 px-1' : 'px-3 py-2'}`}>
         <button
           onClick={() => handleNav('accessi')}
-          className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-            location.pathname === routeMap['accessi']
+            title={isCollapsed ? 'Accessi' : undefined}
+          className={`w-full flex items-center gap-3 ${isCollapsed ? 'justify-center py-3' : 'px-4 py-3'} rounded-lg transition-all duration-200 ${location.pathname === routeMap['accessi']
               ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
               : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
-          }`}
+            }`}
         >
-          <UserPlus size={20} />
-          <span className="font-medium text-sm">Accessi</span>
+          <UserPlus size={iconSize} />
+          <span className={`${isCollapsed ? 'hidden' : 'font-medium text-sm'}`}>Accessi</span>
         </button>
       </div>
 
       {/* User Profile Section */}
-      <div className="border-t border-blue-800 bg-[#172554] p-4">
-        <div 
+      <div className={`border-t border-blue-800 bg-[#172554] ${isCollapsed ? 'py-3 px-2' : 'p-4'}`}>
+        <div
           onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-          className="flex items-center gap-3 cursor-pointer hover:bg-[#1e3a8a] p-2 rounded-lg transition-colors"
+          title={isCollapsed ? 'Profilo' : undefined}
+          className={`flex items-center gap-3 cursor-pointer hover:bg-[#1e3a8a] p-2 rounded-lg transition-colors ${isCollapsed ? 'justify-center' : ''}`}
         >
-          <div className="w-9 h-9 bg-[#15803d] rounded-full flex items-center justify-center text-white font-bold text-sm shadow-sm border-2 border-blue-900">
+          <div className={`${isCollapsed ? 'w-10 h-10' : 'w-9 h-9'} bg-[#15803d] rounded-full flex items-center justify-center text-white font-bold text-sm shadow-sm border-2 border-blue-900`}>
             {userInitial}
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-white truncate">{userName}</p>
-            <p className="text-[12px] text-blue-300 truncate">{userRole}</p>
-          </div>
-          {isUserMenuOpen ? <ChevronDown size={16} className="text-blue-300" /> : <ChevronRight size={16} className="text-blue-300" />}
+          {!isCollapsed && (
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-white truncate">{userName}</p>
+              <p className="text-[12px] text-blue-300 truncate">{userRole}</p>
+            </div>
+          )}
+          {!isCollapsed && (isUserMenuOpen ? <ChevronDown size={16} className="text-blue-300" /> : <ChevronRight size={16} className="text-blue-300" />)}
         </div>
 
         {isUserMenuOpen && (
           <div className="mt-2 space-y-1 animate-fade-in">
-            <button 
+            <button
               onClick={handleLogout}
-              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-red-300 hover:text-white hover:bg-red-500/20 rounded-lg transition-colors"
+              title={isCollapsed ? 'Disconnetti' : ''}
+              className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-red-300 hover:text-white hover:bg-red-500/20 rounded-lg transition-colors ${isCollapsed ? 'justify-center' : ''}`}
             >
               <LogOut size={14} />
-              Disconnetti
+              {!isCollapsed && 'Disconnetti'}
             </button>
           </div>
         )}
       </div>
 
       {/* Footer */}
-      <div className="py-2 bg-[#172554] text-[10px] text-blue-400 text-center border-t border-blue-800">
-        Refink Suite v2.4.0
+      <div className={`py-2 bg-[#172554] text-[10px] text-blue-400 text-center border-t border-blue-800 ${isCollapsed ? 'text-xs' : ''}`}>
+        {!isCollapsed ? 'Refink Suite v2.4.0' : ''}
       </div>
     </div>
   );

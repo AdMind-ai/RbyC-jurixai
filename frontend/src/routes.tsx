@@ -2,6 +2,8 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import Home from './pages/Home'
 import Login from './pages/Login'
+import ResetPassword from './pages/ResetPassword'
+import ForgotPassword from './pages/ForgotPassword'
 import PrivateRoute from './components/PrivateRoute'
 import Dashboard from './components/SegreteriaSocietaria/Dashboard'
 import CompanyList from './components/SegreteriaSocietaria/CompanyList'
@@ -19,6 +21,10 @@ const AppRoutes = () => {
       <Routes>
         {/* Public Route (login) */}
         <Route path="/login" element={<Login />} />
+        {/* Public Route (password reset) - link received by email */}
+        <Route path="/reset-password" element={<ResetPassword />} />
+        {/* Public Route (forgot password) - request reset email */}
+        <Route path="/forgot-password" element={<ForgotPassword />} />
 
         {/* Rotas privadas */}
         <Route element={<PrivateRoute />}>
