@@ -54,3 +54,19 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             "is_company_admin": getattr(user, "is_company_admin", False),
         })
         return data
+
+
+class PasswordResetSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    uid = serializers.CharField(required=False, allow_blank=True)
+    token = serializers.CharField()
+    new_password = serializers.CharField(write_only=True)
+
+    def validate_new_password(self, value):
+        # Optionally, add additional password validation here
+        if not value:
+            raise serializers.ValidationError('Password cannot be empty')
+        return value

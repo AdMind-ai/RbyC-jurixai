@@ -89,7 +89,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     if (!initialized) return;
 
-    const PUBLIC_PATHS = ["/login"];
+    const PUBLIC_PATHS = ["/login", "/forgot-password", "/reset-password"];
     const isPublicPath = PUBLIC_PATHS.includes(location.pathname);
 
     if (!isPublicPath && !token) {
