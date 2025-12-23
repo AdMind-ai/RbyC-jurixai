@@ -46,6 +46,8 @@ S3_BUCKET_NAME = os.environ.get('S3_BUCKET_NAME')
 MAILAPI_API_KEY = os.environ.get('MAILAPI_API_KEY')
 FRONTEND_URL = os.environ.get('FRONTEND_URL')
 
+INTEGRATION_API_KEY = os.environ.get('INTEGRATION_API_KEY')
+
 keys = [
     'OPENAI_KEY',
     'DEEPL_KEY',
@@ -63,6 +65,7 @@ keys = [
     'S3_BUCKET_NAME',
     'MAILAPI_API_KEY',
     'FRONTEND_URL',
+    'INTEGRATION_API_KEY',
 ]
 
 missing_keys = [key for key in keys if not os.getenv(key)]
@@ -127,6 +130,7 @@ DEFAULT_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    "drf_spectacular"
 ]
 
 THIRD_PARTY_APPS = [
@@ -140,6 +144,7 @@ THIRD_PARTY_APPS = [
 LOCAL_APPS = [
     'core.apps.CoreConfig',
     'users',
+    'integrations'
 ]
 
 INSTALLED_APPS = DEFAULT_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -166,7 +171,8 @@ REST_FRAMEWORK = {
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
         'rest_framework.renderers.BrowsableAPIRenderer',
-    ]
+    ],
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 
 SIMPLE_JWT = {
@@ -266,6 +272,32 @@ STORAGES = {
     "staticfiles": {
         "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
     }
+}
+
+# drf-spectacular settings
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Integrations API",
+    "VERSION": "1.0.0",
+
+    "SERVERS": [
+        {
+            "url": "/api/integrations",
+            "description": "Integrations API",
+        }
+    ],
+
+    "SECURITY": [{"ApiKeyAuth": []}],
+
+    "COMPONENTS": {
+        "securitySchemes": {
+            "ApiKeyAuth": {
+                "type": "apiKey",
+                "in": "header",
+                "name": "Authorization",
+                "description": "Use: Api-Key <sua_api_key>",
+            }
+        }
+    },
 }
 
 

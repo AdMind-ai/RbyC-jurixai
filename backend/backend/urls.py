@@ -20,6 +20,10 @@ from django.contrib import admin
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from core.views.api import CoreViewSet, APIRootView
+from drf_spectacular.views import (
+    SpectacularAPIView,
+    SpectacularSwaggerView,
+)
 
 router = DefaultRouter()
 router.register(r'core', CoreViewSet, basename='core')
@@ -31,6 +35,24 @@ urlpatterns = [
     path('api/auth/', include('users.urls')),
     path('api/', include('core.urls')),
     
+    # API de integração
+    path("api/integrations/", include("integrations.urls")),
+    
+    # Documentação da API de integração
+    path(
+        "api/integrations/schema/",
+        SpectacularAPIView.as_view(
+            urlconf="integrations.urls"
+        ),
+        name="integration-schema",
+    ),
+    path(
+        "api/integrations/docs/",
+        SpectacularSwaggerView.as_view(
+            url_name="integration-schema"
+        ),
+        name="integration-docs",
+    ),
 ]
 
 if settings.DEBUG:
