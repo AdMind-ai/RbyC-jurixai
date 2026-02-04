@@ -30,7 +30,7 @@ class OpenAISendMessageView(APIView):
 
         content = serializer.validated_data.get('content', '')
         file = serializer.validated_data.get('file', None)
-        model = request.data.get('model', 'gpt-5.2-pro')
+        model = request.data.get('model', 'gpt-5.2')
 
         # logger.debug(
         #     f"Received data - Content: {content}, Model: {model}, User: {user}, conversation_id: {conversation_id}, file: {file}")
@@ -56,6 +56,7 @@ class OpenAISendMessageView(APIView):
                 # cria thread local, id será preenchido depois
                 conversation_openai = client.conversations.create()
                 assistant_thread = AssistantThread.objects.create(thread_id=conversation_openai.id, active=True)
+                conversation_id = conversation_openai.id
             
             # cria ou reaproveita conversa local (ChatConversation)
             if assistant_thread and assistant_thread.conversation:
@@ -71,6 +72,8 @@ class OpenAISendMessageView(APIView):
                 )
                 assistant_thread.conversation = conversation
                 assistant_thread.save(update_fields=["conversation"])
+
+        conversation_id = assistant_thread.thread_id if assistant_thread else conversation_id
 
         # salva a mensagem do usuário
         ChatMessage.objects.create(

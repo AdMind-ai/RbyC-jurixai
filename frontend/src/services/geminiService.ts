@@ -384,4 +384,72 @@ export const analyzeCompliance = async (
   }
 };
 
+export interface GeminiChatMessage {
+  role: 'user' | 'ai';
+  content: string;
+}
+
+export interface GeminiAttachment {
+  mimeType: string;
+  data: string;
+}
+
+export const generateGeminiResponse = async (
+  prompt: string,
+  modelId: string,
+  history: GeminiChatMessage[] = [],
+  attachments: GeminiAttachment[] = []
+): Promise<string> => {
+  const client = new GoogleGenAI({ apiKey: API_KEY });
+  if (!client) return "Error: API Key missing.";
+
+  try {
+    // Mapping our internal ID to the actual API model ID
+    // Note: The prompt requested "Gemini 3 Pro Preview"
+    const apiModelName = modelId === 'gemini-3-pro-preview' 
+      ? 'gemini-3-pro-preview' 
+      : 'gemini-3-flash-preview'; // Fallback
+
+    type GeminiContentPart = {
+      text?: string;
+      inlineData?: {
+        mimeType: string;
+        data: string;
+      };
+    };
+
+    const conversation = history
+      .filter(msg => Boolean(msg.content?.trim()))
+      .slice(-10)
+      .map(msg => ({
+        role: msg.role === 'user' ? 'user' : 'model',
+        parts: [{ text: msg.content } as GeminiContentPart]
+      }));
+
+    const attachmentParts = attachments
+      .filter(att => att?.data)
+      .map(att => ({
+        inlineData: {
+          mimeType: att.mimeType || 'application/octet-stream',
+          data: att.data
+        }
+      } as GeminiContentPart));
+
+    conversation.push({
+      role: 'user',
+      parts: [...attachmentParts, { text: prompt } as GeminiContentPart]
+    });
+
+    const response = await client.models.generateContent({
+      model: apiModelName,
+      contents: conversation,
+    });
+
+    return response.text || "No response text generated.";
+  } catch (error) {
+    console.error("Gemini API Error:", error);
+    return "Mi dispiace, si è verificato un errore durante la comunicazione con Gemini.";
+  }
+};
+
 export const geminiService = new GeminiService();

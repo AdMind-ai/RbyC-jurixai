@@ -47,5 +47,8 @@ class APIRootView(APIView):
                     "chat-save": request.build_absolute_uri(reverse("openai-chat-assistant-save-conversation")),
                     "create-conversation": request.build_absolute_uri(reverse("openai-chat-create-conversation")),
                 },
+                "perplexity": {
+                    "chat-assistant": request.build_absolute_uri(reverse("perplexity-chat-assistant")),
+                },
             }
         })

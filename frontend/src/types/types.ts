@@ -14,6 +14,12 @@ export enum Role {
   REVISORE = 'Revisore'
 }
 
+export enum ModelId {
+  GEMINI_3_PRO = 'gemini-3-pro-preview',
+  PERPLEXITY = 'perplexity',
+  GPT_5_2 = 'gpt-5-2'
+}
+
 export interface Officer {
   id: string;
   name: string;

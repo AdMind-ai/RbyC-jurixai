@@ -1,17 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { fetchWithAuth } from '../../api/fetchWithAuth';
 import { Bot, Paperclip, Upload, X } from 'lucide-react';
+import { ModelId } from '../../types/types'
+import { generateGeminiResponse, GeminiAttachment } from '../../services/geminiService';
+import { perplexityService } from '../../services/perplexityService';
+import { StoredChatSelection } from '../../types/chat';
 
 interface ChatInputAreaProps {
   onSend: (content: string, sender: 'user' | 'ai', isStream?: boolean) => void;
-  selectedChat: { id: number | string; name: string; thread_id: string | null } | null;
-  setSelectedChat: React.Dispatch<React.SetStateAction<{ id: number | string; name: string; thread_id: string | null } | null>>;
+  selectedChat: StoredChatSelection | null;
+  setSelectedChat: React.Dispatch<React.SetStateAction<StoredChatSelection | null>>;
   searchWebEnabled: boolean;
   setSearchWebEnabled: (enabled: boolean) => void;
-  setCitations?: React.Dispatch<React.SetStateAction<string[]>>;
   setIsOverview: React.Dispatch<React.SetStateAction<boolean>>;
   setIsTyping: React.Dispatch<React.SetStateAction<boolean>>;
-  conversationId: string
+  conversationId: string | null;
+  selectedModel: ModelId;
+  onConversationIdChange?: (model: ModelId, conversationId: string | null) => void;
+  onConversationUpdated?: () => void;
 }
 
 interface Attachment {
@@ -30,12 +36,14 @@ interface Message {
 const ChatInputArea: React.FC<ChatInputAreaProps & { messages: Message[] }> = ({
   onSend,
   selectedChat,
+  selectedModel,
   setSearchWebEnabled,
-  setCitations,
   setIsOverview,
   setIsTyping,
   conversationId,
-  messages
+  messages,
+  onConversationIdChange,
+  onConversationUpdated,
 }) => {
   const [input, setInput] = useState('');
   const [files, setFiles] = useState<File[]>([]);
@@ -45,6 +53,29 @@ const ChatInputArea: React.FC<ChatInputAreaProps & { messages: Message[] }> = ({
 
   // Show empty state if no messages have been sent yet
   const showEmptyState = !selectedChat && messages.length === 0;
+
+  const modelMessaging = {
+    [ModelId.GPT_5_2]: {
+      color: '#1e3a8a',
+      label: 'GPT-5.2',
+      body: 'Posso cercare sul web per normative aggiornate, analizzare documenti allegati e rispondere a quesiti complessi.',
+      accept: ".pdf,.txt,.jpg,.png"
+    },
+    [ModelId.GEMINI_3_PRO]: {
+      color: '#0f9d58',
+      label: 'Gemini 3 Pro',
+      body: 'Eccello nel ragionamento multimodale, analisi di codice complessa e comprensione contestuale profonda.',
+      accept: ".pdf,.txt,.jpg,.png"
+    },
+    [ModelId.PERPLEXITY]: {
+      color: '#f97316',
+      label: 'Perplexity',
+      body: 'Fornisco risposte precise e aggiornate in tempo reale citando sempre le fonti.',
+      accept: ".pdf,.txt,.doc,.docx,.rtf"
+    }
+  } satisfies Record<ModelId, { color: string; label: string; body: string, accept: string }>;
+
+  const currentMessaging = modelMessaging[selectedModel] ?? modelMessaging[ModelId.GPT_5_2];
 
 
   useEffect(() => {
@@ -68,6 +99,41 @@ const ChatInputArea: React.FC<ChatInputAreaProps & { messages: Message[] }> = ({
     fileInputRef.current?.click();
   };
 
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result;
+        if (typeof result === 'string') {
+          const base64 = result.split(',')[1] ?? '';
+          resolve(base64);
+        } else {
+          reject(new Error('Conversão inválida de arquivo.'));
+        }
+      };
+      reader.onerror = () => reject(reader.error || new Error('Erro ao ler arquivo.'));
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const buildGeminiAttachments = async (fileList: File[]): Promise<GeminiAttachment[]> => {
+    const attachments: GeminiAttachment[] = [];
+    for (const file of fileList) {
+      try {
+        const data = await fileToBase64(file);
+        if (data) {
+          attachments.push({
+            mimeType: file.type || 'application/octet-stream',
+            data
+          });
+        }
+      } catch (error) {
+        console.error('Erro ao converter arquivo para Gemini:', error);
+      }
+    }
+    return attachments;
+  };
+
 
   function handleDeepResearchReady(e: CustomEvent<{
     conversationId: string | number,
@@ -79,9 +145,6 @@ const ChatInputArea: React.FC<ChatInputAreaProps & { messages: Message[] }> = ({
     if (selectedChat && e.detail.conversationId === selectedChat.id) {
       setIsLoading(false);
       onSend(e.detail.content, "ai", true);
-      if (setCitations && e.detail.citations) {
-        setCitations(e.detail.citations);
-      }
     }
   }
 
@@ -91,53 +154,126 @@ const ChatInputArea: React.FC<ChatInputAreaProps & { messages: Message[] }> = ({
     return () => window.removeEventListener("deepResearchReady", handler as EventListener);
   }, [selectedChat, onSend]);
 
+  const sendMessageWithGPT = async (payload: FormData) => {
+    const response = await fetchWithAuth('/openai/chat/send-message/', {
+      method: 'POST',
+      body: payload
+    });
+
+    if (!response.ok || !response.body) {
+      console.error('Erro ao conectar:', response.statusText);
+      onSend('Erro ao conectar.', 'ai');
+      setIsTyping(false);
+      return;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let done = false;
+
+    while (!done) {
+      const { value, done: doneReading } = await reader.read();
+      done = doneReading;
+      const chunkValue = decoder.decode(value, { stream: true });
+      if (chunkValue) {
+        onSend(chunkValue, 'ai', true);
+      }
+    }
+
+    onConversationUpdated?.();
+
+    setIsTyping(false);
+  };
+
+  const sendMessageWithGemini = async (
+    prompt: string,
+    attachments: GeminiAttachment[] = [],
+    historyOverride?: Message[]
+  ) => {
+    const historySource = historyOverride ?? messages;
+    const historyForGemini = historySource.map(message => ({
+      role: message.sender,
+      content: message.content
+    }));
+    const responseText = await generateGeminiResponse(prompt, selectedModel, historyForGemini, attachments);
+    onSend(responseText, 'ai');
+    onConversationUpdated?.();
+    setIsTyping(false);
+  };
+
+  const sendMessageWithPerplexity = async (
+    prompt: string,
+    filesToUpload: File[],
+    historyOverride?: Message[],
+    conversationRef?: string | null
+  ) => {
+    const historySource = historyOverride ?? messages;
+    const historyForPerplexity = historySource.map(message => ({
+      role: message.sender,
+      content: message.content
+    }));
+
+    const { conversationId: updatedConversationId } = await perplexityService.generatePerplexityResponse({
+      prompt,
+      files: filesToUpload,
+      conversation: historyForPerplexity,
+      conversationId: conversationRef,
+      onChunk: (chunk) => {
+        if (chunk) {
+          onSend(chunk, 'ai', true);
+        }
+      }
+    });
+
+    const normalizedConversationId = updatedConversationId || conversationRef || null;
+    if (onConversationIdChange && normalizedConversationId !== conversationRef) {
+      onConversationIdChange(ModelId.PERPLEXITY, normalizedConversationId);
+    }
+
+    onConversationUpdated?.();
+    setIsTyping(false);
+  };
+
 
   const handleSubmit = async () => {
+    if (!input.trim() && files.length === 0) {
+      return;
+    }
+
+    const userMessage = input;
+    const filesToUpload = [...files];
+    const conversationRef = selectedChat?.thread_id ?? conversationId ?? null;
+    const historyWithUser: Message[] = [...messages, { sender: 'user', content: userMessage }];
+
     setIsOverview(false);
     setIsTyping(true);
-    if (!input.trim() && files.length === 0) return;
+    setIsLoading(true);
 
-    // Send user message with attachments if onSend supports 4th argument
-    onSend(input, 'user', false);
+    onSend(userMessage, 'user', false);
     setInput('');
     setFiles([]);
 
     try {
-      const formData = new FormData();
-      formData.append('content', input);
-      files.forEach(file => formData.append('file', file));
-      if (selectedChat) {
-        formData.append('conversation_id', selectedChat.thread_id as string);
-      } else if (conversationId) {
-        formData.append('conversation_id', conversationId);
-      }
-      const response = await fetchWithAuth('/openai/chat/send-message/', {
-        method: 'POST',
-        body: formData
-      });
-      setIsTyping(false);
-      if (!response.ok || !response.body) {
-        onSend('Erro ao conectar.', 'ai');
-        return;
-      }
-      if (response.ok) {
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder('utf-8');
-        let done = false;
-        while (!done) {
-          const { value, done: doneReading } = await reader.read();
-          done = doneReading;
-          const chunkValue = decoder.decode(value, { stream: true });
-          onSend(chunkValue, 'ai', true);
-        }
+      if (selectedModel === ModelId.GEMINI_3_PRO) {
+        const geminiAttachments = await buildGeminiAttachments(filesToUpload);
+        await sendMessageWithGemini(userMessage, geminiAttachments, historyWithUser);
+      } else if (selectedModel === ModelId.PERPLEXITY) {
+        await sendMessageWithPerplexity(userMessage, filesToUpload, historyWithUser, conversationRef);
       } else {
-        console.error('Erro ao conectar:', response.statusText);
-        onSend('Erro ao gerar resposta.', 'ai');
+        const formData = new FormData();
+        formData.append('content', userMessage);
+        filesToUpload.forEach(file => formData.append('file', file));
+        if (conversationRef) {
+          formData.append('conversation_id', conversationRef);
+        }
+        await sendMessageWithGPT(formData);
       }
     } catch (error) {
       console.error('Error sending message:', error);
       setIsTyping(false);
       onSend('Erro ao enviar mensagem.', 'ai');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -152,12 +288,15 @@ const ChatInputArea: React.FC<ChatInputAreaProps & { messages: Message[] }> = ({
       {showEmptyState && (
         <>
           <div className="flex flex-col items-center justify-center mb-4">
-            <div className="w-16 h-16 bg-white rounded-2xl shadow-md flex items-center justify-center mb-6 text-[#1e3a8a]">
+            <div
+              className="w-16 h-16 rounded-2xl shadow-md flex items-center justify-center mb-6 text-white"
+              style={{ color: currentMessaging.color }}
+            >
               <Bot size={32} />
             </div>
             <h3 className="text-xl font-bold text-slate-800 text-center">Come posso esserti utile?</h3>
             <p className="text-slate-500 mt-2 mb-6 text-center max-w-md text-sm">
-              Sono potenziato da <strong>GPT-5.2 pro</strong>. Posso cercare sul web per normative aggiornate, analizzare documenti allegati e rispondere a quesiti complessi.
+              Sono potenziato da <strong>{currentMessaging.label}</strong>. {currentMessaging.body}
             </p>
           </div>
           <div className="w-full max-w-2xl">
@@ -188,7 +327,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps & { messages: Message[] }> = ({
                     ref={fileInputRef}
                     className="hidden"
                     onChange={handleFileChange}
-                    accept=".pdf,.doc,.docx,.txt,.jpg,.png"
+                    accept={modelMessaging[selectedModel]?.accept || ".pdf,.txt,.jpg,.png"}
                   />
                   <button
                     onClick={handleFileUploadClick}
@@ -229,7 +368,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps & { messages: Message[] }> = ({
               ref={fileInputRef}
               className="hidden"
               onChange={handleFileChange}
-              accept=".pdf,.doc,.docx,.txt,.jpg,.png"
+              accept={modelMessaging[selectedModel]?.accept || ".pdf,.txt,.jpg,.png"}
             />
             <button
               type="button"
