@@ -19,6 +19,12 @@ from .segretaria_societaria.deadline_view import DeadlineListCreateView, Deadlin
 from .segretaria_societaria.company_view import CompanyListCreateView, CompanyUpdateView, CompanyLetterheadProxyView, GenerateDocumentPDFView
 from .segretaria_societaria.officer_view import OfficerListCreateView, OfficerUpdateView
 from .segretaria_societaria.shareholder_view import ShareholderListCreateView, ShareholderUpdateView
+from .perplexity.chat_assistant import PerplexityChatAssistant
+from .stored_chat_session_view import (
+    StoredChatSessionSaveView,
+    StoredChatSessionListView,
+    StoredChatSessionDetailView,
+)
 
 __all__ = [
     'DeeplTranslateFileView',
@@ -48,4 +54,8 @@ __all__ = [
     'CompanyDocumentLayoutDetailView',
     'S3UploadView',
     'S3TokenView',
+    'PerplexityChatAssistant',
+    'StoredChatSessionSaveView',
+    'StoredChatSessionListView',
+    'StoredChatSessionDetailView',
 ]

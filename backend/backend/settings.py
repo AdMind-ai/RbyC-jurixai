@@ -48,6 +48,8 @@ FRONTEND_URL = os.environ.get('FRONTEND_URL')
 
 INTEGRATION_API_KEY = os.environ.get('INTEGRATION_API_KEY')
 
+PERPLEXITY_API_KEY = os.environ.get('PERPLEXITY_API_KEY')
+
 keys = [
     'OPENAI_KEY',
     'DEEPL_KEY',
@@ -66,6 +68,7 @@ keys = [
     'MAILAPI_API_KEY',
     'FRONTEND_URL',
     'INTEGRATION_API_KEY',
+    'PERPLEXITY_API_KEY'
 ]
 
 missing_keys = [key for key in keys if not os.getenv(key)]

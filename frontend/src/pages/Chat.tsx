@@ -1,11 +1,14 @@
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import ChatHeader from '../components/ChatPage/ChatHeader'
 import ChatMessageList from '../components/ChatPage/ChatMessageList'
 import ChatInputArea from '../components/ChatPage/ChatInputArea'
 
-import { api } from '../api/api'
 import { fetchWithoutAuth } from '../api/fetchWithoutAuth'
 import { toast } from 'react-toastify'
+import { ModelId } from '../types/types'
+import { chatSessionService, SaveChatSessionPayload, StoredChatProvider } from '../services/chatSessionService'
+import { mapMessagesToStoredPayload } from '../utils/chatStorage'
+import { StoredChatSelection } from '../types/chat'
 
 interface Message {
   sender: 'user' | 'ai'
@@ -13,86 +16,163 @@ interface Message {
   citations?: string[]
 }
 
-interface ApiMessage {
-  id: number;
-  conversation: string;
-  content: string;
-  file: string | null;
-  created_at: string;
-  is_user: boolean;
-}
+const providerToModel: Record<StoredChatProvider, ModelId> = {
+  gpt: ModelId.GPT_5_2,
+  gemini: ModelId.GEMINI_3_PRO,
+  perplexity: ModelId.PERPLEXITY,
+};
 
-// interface ApiChatResponse {
-//   id: string;
-//   name: string;
-//   user: number;
-//   created_at: string;
-//   messages: ApiMessage[];
-// }
+const flattenStoredContent = (content: unknown): string => {
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        if (typeof part === 'string') {
+          return part;
+        }
+        if (part && typeof part === 'object') {
+          const maybeText = (part as { text?: string }).text;
+          if (typeof maybeText === 'string') {
+            return maybeText;
+          }
+          return JSON.stringify(part);
+        }
+        return '';
+      })
+      .filter(Boolean)
+      .join('\n\n');
+  }
+
+  if (typeof content === 'string') {
+    return content;
+  }
+
+  if (content && typeof content === 'object') {
+    const maybeText = (content as { text?: string }).text;
+    if (typeof maybeText === 'string') {
+      return maybeText;
+    }
+    return JSON.stringify(content);
+  }
+
+  return '';
+};
 
 const Chat: React.FC = () => {
-  const [selectedModel, setSelectedModel] = useState('GPT-5')
+  const [selectedModel, setSelectedModel] = useState<ModelId>(ModelId.GEMINI_3_PRO)
   const [messages, setMessages] = useState<Message[]>([])
   const [isTyping, setIsTyping] = useState(false);
   const [isOverview, setIsOverview] = useState(false);
-  const [citations, setCitations] = useState<string[]>([])
   const [searchWebEnabled, setSearchWebEnabled] = useState(false)
-  const [selectedChat, setSelectedChat] = useState<{ id: number | string; name: string; thread_id: string | null} | null>(null);
-  const [conversationId, setConversationId] = useState<string>('');
+  const [selectedChat, setSelectedChat] = useState<StoredChatSelection | null>(null);
+  const [conversationRefs, setConversationRefs] = useState<Record<ModelId, string | null>>({
+    [ModelId.GPT_5_2]: null,
+    [ModelId.GEMINI_3_PRO]: null,
+    [ModelId.PERPLEXITY]: null,
+  });
+  const [shouldPersist, setShouldPersist] = useState(false);
+
+  const updateConversationRef = useCallback(
+    (model: ModelId, value: string | null) => {
+      setConversationRefs((prev) => ({
+        ...prev,
+        [model]: value ?? null,
+      }));
+
+      setSelectedChat((prev) => {
+        if (prev && providerToModel[prev.provider] === model) {
+          return {
+            ...prev,
+            thread_id: value ?? null,
+          };
+        }
+        return prev;
+      });
+    },
+    []
+  );
+
+  const requestNewConversation = useCallback(async () => {
+    updateConversationRef(ModelId.GPT_5_2, null);
+    try {
+      const resp = await fetchWithoutAuth('/openai/chat/create-conversation/', {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!resp.ok) {
+        throw new Error(`Failed with status ${resp.status}`);
+      }
+      const data = await resp.json();
+      updateConversationRef(ModelId.GPT_5_2, data.conversation_id);
+      return data.conversation_id as string;
+    } catch (err) {
+      console.error("Erro ao criar nova conversa:", err);
+      toast.error("Erro ao criar nova conversa");
+      return null;
+    }
+  }, [updateConversationRef]);
 
   useEffect(() => {
-    const createConversation = async () => {
-      try {
-        const resp = await fetchWithoutAuth('/openai/chat/create-conversation/', {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-        });
-        if (resp.ok) {
-          const data = await resp.json();
-          setConversationId(data.conversation_id);
-        }
-      } catch (err) {
-        console.error("Erro ao criar nova conversa:", err);
-        toast.error("Erro ao criar nova conversa:");
-      }
-    }
-    createConversation();
-  }, []);
+    requestNewConversation();
+  }, [requestNewConversation]);
 
-  const handleChatSelect = async (id: number | string | null, name: string | null, thread_id: string | null ) => {
-    if (id && name && thread_id) {
-      console.log(`Selected Chat ID: ${id}, Name: ${name}`);
-      setSelectedChat({ id, name, thread_id });
+  useEffect(() => {
+    setMessages([]);
+    setSelectedChat(null);
+  }, [selectedModel]);
 
-      try {
-        const response = await api.get(`/openai/chat/${id}`);
-        console.log(response.data, citations);
-
-        const messages = response.data.messages.map((message: ApiMessage & { citations?: string[] }) => ({
-          sender: message.is_user ? 'user' : 'ai',
-          content: message.content,
-          citations: message.citations || []
-        }));
-
-        setMessages(messages);
-
-      } catch (error) {
-        console.error("Error fetching conversations:", error);
-      }
+  const handleResetConversationContext = useCallback(async () => {
+    setMessages([]);
+    setSelectedChat(null);
+    if (selectedModel === ModelId.GPT_5_2) {
+      await requestNewConversation();
     } else {
-      setSelectedChat(null);
-      setMessages([])
+      updateConversationRef(selectedModel, null);
     }
+  }, [selectedModel, requestNewConversation, updateConversationRef]);
 
-  };
+  const handleChatSelect = useCallback(
+    async (id: number | string | null, name: string | null) => {
+      if (id && name) {
+        try {
+          const session = await chatSessionService.getSession(String(id));
+
+          const normalizedMessages: Message[] = session.messages
+            .filter((message) => message.role === 'user' || message.role === 'assistant')
+            .map((message): Message => ({
+              sender: message.role === 'user' ? 'user' : 'ai',
+              content: flattenStoredContent(message.content),
+            }));
+
+          setMessages(normalizedMessages);
+          const targetModel = providerToModel[session.provider];
+          const externalConversationId = session.external_conversation_id ?? null;
+          updateConversationRef(targetModel, externalConversationId);
+
+          setSelectedChat({
+            id: session.id,
+            name: session.title,
+            provider: session.provider,
+            thread_id: externalConversationId,
+          });
+        } catch (error) {
+          console.error('Error fetching stored conversation:', error);
+          toast.error('Erro ao carregar chat salvo.');
+        }
+      } else {
+        setSelectedChat(null);
+        setMessages([]);
+        updateConversationRef(selectedModel, null);
+      }
+    },
+    [selectedModel, updateConversationRef]
+  );
 
   const handleSendMessage = (message: string, sender: 'user' | 'ai', isStream: boolean = false) => {
     console.log('----------------------------')
     console.log('onsend:', message, '\n', sender, ' - ', isStream);
     if (!isStream) {
       setIsOverview(false);
-      if (sender === 'user')
-        setMessages(messages => [...messages, { sender, content: message }]);
+      setMessages(messages => [...messages, { sender, content: message }]);
     } else {
       console.log('isOverview: ', isOverview, 'isTyping: ', isTyping)
       setMessages(messages => {
@@ -107,12 +187,58 @@ const Chat: React.FC = () => {
     console.log('----------------------------')
   };
 
+  const persistSelectedChat = useCallback(async () => {
+    if (!selectedChat?.id) {
+      return;
+    }
+
+    const provider = selectedChat.provider;
+    const targetModel = providerToModel[provider];
+    const conversationId = selectedChat.thread_id ?? conversationRefs[targetModel] ?? null;
+    const requiresConversationId = provider === 'gpt' || provider === 'perplexity';
+
+    if (requiresConversationId && !conversationId) {
+      return;
+    }
+
+    const payload: SaveChatSessionPayload = {
+      provider,
+      title: selectedChat.name,
+      session_id: selectedChat.id,
+      messages: mapMessagesToStoredPayload(messages),
+    };
+
+    if (conversationId) {
+      payload.conversation_id = conversationId;
+    }
+
+    try {
+      await chatSessionService.saveSession(payload);
+    } catch (error) {
+      console.error('Erro ao atualizar chat salvo automaticamente:', error);
+    }
+  }, [selectedChat, conversationRefs, messages]);
+
+  useEffect(() => {
+    if (!shouldPersist) {
+      return;
+    }
+    setShouldPersist(false);
+    void persistSelectedChat();
+  }, [shouldPersist, persistSelectedChat]);
+
+  const requestAutoPersist = useCallback(() => {
+    setShouldPersist(true);
+  }, []);
+
+
+  const activeConversationId = selectedChat?.thread_id ?? conversationRefs[selectedModel] ?? null;
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen w-full bg-[#f8fafc]">
       {/* Header */}
       <ChatHeader
-        conversationId={conversationId}
+        conversationId={activeConversationId}
         selectedModel={selectedModel}
         setSelectedModel={setSelectedModel}
         searchWebEnabled={searchWebEnabled}
@@ -122,6 +248,7 @@ const Chat: React.FC = () => {
         saveCleanEnabled={messages.length > 0}
         messages={messages}
         setMessages={setMessages}
+        onResetConversation={handleResetConversationContext}
       />
       <div className="flex-1 relative flex flex-col items-center justify-center h-full w-full relative">
         <div className="w-full max-w-6xl mx-auto px-8 flex flex-col h-full">
@@ -134,16 +261,18 @@ const Chat: React.FC = () => {
           {/* Messages Container */}
           <div className="w-full">
             <ChatInputArea
-              conversationId={conversationId}
+                conversationId={activeConversationId}
               onSend={handleSendMessage}
               selectedChat={selectedChat}
               setSelectedChat={setSelectedChat}
               searchWebEnabled={searchWebEnabled}
               setSearchWebEnabled={setSearchWebEnabled}
-              setCitations={setCitations}
               setIsOverview={setIsOverview}
               setIsTyping={setIsTyping}
               messages={messages}
+              selectedModel={selectedModel}
+                onConversationIdChange={updateConversationRef}
+                onConversationUpdated={requestAutoPersist}
             />
           </div>
         </div>

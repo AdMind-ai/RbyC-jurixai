@@ -38,6 +38,16 @@ urlpatterns = [
          name='openai-chat-assistant-thread'),
     path('openai/chat/assistant/save-conversation', SaveConversationView.as_view(),
          name='openai-chat-assistant-save-conversation'),
+    path('chat/sessions/save', StoredChatSessionSaveView.as_view(),
+         name='stored-chat-session-save'),
+    path('chat/sessions/', StoredChatSessionListView.as_view(),
+         name='stored-chat-session-list'),
+    path('chat/sessions/<uuid:session_id>/', StoredChatSessionDetailView.as_view(),
+         name='stored-chat-session-detail'),
+    
+     # Chat assistant with perplexity
+     path('perplexity/chat/assistant', PerplexityChatAssistant.as_view(),
+           name='perplexity-chat-assistant'),
    
     # Check Compliance
     path('check-compliance', CheckComplianceView.as_view(),
