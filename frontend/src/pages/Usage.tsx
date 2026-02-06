@@ -1,202 +1,132 @@
-import React, {useState} from 'react';
-// import React, { useState, useEffect } from 'react';
-import { Box, Typography, Divider, LinearProgress  } from '@mui/material'
-// import { useTheme } from '@mui/material/styles'
-import Layout from '../layouts/Layout'
-import LinedDropdown from '../components/dropdowns/LinedDropdown';
-// import { api } from '../api/api'
 
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 
-const cardsTitle: CardGroup[] = [
-  { key: 'use', label: '' },
-];
+import ConsumptionTable from '../components/UsagePage/ConsumptionTable';
+import { formatEuro } from '../constants/usage';
+import { useUsageReport } from '../hooks/useUsageReport';
+import { usageService, UsageMonthOption } from '../services/usageService';
 
-const cardsMock: Record<string, CardData[]> = {
-  use: [
-    { title: 'Draft documenti', usage: '40%' },
-    { title: 'Ricerca documentale', usage: '1%' },
-    { title: 'Check compliance', usage: '84%' },
-    { title: 'Traduttore', usage: '12%' },
-    { title: 'Law Assistant', usage: '120/240' },
-  ],
-};
+const UsagePage: React.FC = () => {
+  const [monthOptions, setMonthOptions] = useState<UsageMonthOption[]>([]);
+  const [monthsLoading, setMonthsLoading] = useState<boolean>(true);
+  const [monthsError, setMonthsError] = useState<string | null>(null);
+  const [period, setPeriod] = useState<string | null>(null);
 
-function getUsageValue(usage: string) {
-  if (usage.endsWith('%')) {
-    const percent = parseFloat(usage.replace('%', ''));
-    return { value: percent, isPercent: true, label: usage };
-  } else if (usage.includes('/')) {
-    const [current, total] = usage.split('/').map(Number);
-    const percent = total ? (current / total) * 100 : 0;
-    return { value: percent, isPercent: false, label: usage };
-  }
-  return { value: 0, isPercent: false, label: usage };
-}
+  const loadMonths = useCallback(async () => {
+    setMonthsLoading(true);
+    try {
+      const months = await usageService.getAvailableMonths();
+      setMonthOptions(months);
+      setPeriod((current) => {
+        if (current && months.some((option) => option.value === current)) {
+          return current;
+        }
+        return months[0]?.value ?? null;
+      });
+      setMonthsError(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Errore nel recupero dei periodi disponibili.';
+      setMonthsError(message);
+      setMonthOptions([]);
+      setPeriod(null);
+    } finally {
+      setMonthsLoading(false);
+    }
+  }, []);
 
-interface CardData {
-  title: string;
-  usage: string;
-}
+  useEffect(() => {
+    loadMonths();
+  }, [loadMonths]);
 
-interface CardGroup {
-  key: string;
-  label: string;
-}
+  const { data: report, loading: reportLoading, error } = useUsageReport({ month: period ?? undefined });
 
-// interface ApiResponse {
-//   [groupKey: string]: CardData[];
-// }
+  const totalCostDisplay = report
+    ? formatEuro(report.totalCost)
+    : reportLoading
+      ? 'Caricamento...'
+      : '—';
 
-
-const Card: React.FC<CardData> = ({ title, usage }) => {
-  const { value, label } = getUsageValue(usage);
+  const selectedPeriodLabel = useMemo(() => {
+    if (!period) {
+      return 'Nessun periodo disponibile';
+    }
+    return monthOptions.find((option) => option.value === period)?.label || 'Periodo selezionato';
+  }, [period, monthOptions]);
 
   return (
-    <Box
-      sx={{
-        width: '255px',
-        border: '1px solid #ddd',
-        borderRadius: 2,
-        padding: 2,
-        boxShadow: '0px 3px 10px rgba(0,0,0,0.1)',
-        minHeight: '100px',
-        mb: 1,
-        background: '#fff',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-      }}
-    >
-      <Typography variant="subtitle2" mb={1}>
-        {title}
-      </Typography>
-      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'bottom', gap: 1 }}>
-        <Typography
-          variant="subtitle2" fontWeight='bold'
-          sx={{ color: '#212121', textAlign: 'right' }}
-        >
-          {label}
-        </Typography>
-        <Box sx={{ flex: 1, mb:2 }}>
-          <LinearProgress
-            variant="determinate"
-            value={value}
-            sx={{
-              height: 15,
-              borderRadius: 1.3,
-              background: '#eee',
-              // '& .MuiLinearProgress-bar': { backgroundColor: '#ED6008' },
-            }}
-          />
-        </Box>
-      </Box>
-    </Box>
+    <div className="min-h-screen p-8 lg:p-12 max-w-[1200px] mx-auto space-y-12 relative font-sans">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+        <div>
+          <h1 className="text-3xl font-bold text-[#172554] tracking-tight">Consumo AI</h1>
+          <p className="text-sm text-gray-400 font-normal mt-1">
+            Monitoraggio costi e attività — {report?.monthLabel || selectedPeriodLabel}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-4">
+          {/* Mini Card Totale */}
+          <div className="bg-white border border-gray-100 rounded-2xl px-6 py-4 shadow-sm flex items-center justify-between gap-10 min-w-[320px]">
+            <p className="text-sm font-normal text-gray-400 whitespace-nowrap">Totale periodo</p>
+            <p className="text-[22px] font-bold text-[#1F3A8B] leading-none">{totalCostDisplay}</p>
+          </div>
+
+          {/* Selezione Periodo */}
+          <div className="relative group h-full">
+            <select
+              value={period ?? ''}
+              onChange={(e) => setPeriod(e.target.value || null)}
+              disabled={monthsLoading || monthOptions.length === 0}
+              className="appearance-none bg-white border border-gray-200 rounded-2xl py-4 pl-6 pr-14 text-base font-normal text-[#172554] focus:outline-none focus:ring-4 focus:ring-[#1F3A8B]/5 focus:border-[#1F3A8B] cursor-pointer transition-all shadow-sm group-hover:border-gray-300 h-full disabled:bg-gray-50 disabled:text-gray-400"
+            >
+              {monthOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none group-hover:text-[#172554] transition-colors" />
+          </div>
+        </div>
+      </div>
+
+      {/* Sezione Tabella */}
+      <div className="space-y-6">
+        {monthsError && (
+          <div className="rounded-2xl border border-red-100 bg-red-50 text-red-700 px-5 py-4 text-sm">
+            Errore nel caricamento dei periodi: {monthsError}
+          </div>
+        )}
+
+        {monthsLoading && (
+          <div className="rounded-2xl border border-dashed border-[#1F3A8B]/20 bg-white px-5 py-4 text-sm text-[#1F3A8B]">
+            Caricamento periodi disponibili...
+          </div>
+        )}
+
+        {!monthsLoading && !monthsError && monthOptions.length === 0 && (
+          <div className="rounded-2xl border border-gray-100 bg-white px-5 py-4 text-sm text-gray-500">
+            Nessun consumo registrato finora. Torna quando avrai almeno un evento di utilizzo.
+          </div>
+        )}
+
+        {error && (
+          <div className="rounded-2xl border border-red-100 bg-red-50 text-red-700 px-5 py-4 text-sm">
+            Errore nel caricamento del report: {error.message}
+          </div>
+        )}
+
+        {reportLoading && !report && period && (
+          <div className="rounded-2xl border border-dashed border-[#1F3A8B]/20 bg-white px-5 py-4 text-sm text-[#1F3A8B]">
+            Caricamento dati per {selectedPeriodLabel}...
+          </div>
+        )}
+
+        {report && <ConsumptionTable report={report} />}
+      </div>
+    </div>
   );
 };
 
-const Usage: React.FC = () => {
-  // List of months in Italian
-  const months = [
-    "Gennaio 2025", "Febbraio 2025", "Marzo 2025", "Aprile 2025",
-    "Maggio 2025", "Giugno 2025", "Luglio 2025", "Agosto 2025",
-    "Settembre 2025", "Ottobre 2025", "Novembre 2025", "Dicembre 2025"
-  ];
-  const [selectValue, setSelectValue] = useState<string | string[]>('');
-
-  // const theme = useTheme()
-
-  // const [cardsData, setCardsData] = useState<ApiResponse>({});
-  // const [loading, setLoading] = useState<boolean>(true);
-  // const [error, setError] = useState<string | null>(null);
-
-  // useEffect(() => {
-  //   api.get('/usage/') 
-  //     .then((response) => {
-  //       setCardsData(response.data);
-  //     })
-  //     .catch((err) => {
-  //       setError(err?.message || 'Erro ao carregar dados');
-  //     })
-  //     .finally(() => setLoading(false));
-  // }, []);
-
-  return (
-
-    <Layout>
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'auto',
-          height: '100%',
-          width: '100%',
-        }}
-      >
-        {/* Header */}
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            marginBottom: '0.2vw',
-            padding: 'calc(3vh) calc(3vh) 0 calc(3vh)',
-          }}
-        >
-          <Typography variant="h2" sx={{ marginLeft: '1vw' }}>
-          Consumo AI
-          </Typography>
-
-        </Box>
-        <Divider sx={{mx:'calc(3vh)'}}/>
-
-        {/* Main Content */}
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            height: '100%',
-            width: '100%',
-            overflow: 'auto',
-            px: '4vh',
-            py: 1.5
-          }}
-        >
-          
-          {/* Cards Group */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: '6vh', pt:2 }}>
-            {cardsTitle.map((group) => (
-              <Box key={group.key}>
-                <Typography variant="h4" fontWeight="bold" marginLeft={1} marginBottom={1.5}>
-                  {group.label}
-                </Typography>
-                <Box>
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      flexDirection: 'row',
-                      gap: 2,
-                      flexWrap: 'wrap'
-                    }}
-                  >
-                    {(cardsMock[group.key] || []).map((card, idx) => (
-                      <Card key={idx} title={card.title} usage={card.usage} />
-                    ))}
-                  </Box>
-                </Box>
-              </Box>
-            ))}
-          </Box>
-          
-          {/* Selector */}
-          <LinedDropdown
-            title="Costo extra AI"
-            options={months}
-            value={selectValue}
-            onChange={setSelectValue}
-          />
-        </Box>
-      </Box>
-    </Layout>
-  )
-}
-
-export default Usage
+export default UsagePage;

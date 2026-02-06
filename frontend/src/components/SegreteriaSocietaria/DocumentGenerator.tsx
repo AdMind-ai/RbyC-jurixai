@@ -128,7 +128,18 @@ const DocumentGenerator: React.FC = () => {
       if (res && res.ok) {
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
-        // Revoke previous if exists
+        
+        // Record usage for document generation
+        fetchWithAuth('/usage/manual/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tool: 'SEGRETERIA_SOCIETARIA',
+            subTool: 'DOCUMENTI_AI',
+            quantity: 1, // 1 documento generato = 1 usi
+          }),
+        });
+
         setPdfUrl(url);
       } else {
         const errText = await res.text();

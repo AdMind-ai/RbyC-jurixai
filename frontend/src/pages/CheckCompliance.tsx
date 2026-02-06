@@ -41,6 +41,7 @@ const CheckCompliance: React.FC = () => {
   const [files, setFiles] = useState<
     { name: string; type: string; data: string }[]
   >([])
+  const [isDragging, setIsDragging] = useState(false)
 
   // Stores the full document split into segments
   const [documentSegments, setDocumentSegments] = useState<DocumentSegment[]>(
@@ -71,15 +72,52 @@ const CheckCompliance: React.FC = () => {
     })
   }
 
+  const processFiles = async (fileList: FileList | File[]) => {
+    const selected = Array.from(fileList).filter(
+      (file) => file.type?.toLowerCase() === 'application/pdf'
+    )
+    if (!selected.length) {
+      console.warn('No PDF files detected in selection')
+      return
+    }
+    try {
+      const uploads = await Promise.all(selected.map(readFile))
+      setFiles((prev) => [...prev, ...uploads])
+    } catch (err) {
+      console.error('Failed to load files', err)
+    }
+  }
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const file = e.target.files[0]
-      try {
-        const fileData = await readFile(file)
-        setFiles((prev) => [...prev, fileData])
-      } catch (err) {
-        console.error(err)
-      }
+      await processFiles(e.target.files)
+      e.target.value = ''
+    }
+  }
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!isDragging) {
+      setIsDragging(true)
+    }
+  }
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (isDragging) {
+      setIsDragging(false)
+    }
+  }
+
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+    const droppedFiles = e.dataTransfer?.files
+    if (droppedFiles && droppedFiles.length > 0) {
+      await processFiles(droppedFiles)
     }
   }
 
@@ -94,7 +132,7 @@ const CheckCompliance: React.FC = () => {
     setStep('ANALYZING')
 
     const segments = await analyzeCompliance(
-      files.map((f) => ({ mimeType: f.type, data: f.data })),
+      files.map((f) => ({ mimeType: f.type, data: f.data, name: f.name })),
       selectedNorms
     )
 
@@ -618,7 +656,15 @@ const CheckCompliance: React.FC = () => {
 
           <div
             onClick={() => fileInputRef.current?.click()}
-            className="flex-1 border-2 border-dashed border-slate-300 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors flex flex-col items-center justify-center cursor-pointer min-h-[300px]"
+            onDragOver={handleDragOver}
+            onDragEnter={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`flex-1 border-2 border-dashed rounded-lg transition-all flex flex-col items-center justify-center cursor-pointer min-h-[300px] ${
+              isDragging
+                ? 'border-[#1E3A8A] bg-blue-50'
+                : 'border-slate-300 bg-slate-50 hover:bg-slate-100'
+            }`}
           >
             <div className="bg-white p-4 rounded-full shadow-sm mb-4">
               <Upload className="w-10 h-10 text-[#1E3A8A]" />
@@ -627,7 +673,8 @@ const CheckCompliance: React.FC = () => {
               Carica o trascina il tuo file qui
             </h4>
             <p className="text-slate-500 font-light text-sm">
-              Accettati solo PDF (.pdf) 
+              Accettati solo PDF (.pdf)
+              {isDragging && <span className="ml-1 text-[#1E3A8A] font-semibold">Rilascia per caricare</span>}
             </p>
             <input
               ref={fileInputRef}
@@ -635,6 +682,7 @@ const CheckCompliance: React.FC = () => {
               className="hidden"
               onChange={handleFileChange}
               accept=".pdf"
+              multiple
             />
           </div>
 

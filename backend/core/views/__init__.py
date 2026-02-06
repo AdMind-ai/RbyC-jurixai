@@ -25,6 +25,7 @@ from .stored_chat_session_view import (
     StoredChatSessionListView,
     StoredChatSessionDetailView,
 )
+from .usage_view import UsageManualRecordView, UsageMonthListView, UsageReportView
 
 __all__ = [
     'DeeplTranslateFileView',
@@ -58,4 +59,7 @@ __all__ = [
     'StoredChatSessionSaveView',
     'StoredChatSessionListView',
     'StoredChatSessionDetailView',
+    'UsageReportView',
+    'UsageMonthListView',
+    'UsageManualRecordView',
 ]

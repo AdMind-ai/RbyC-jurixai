@@ -14,6 +14,7 @@ import TeamManagement from './pages/TeamManagement'
 import CheckCompliance from './pages/CheckCompliance'
 import AIAssistant from './components/SegreteriaSocietaria/AIAssistant'
 import { DraftDocument } from './pages/DraftDocument'
+import Usage from './pages/Usage'
 
 const AppRoutes = () => {
 
@@ -38,6 +39,9 @@ const AppRoutes = () => {
 
           {/* Access Routes */}
           <Route path="/accessi" element={<TeamManagement />} />
+
+          {/* Usage Route */}
+          <Route path="/usage" element={<Usage />} />
 
           {/* Segreteria Societaria Sub-routes */}
           <Route path="/segreteria">
