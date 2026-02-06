@@ -1,3 +1,5 @@
+from core.models.usage import UsageTool
+from core.services.usage_tracking import UsageTrackingService
 from core.models.draft_document.company_document_layout import CompanyDocumentLayout
 from core.utils.common import safe_load_json
 from rest_framework.views import APIView
@@ -9,6 +11,7 @@ from django.conf import settings
 import json
 from core.utils.encode_file import encode_file_base64
 from io import BytesIO
+from PyPDF2 import PdfReader
 import re
 from core.utils.quickdoc import upload_to_blob_storage
 from core.utils.pdf_utils import build_overlay_pdf, merge_with_letterhead
@@ -213,8 +216,14 @@ class DraftDocumentFileView(APIView):
             return Response({'detail': 'Error generating Word file.'}, status=500)
 
         # Upload files to blob storage
+        total_pages_doc = 0
         try:
             pdf_bytes = pdf_result.getvalue()
+            try:
+                pdf_reader = PdfReader(BytesIO(pdf_bytes))
+                total_pages_doc = len(pdf_reader.pages)
+            except Exception as page_err:
+                logger.warning("Unable to count PDF pages: %s", page_err)
             word_bytes = word_buffer.getvalue()
             pdf_blob_name = f"draftdocument/{safe_name}.pdf"
             word_blob_name = f"draftdocument/{safe_name}.docx"
@@ -223,6 +232,22 @@ class DraftDocumentFileView(APIView):
         except Exception as e:
             logger.exception('Error uploading generated files: %s', e)
             return Response({'detail': 'Error uploading files.'}, status=500)
+
+        # Report usage for generated document pages
+        try:
+            UsageTrackingService.record_usage_event(
+                user=request.user,
+                tool=UsageTool.DRAFT_DOCUMENT,
+                quantity=total_pages_doc,
+                company=getattr(request.user, "company", None),
+                metadata={
+                    "document_title": titolo,
+                    "pages": total_pages_doc,
+                },
+            )
+        except Exception as e:
+            logger.exception("Error recording usage event for draft document: %s", e)
+
 
         return Response({
             'name': safe_name,

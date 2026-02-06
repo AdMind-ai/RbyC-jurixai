@@ -11,7 +11,8 @@ import {
   ChevronDown,
   Briefcase,
   UserPlus,
-  LogOut
+  LogOut,
+  BarChart3
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
@@ -25,6 +26,7 @@ const routeMap = {
   compliance: '/compliance',
   'chat-general': '/chat-general',
   accessi: '/accessi',
+  usage: '/usage',
   'seg-dashboard': '/segreteria/dashboard',
   'seg-companies': '/segreteria/companies',
   'seg-documents': '/segreteria/documents',
@@ -138,8 +140,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapseChange }) => {
           onClick={() => handleNav('home')}
           title={isCollapsed ? 'Home' : undefined}
           className={`w-full flex items-center gap-3 ${isCollapsed ? 'justify-center py-3' : 'px-4 py-3'} rounded-lg transition-all duration-200 mb-4 ${location.pathname === routeMap['home']
-              ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
-              : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
+            ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
+            : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
             }`}
         >
           <Home size={iconSize} />
@@ -154,8 +156,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapseChange }) => {
           onClick={() => handleNav('search')}
           title={isCollapsed ? 'Ricerca documentale' : undefined}
           className={`w-full flex items-center gap-3 ${isCollapsed ? 'justify-center py-3' : 'px-4 py-3'} rounded-lg transition-all duration-200 ${location.pathname === routeMap['search']
-              ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
-              : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
+            ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
+            : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
             }`}
         >
           <Search size={iconSize} />
@@ -166,8 +168,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapseChange }) => {
           onClick={() => handleNav('draft')}
           title={isCollapsed ? 'Draft Document' : undefined}
           className={`w-full flex items-center gap-3 ${isCollapsed ? 'justify-center py-3' : 'px-4 py-3'} rounded-lg transition-all duration-200 ${location.pathname === routeMap['draft']
-              ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
-              : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
+            ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
+            : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
             }`}
         >
           <FileText size={iconSize} />
@@ -178,8 +180,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapseChange }) => {
           onClick={() => handleNav('compliance')}
           title={isCollapsed ? 'Check compliance' : undefined}
           className={`w-full flex items-center gap-3 ${isCollapsed ? 'justify-center py-3' : 'px-4 py-3'} rounded-lg transition-all duration-200 ${location.pathname === routeMap['compliance']
-              ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
-              : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
+            ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
+            : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
             }`}
         >
           <ShieldCheck size={iconSize} />
@@ -190,8 +192,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapseChange }) => {
           onClick={() => handleNav('chat-general')}
           title={isCollapsed ? 'Chat Assistant' : undefined}
           className={`w-full flex items-center gap-3 ${isCollapsed ? 'justify-center py-3' : 'px-4 py-3'} rounded-lg transition-all duration-200 ${location.pathname === routeMap['chat-general']
-              ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
-              : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
+            ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
+            : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
             }`}
         >
           <Bot size={iconSize} />
@@ -204,9 +206,9 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapseChange }) => {
             onClick={toggleSegreteria}
             title={isCollapsed ? 'Segreteria Societaria' : undefined}
             className={`w-full flex items-center ${isCollapsed ? 'justify-center py-3' : 'justify-between px-4 py-3'} rounded-lg transition-all duration-200 ${location.pathname.startsWith('/seg-')
-                || location.pathname.startsWith('/segreteria')
-                ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
-                : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
+              || location.pathname.startsWith('/segreteria')
+              ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
+              : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
               }`}
           >
             <div className={`flex items-center gap-3 ${isCollapsed ? '' : ''}`}>
@@ -224,8 +226,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapseChange }) => {
                   title={isCollapsed ? tab.label : undefined}
                   onClick={() => handleNav(tab.key)}
                   className={`w-full flex items-center gap-3 ${isCollapsed ? 'justify-center py-3' : 'px-4 py-2'} rounded-lg text-xs transition-all duration-200 ${location.pathname === routeMap[tab.key]
-                      ? 'text-[#4ade80] font-semibold bg-blue-900/50'
-                      : 'text-blue-300 hover:text-white'
+                    ? 'text-[#4ade80] font-semibold bg-blue-900/50'
+                    : 'text-blue-300 hover:text-white'
                     }`}
                 >
                   <tab.Icon size={subIconSize} />
@@ -237,14 +239,26 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapseChange }) => {
         </div>
       </nav>
 
-      {/* Accessi Button */}
-      <div className={`border-t border-blue-800 bg-[#1e3a8a] ${isCollapsed ? 'py-2 px-1' : 'px-3 py-2'}`}>
+      {/* Accessi & Usage Buttons */}
+      <div className={`border-t border-blue-800 bg-[#1e3a8a] ${isCollapsed ? 'py-2 px-1' : 'px-3 py-2'} space-y-2`}>
+        <button
+          onClick={() => handleNav('usage')}
+          title={isCollapsed ? 'Usage' : undefined}
+          className={`w-full flex items-center gap-3 ${isCollapsed ? 'justify-center py-3' : 'px-4 py-3'} rounded-lg transition-all duration-200 ${location.pathname === routeMap['usage']
+            ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
+            : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
+            }`}
+        >
+          <BarChart3 size={iconSize} />
+          <span className={`${isCollapsed ? 'hidden' : 'font-medium text-sm'}`}>Consumo AI</span>
+        </button>
+
         <button
           onClick={() => handleNav('accessi')}
-            title={isCollapsed ? 'Accessi' : undefined}
+          title={isCollapsed ? 'Accessi' : undefined}
           className={`w-full flex items-center gap-3 ${isCollapsed ? 'justify-center py-3' : 'px-4 py-3'} rounded-lg transition-all duration-200 ${location.pathname === routeMap['accessi']
-              ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
-              : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
+            ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
+            : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
             }`}
         >
           <UserPlus size={iconSize} />

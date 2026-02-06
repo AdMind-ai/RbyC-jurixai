@@ -26,6 +26,11 @@ urlpatterns = [
          name='company-document-layout'),
     path('company/document-layout/<int:pk>/', CompanyDocumentLayoutDetailView.as_view(),
          name='company-document-layout-detail'),
+
+     # Usage report & metadata
+     path('usage/report/', UsageReportView.as_view(), name='usage-report'),
+     path('usage/months/', UsageMonthListView.as_view(), name='usage-months'),
+     path('usage/manual/', UsageManualRecordView.as_view(), name='usage-manual'),
     
     # Draft document generation (OpenAI)
     path('openai/draft/generate/', DraftDocumentView.as_view(), name='draft-document'),

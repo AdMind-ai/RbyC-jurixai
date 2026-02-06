@@ -50,6 +50,21 @@ INTEGRATION_API_KEY = os.environ.get('INTEGRATION_API_KEY')
 
 PERPLEXITY_API_KEY = os.environ.get('PERPLEXITY_API_KEY')
 
+USAGE_DEFAULT_PRICES = {
+    "RICERCA_DOCUMENTALE": "0.10",  # euros por consulta
+    "DRAFT_DOCUMENT": "0.10",  # euros por página analisada
+    "CHECK_COMPLIANCE": "0.45",  # euros por página analisada
+    "CHAT_ASSISTANT": {
+        "GPT-5.2": "0.10",
+        "GEMINI_3_PRO_PREVIEW": "0.10",
+        "PERPLEXITY": "0.20",
+    },
+    "SEGRETERIA_SOCIETARIA": {
+        "DOCUMENTI_AI": "0.10",
+        "ASSISTENTE_LEGALE": "0.10",
+    },
+}
+
 keys = [
     'OPENAI_KEY',
     'DEEPL_KEY',

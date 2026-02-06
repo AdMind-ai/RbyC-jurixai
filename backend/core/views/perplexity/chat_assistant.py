@@ -2,6 +2,8 @@ import base64
 from typing import List, Optional
 
 from backend import settings
+from core.models.usage import UsageSubTool, UsageTool
+from core.services.usage_tracking import UsageTrackingService
 from perplexity import Perplexity
 from rest_framework.views import APIView
 from django.http import StreamingHttpResponse
@@ -94,6 +96,19 @@ class PerplexityChatAssistant(APIView):
                         conversation=conversation,
                         role="assistant",
                         content=[{"type": "text", "text": assistant_reply}],
+                    )
+                    
+                    UsageTrackingService.record_usage_event(
+                        user=request.user,
+                        tool=UsageTool.CHAT_ASSISTANT,
+                        sub_tool=UsageSubTool.PERPLEXITY,
+                        quantity=1/2,  # 2 interazioni = 1 uso
+                        company=getattr(request.user, "company", None),
+                        metadata={
+                            "conversation_id": str(conversation.conversation_id),
+                            "message_length": len(assistant_reply),
+                            "files_attached": len(uploaded_files),
+                        },
                     )
                     self._update_memory_summary(conversation)
 

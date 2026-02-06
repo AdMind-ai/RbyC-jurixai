@@ -1,3 +1,5 @@
+from core.models.usage import UsageSubTool, UsageTool
+from core.services.usage_tracking import UsageTrackingService
 from core.models.assistant_thread_model import AssistantThread
 from rest_framework.views import APIView
 from django.http import StreamingHttpResponse
@@ -134,11 +136,23 @@ class OpenAISendMessageView(APIView):
             except Exception as e:
                 logger.error("Erro ao fazer streaming: %s", e)
             else:
-
                 ChatMessage.objects.create(
                     conversation=conversation,
                     content=full_ai_message,
                     is_user=False
+                )
+                
+                UsageTrackingService.record_usage_event(
+                    user=request.user,
+                    tool=UsageTool.CHAT_ASSISTANT,
+                    sub_tool=UsageSubTool.GPT_5_2,
+                    quantity=1/2, # 2 interações = 1 uso
+                    company=getattr(request.user, "company", None),
+                    metadata={
+                        "conversation_id": conversation.id,
+                        "message_length": len(full_ai_message),
+                        "has_file": bool(file),
+                    },
                 )
 
         return StreamingHttpResponse(event_stream(), content_type='text/event-stream')

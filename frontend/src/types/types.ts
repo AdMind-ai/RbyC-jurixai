@@ -100,3 +100,46 @@ export interface AppUser {
   lastModified: string;
   avatarColor: string; // hex code
 }
+
+
+export enum ToolId {
+  RICERCA_DOCUMENTALE = 'RICERCA_DOCUMENTALE',
+  DRAFT_DOCUMENT = 'DRAFT_DOCUMENT',
+  CHECK_COMPLIANCE = 'CHECK_COMPLIANCE',
+  CHAT_ASSISTANT = 'CHAT_ASSISTANT',
+  SEGRETERIA_SOCIETARIA = 'SEGRETERIA_SOCIETARIA'
+}
+
+export enum SubToolId {
+  DOCUMENTI_AI = 'DOCUMENTI_AI',
+  ASSISTENTE_LEGALE = 'ASSISTENTE_LEGALE'
+}
+
+export interface ConsumptionStats {
+  cost: number;
+  count: number;
+  subItems?: Record<string, ConsumptionStats>; // Per gestire Documenti AI e Assistente legale
+}
+
+export interface UserConsumption {
+  userId: string | number;
+  userName: string;
+  userEmail: string;
+  role: 'Admin' | 'Utente';
+  isCompanyAdmin?: boolean;
+  costs: Record<string, number>; // Costo per tool in €
+  counts: Record<string, number>; // Utilizzo per tool (richieste, messaggi, etc.)
+  subToolCosts?: Record<string, Record<string, number>>;
+  subToolCounts?: Record<string, Record<string, number>>;
+  totalCost?: number;
+}
+
+export interface MonthlyReport {
+  month: string;
+  monthLabel?: string;
+  currency?: string;
+  totalCost: number;
+  totalRequests: number;
+  toolUsage: Record<string, ConsumptionStats>;
+  userBreakdown: UserConsumption[];
+}

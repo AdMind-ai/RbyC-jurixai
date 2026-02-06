@@ -1,6 +1,77 @@
 
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { Company } from '../types/types';
+import { api } from "../api/api";
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf'
+import workerSrc from 'pdfjs-dist/legacy/build/pdf.worker?url'
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
+
+type ComplianceFile = {
+  mimeType: string;
+  data: string;
+  name?: string;
+};
+
+type ComplianceDocumentMetric = {
+  name?: string;
+  mimeType?: string;
+  pages: number;
+};
+
+const isPdfMimeType = (mimeType?: string) =>
+  Boolean(mimeType && mimeType.toLowerCase().includes('pdf'));
+
+const base64ToUint8Array = (input: string): Uint8Array => {
+  const cleaned = (input || '').split(',').pop() ?? '';
+  const binary = atob(cleaned);
+  const len = binary.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+};
+
+const countPdfPages = async (file: ComplianceFile): Promise<ComplianceDocumentMetric> => {
+  if (!isPdfMimeType(file.mimeType) || !file.data) {
+    return { name: file.name, mimeType: file.mimeType, pages: 0 };
+  }
+  try {
+    const arrayBuffer = base64ToUint8Array(file.data);
+    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+    const pdf = await loadingTask.promise;
+    const pages = pdf.numPages || 0;
+    pdf.destroy();
+    return { name: file.name, mimeType: file.mimeType, pages };
+  } catch (err) {
+    console.warn('Failed to count pages for file', file.name, err);
+    return { name: file.name, mimeType: file.mimeType, pages: 0 };
+  }
+};
+
+const recordComplianceUsage = async (
+  totalPages: number,
+  documents: ComplianceDocumentMetric[],
+  norms: string[]
+) => {
+  if (totalPages <= 0) {
+    return;
+  }
+  try {
+    await api.post('/usage/manual/', {
+      tool: 'CHECK_COMPLIANCE',
+      quantity: totalPages,
+      metadata: {
+        "pages": totalPages,
+        "docs": documents,
+        "norms": norms,
+      },
+    });
+  } catch (error) {
+    console.error('Failed to record compliance usage', error);
+  }
+};
 
 // Prefer Vite env variables (defined as VITE_*). Fallback to process.env for compatibility.
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || process.env.API_KEY;
@@ -16,13 +87,6 @@ export interface ChatSource {
 export interface ChatResponse {
   text: string;
   sources: ChatSource[];
-}
-
-interface GroundingChunk {
-  web?: {
-    title?: string;
-    uri?: string;
-  };
 }
 
 export interface DocumentSegment {
@@ -176,89 +240,18 @@ class GeminiService {
           systemInstruction: systemInstruction
         }
       });
+
+      // Registra l'uso del assistente legale
+      api.post('/usage/manual/', {
+        tool: 'SEGRETERIA_SOCIETARIA',
+        subTool: 'ASSISTENTE_LEGALE',
+        quantity: 0.5, // 2 interazioni = 1 uso
+      });
+
       return response.text || "Non ho capito la domanda.";
     } catch (error) {
       console.error("Gemini Chat Error:", error);
       return "Si è verificato un errore di comunicazione con l'assistente.";
-    }
-  }
-
-  /**
-   * General Chat with Gemini 3 (Pro Preview), Google Search, and File support.
-   */
-  public async generalChatWithSearch(
-    message: string,
-    files: { mimeType: string; data: string }[] = [],
-    history: { role: 'user' | 'model', text: string }[] = []
-  ): Promise<ChatResponse> {
-    if (!this.ai) return { text: "Servizio AI non disponibile (API Key mancante).", sources: [] };
-
-    // Use Gemini 3 Pro Preview for complex tasks and reasoning
-    const modelId = 'gemini-3-pro-preview';
-
-    const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [];
-
-    // Add files first
-    files.forEach(file => {
-      parts.push({
-        inlineData: {
-          mimeType: file.mimeType,
-          data: file.data
-        }
-      });
-    });
-
-    // Add text message
-    parts.push({ text: message });
-
-    // Construct history parts for context (simplified for single-turn API structure, 
-    // ideally use chats.create for proper history, but mixing search tools + history manually here for control)
-    // For this implementation, we will rely on the system instruction + current prompt for simplicity in the single call,
-    // or we could prepend history to the prompt. Let's prepend history to the text prompt for context.
-    let fullPrompt = message;
-    if (history.length > 0) {
-      const historyText = history.map(h => `${h.role.toUpperCase()}: ${h.text}`).join('\n');
-      fullPrompt = `CONTESTO CONVERSAZIONE PRECEDENTE:\n${historyText}\n\nNUOVA RICHIESTA UTENTE:\n${message}`;
-      // Update the text part
-      parts[parts.length - 1] = { text: fullPrompt };
-    }
-
-    try {
-      const response = await this.ai.models.generateContent({
-        model: modelId,
-        contents: { parts },
-        config: {
-          tools: [{ googleSearch: {} }], // Enable Google Search Grounding
-          systemInstruction: "Sei un assistente legale avanzato. Usa la Ricerca Google per trovare informazioni recenti, sentenze, o normative aggiornate se necessario. Rispondi in italiano professionale. Se usi informazioni dal web, cita le fonti."
-        }
-      });
-
-      // Extract grounding metadata (sources)
-      const sources: ChatSource[] = [];
-      const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-
-      if (groundingChunks) {
-        groundingChunks.forEach((chunk: GroundingChunk) => {
-          if (chunk.web && typeof chunk.web.uri === 'string') {
-            sources.push({
-              title: chunk.web.title || 'Fonte Web',
-              uri: chunk.web.uri
-            });
-          }
-        });
-      }
-
-      return {
-        text: response.text || "Non è stata generata alcuna risposta.",
-        sources: sources
-      };
-
-    } catch (error) {
-      console.error("Gemini General Chat Error:", error);
-      return {
-        text: "Si è verificato un errore durante l'elaborazione della richiesta. Riprova più tardi.",
-        sources: []
-      };
     }
   }
 }
@@ -271,22 +264,22 @@ const MCP_CONFIG = {
 };
 
 export const analyzeCompliance = async (
-  files: { mimeType: string; data: string }[],
+  files: ComplianceFile[],
   norms: string[]
 ): Promise<DocumentSegment[]> => {
   try {
     const ai = new GoogleGenAI({ apiKey: API_KEY });
     const modelId = 'gemini-2.5-flash';
-    
+
     // -------------------------------------------------------------
     // MCP / Custom Database Logic
     // -------------------------------------------------------------
     let mcpContextInstruction = "";
 
     if (norms.includes("Database customizzato")) {
-        console.log(`Connecting to Custom MCP Database [${MCP_CONFIG.label}] at ${MCP_CONFIG.url}...`);
-        
-        mcpContextInstruction = `
+      console.log(`Connecting to Custom MCP Database [${MCP_CONFIG.label}] at ${MCP_CONFIG.url}...`);
+
+      mcpContextInstruction = `
         IMPORTANTE: L'utente ha selezionato un database personalizzato "${MCP_CONFIG.label}".
         Devi verificare la conformità rispetto alle policy interne tipicamente ospitate su: ${MCP_CONFIG.url}.
         Simula le seguenti policy interne rigorose:
@@ -338,30 +331,34 @@ export const analyzeCompliance = async (
       },
     });
 
+    const documentMetrics = await Promise.all(files.map((file) => countPdfPages(file)));
+    const totalPages = documentMetrics.reduce((sum, metric) => sum + metric.pages, 0);
+    await recordComplianceUsage(totalPages, documentMetrics, norms);
+
     if (response.text) {
-        const rawData: unknown = JSON.parse(response.text);
+      const rawData: unknown = JSON.parse(response.text);
 
-        // Normalize to array of items with expected shape
-        type DocumentSegmentInput = {
-          text: string;
-          issue?: Partial<ComplianceIssue> | null;
-        };
+      // Normalize to array of items with expected shape
+      type DocumentSegmentInput = {
+        text: string;
+        issue?: Partial<ComplianceIssue> | null;
+      };
 
-        const segmentsArray: DocumentSegmentInput[] = Array.isArray(rawData)
-          ? rawData as DocumentSegmentInput[]
-          : ((rawData as { segments?: DocumentSegmentInput[] }).segments ?? []);
+      const segmentsArray: DocumentSegmentInput[] = Array.isArray(rawData)
+        ? rawData as DocumentSegmentInput[]
+        : ((rawData as { segments?: DocumentSegmentInput[] }).segments ?? []);
 
-        return segmentsArray.map((item: DocumentSegmentInput, index: number) => ({
-          id: `seg-${index}`,
-          text: item.text,
-          issue: item.issue ? {
-            title: item.issue.title ?? '',
-            status: (item.issue.status as ComplianceIssue['status']) ?? 'BORDERLINE',
-            description: item.issue.description ?? '',
-            referenceNorm: item.issue.referenceNorm ?? '',
-            suggestion: item.issue.suggestion ?? ''
-          } : undefined
-        }));
+      return segmentsArray.map((item: DocumentSegmentInput, index: number) => ({
+        id: `seg-${index}`,
+        text: item.text,
+        issue: item.issue ? {
+          title: item.issue.title ?? '',
+          status: (item.issue.status as ComplianceIssue['status']) ?? 'BORDERLINE',
+          description: item.issue.description ?? '',
+          referenceNorm: item.issue.referenceNorm ?? '',
+          suggestion: item.issue.suggestion ?? ''
+        } : undefined
+      }));
     }
     return [];
 
@@ -373,11 +370,11 @@ export const analyzeCompliance = async (
         id: 'err-1',
         text: "Errore durante l'analisi del documento. Impossibile recuperare il testo.",
         issue: {
-            title: 'Analisi Fallita',
-            status: 'BORDERLINE',
-            description: 'Impossibile completare l\'analisi automatica. Riprova.',
-            referenceNorm: 'System',
-            suggestion: ''
+          title: 'Analisi Fallita',
+          status: 'BORDERLINE',
+          description: 'Impossibile completare l\'analisi automatica. Riprova.',
+          referenceNorm: 'System',
+          suggestion: ''
         }
       }
     ];
@@ -406,8 +403,8 @@ export const generateGeminiResponse = async (
   try {
     // Mapping our internal ID to the actual API model ID
     // Note: The prompt requested "Gemini 3 Pro Preview"
-    const apiModelName = modelId === 'gemini-3-pro-preview' 
-      ? 'gemini-3-pro-preview' 
+    const apiModelName = modelId === 'gemini-3-pro-preview'
+      ? 'gemini-3-pro-preview'
       : 'gemini-3-flash-preview'; // Fallback
 
     type GeminiContentPart = {
@@ -443,6 +440,12 @@ export const generateGeminiResponse = async (
     const response = await client.models.generateContent({
       model: apiModelName,
       contents: conversation,
+    });
+
+    api.post('/usage/manual/', {
+      tool: 'CHAT_ASSISTANT',
+      subTool: 'GEMINI_3_PRO_PREVIEW',
+      quantity: 0.5, // 2 interazioni = 1 uso
     });
 
     return response.text || "No response text generated.";

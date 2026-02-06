@@ -1,0 +1,62 @@
+
+import React from 'react';
+import { Search, FileText, Shield, Bot, Briefcase } from 'lucide-react';
+import { ToolId, SubToolId } from '../types/types';
+
+export const TOOL_CONFIG: Record<string, { name: string; icon: React.ReactNode; color: string; description: string }> = {
+  [ToolId.RICERCA_DOCUMENTALE]: {
+    name: 'Ricerca documentale',
+    icon: <Search className="w-5 h-5" />,
+    color: '#1F3A8B',
+    description: 'Analisi semantica e ricerca avanzata nell\'archivio documenti.'
+  },
+  [ToolId.DRAFT_DOCUMENT]: {
+    name: 'Draft Document',
+    icon: <FileText className="w-5 h-5" />,
+    color: '#1F3A8B',
+    description: 'Generazione bozze legali e atti partendo da prompt strutturati.'
+  },
+  [ToolId.CHECK_COMPLIANCE]: {
+    name: 'Check compliance',
+    icon: <Shield className="w-5 h-5" />,
+    color: '#1F3A8B',
+    description: 'Verifica automatizzata della conformità normativa e GDPR.'
+  },
+  [ToolId.CHAT_ASSISTANT]: {
+    name: 'Chat Assistant',
+    icon: <Bot className="w-5 h-5" />,
+    color: '#1F3A8B',
+    description: 'Interfaccia conversazionale per brainstorming e supporto rapido.'
+  },
+  [ToolId.SEGRETERIA_SOCIETARIA]: {
+    name: 'Segreteria Societaria (Totale)',
+    icon: <Briefcase className="w-5 h-5" />,
+    color: '#1F3A8B',
+    description: 'Gestione adempimenti societari con strumenti AI dedicati.'
+  },
+  [SubToolId.DOCUMENTI_AI]: {
+    name: 'Documenti AI',
+    icon: <FileText className="w-5 h-5" />,
+    color: '#1F3A8B',
+    description: ''
+  },
+  [SubToolId.ASSISTENTE_LEGALE]: {
+    name: 'Assistente Legale',
+    icon: <Bot className="w-5 h-5" />,
+    color: '#1F3A8B',
+    description: ''
+  }
+};
+
+export const METRIC_LABELS: Record<string, string> = {
+  [ToolId.RICERCA_DOCUMENTALE]: 'Messaggi scambiati',
+  [ToolId.CHECK_COMPLIANCE]: 'Pagine analizzate',
+  [ToolId.DRAFT_DOCUMENT]: 'Pagine generate',
+  [ToolId.CHAT_ASSISTANT]: 'Messaggi scambiati',
+  [ToolId.SEGRETERIA_SOCIETARIA]: 'Operazioni totali',
+  [SubToolId.DOCUMENTI_AI]: 'Documenti gestiti',
+  [SubToolId.ASSISTENTE_LEGALE]: 'Messaggi scambiati'
+};
+
+export const formatEuro = (val: number) =>
+  val.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';

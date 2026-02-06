@@ -1,4 +1,6 @@
 from django.conf import settings
+from core.models.usage import UsageTool
+from core.services.usage_tracking import UsageTrackingService
 from core.utils.common import safe_load_json
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
@@ -190,6 +192,17 @@ class AssistantStreamingView(APIView):
             content=response_text,
             is_user=False,
             citations=citations_list,
+        )
+        
+        # Registra meio crédito por request (1 uso a cada duas requisições)
+        UsageTrackingService.record_usage_event(
+            user=request.user,
+            tool=UsageTool.RICERCA_DOCUMENTALE,
+            quantity=1/2,
+            company=getattr(request.user, "company", None),
+            metadata={
+                "conversation_id": conversation.id
+            },
         )
 
         res = {
