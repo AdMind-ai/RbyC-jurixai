@@ -144,7 +144,13 @@ SECRET_KEY = 'django-insecure-a!$duvz(gemholwmq(0q3y5&aeh@b$%g(2hgajbyh%^2i!jcbx
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    "127.0.0.1",
+    "localhost",
+    'rbyc.admind.ai',
+    'backoffice.admind.ai',
+    '54.93.106.73', # Public ip of backoffice server
+]
 CORS_ALLOW_ALL_ORIGINS = True
 
 
