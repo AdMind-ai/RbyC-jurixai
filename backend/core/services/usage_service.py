@@ -38,12 +38,33 @@ class UsageReportFilters:
     user_id: Optional[int] = None
 
 
+def compute_month_bounds(month_str: Optional[str]) -> Tuple[date, datetime, datetime]:
+    tz = timezone.get_current_timezone()
+    if month_str:
+        try:
+            reference = datetime.strptime(month_str, "%Y-%m").date().replace(day=1)
+        except ValueError as exc:  # pragma: no cover - validazione input
+            raise ValueError("Formato del mese non valido. Use YYYY-MM.") from exc
+    else:
+        now = timezone.now().date()
+        reference = now.replace(day=1)
+
+    if reference.month == 12:
+        next_month = date(reference.year + 1, 1, 1)
+    else:
+        next_month = date(reference.year, reference.month + 1, 1)
+
+    start_dt = timezone.make_aware(datetime.combine(reference, time.min), tz)
+    end_dt = timezone.make_aware(datetime.combine(next_month, time.min), tz)
+    return reference, start_dt, end_dt
+
+
 class UsageReportService:
     currency = "EUR"
 
     @classmethod
     def build_report(cls, filters: UsageReportFilters) -> Dict:
-        month_ref, start_dt, end_dt = cls._compute_month_bounds(filters.month)
+        month_ref, start_dt, end_dt = compute_month_bounds(filters.month)
         queryset = cls._apply_filters(UsageRecord.objects.all(), filters, start_dt, end_dt)
 
         totals = queryset.aggregate(
@@ -63,27 +84,6 @@ class UsageReportService:
             "toolUsage": tool_usage,
             "userBreakdown": user_breakdown,
         }
-
-    @staticmethod
-    def _compute_month_bounds(month_str: Optional[str]) -> Tuple[date, datetime, datetime]:
-        tz = timezone.get_current_timezone()
-        if month_str:
-            try:
-                reference = datetime.strptime(month_str, "%Y-%m").date().replace(day=1)
-            except ValueError as exc:  # pragma: no cover - validazione input
-                raise ValueError("Formato del mese non valido. Use YYYY-MM.") from exc
-        else:
-            now = timezone.now().date()
-            reference = now.replace(day=1)
-
-        if reference.month == 12:
-            next_month = date(reference.year + 1, 1, 1)
-        else:
-            next_month = date(reference.year, reference.month + 1, 1)
-
-        start_dt = timezone.make_aware(datetime.combine(reference, time.min), tz)
-        end_dt = timezone.make_aware(datetime.combine(next_month, time.min), tz)
-        return reference, start_dt, end_dt
 
     @staticmethod
     def _apply_filters(

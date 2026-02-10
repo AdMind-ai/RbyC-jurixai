@@ -31,6 +31,7 @@ urlpatterns = [
      path('usage/report/', UsageReportView.as_view(), name='usage-report'),
      path('usage/months/', UsageMonthListView.as_view(), name='usage-months'),
      path('usage/manual/', UsageManualRecordView.as_view(), name='usage-manual'),
+     path('costs/', CostAggregatorView.as_view(), name='costs-export'),
     
     # Draft document generation (OpenAI)
     path('openai/draft/generate/', DraftDocumentView.as_view(), name='draft-document'),
