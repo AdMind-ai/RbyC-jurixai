@@ -6,14 +6,15 @@ class APIKeyAuthentication(BaseAuthentication):
     keyword = "Api-Key"
 
     def authenticate(self, request):
-        # Prefer Authorization header with the `Api-Key <key>` scheme
+        # Accept Authorization header with or without the 'Api-Key' prefix
         auth = request.headers.get("Authorization")
 
         if auth:
-            if not auth.startswith(self.keyword):
-                raise AuthenticationFailed("Formato inválido")
-
-            key = auth[len(self.keyword):].strip()
+            # If startswith prefix, strip it; else, use as is
+            if auth.startswith(self.keyword):
+                key = auth[len(self.keyword):].strip()
+            else:
+                key = auth.strip()
 
             if key != settings.INTEGRATION_API_KEY:
                 raise AuthenticationFailed("API Key inválida")
