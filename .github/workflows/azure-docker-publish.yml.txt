@@ -3,7 +3,7 @@ name: (Backend Container) Build and Push Backend Image to ACR.
 on:
   push:
     branches:
-      - main
+      # - main
 
 env:
   IMAGE_NAME: legalai-rbyc-backend

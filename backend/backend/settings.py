@@ -50,6 +50,11 @@ INTEGRATION_API_KEY = os.environ.get('INTEGRATION_API_KEY')
 
 PERPLEXITY_API_KEY = os.environ.get('PERPLEXITY_API_KEY')
 
+COST_AGGREGATOR_API_KEY = os.environ.get('COST_AGGREGATOR_API_KEY')
+COST_AGGREGATOR_PROJECT_ID = os.environ.get('COST_AGGREGATOR_PROJECT_ID')
+COST_AGGREGATOR_PROJECT_NAME = os.environ.get('COST_AGGREGATOR_PROJECT_NAME')
+COST_AGGREGATOR_DEFAULT_CURRENCY = os.environ.get('COST_AGGREGATOR_DEFAULT_CURRENCY', 'EUR')
+
 USAGE_DEFAULT_PRICES = {
     "RICERCA_DOCUMENTALE": "0.10",  # euros por consulta
     "DRAFT_DOCUMENT": "0.10",  # euros por página analisada
@@ -83,7 +88,10 @@ keys = [
     'MAILAPI_API_KEY',
     'FRONTEND_URL',
     'INTEGRATION_API_KEY',
-    'PERPLEXITY_API_KEY'
+    'PERPLEXITY_API_KEY',
+    'COST_AGGREGATOR_API_KEY',
+    'COST_AGGREGATOR_PROJECT_ID',
+    'COST_AGGREGATOR_PROJECT_NAME'
 ]
 
 missing_keys = [key for key in keys if not os.getenv(key)]
@@ -136,7 +144,13 @@ SECRET_KEY = 'django-insecure-a!$duvz(gemholwmq(0q3y5&aeh@b$%g(2hgajbyh%^2i!jcbx
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    "127.0.0.1",
+    "localhost",
+    'rbyc.admind.ai',
+    'backoffice.admind.ai',
+    '54.93.106.73', # Public ip of backoffice server
+]
 CORS_ALLOW_ALL_ORIGINS = True
 
 
