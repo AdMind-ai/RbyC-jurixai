@@ -13,7 +13,7 @@ from core.utils.encode_file import encode_file_base64
 from io import BytesIO
 from PyPDF2 import PdfReader
 import re
-from core.utils.quickdoc import upload_to_blob_storage
+from core.utils.storage import upload_bytes_to_s3_bucket
 from core.utils.pdf_utils import build_overlay_pdf, merge_with_letterhead
 from core.utils.word_utils import create_word_with_template
 
@@ -215,7 +215,7 @@ class DraftDocumentFileView(APIView):
             logger.exception('Error generating Word: %s', e)
             return Response({'detail': 'Error generating Word file.'}, status=500)
 
-        # Upload files to blob storage
+        # Upload files to the dedicated draft document bucket
         total_pages_doc = 0
         try:
             pdf_bytes = pdf_result.getvalue()
@@ -225,10 +225,20 @@ class DraftDocumentFileView(APIView):
             except Exception as page_err:
                 logger.warning("Unable to count PDF pages: %s", page_err)
             word_bytes = word_buffer.getvalue()
-            pdf_blob_name = f"draftdocument/{safe_name}.pdf"
-            word_blob_name = f"draftdocument/{safe_name}.docx"
-            pdf_url = upload_to_blob_storage(pdf_bytes, pdf_blob_name)
-            word_url = upload_to_blob_storage(word_bytes, word_blob_name)
+            pdf_object_key = f"draftdocument/{safe_name}.pdf"
+            word_object_key = f"draftdocument/{safe_name}.docx"
+            _, pdf_url = upload_bytes_to_s3_bucket(
+                pdf_bytes,
+                pdf_object_key,
+                settings.FUNCTIONALITY_DOCUMENTS_BUCKET_NAME,
+                content_type='application/pdf',
+            )
+            _, word_url = upload_bytes_to_s3_bucket(
+                word_bytes,
+                word_object_key,
+                settings.FUNCTIONALITY_DOCUMENTS_BUCKET_NAME,
+                content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            )
         except Exception as e:
             logger.exception('Error uploading generated files: %s', e)
             return Response({'detail': 'Error uploading files.'}, status=500)
@@ -253,8 +263,8 @@ class DraftDocumentFileView(APIView):
             'name': safe_name,
             'title': titolo,
             'urls': {
-                'pdf': request.build_absolute_uri(pdf_url),
-                'word': request.build_absolute_uri(word_url),
+                'pdf': pdf_url,
+                'word': word_url,
             }
         })
 

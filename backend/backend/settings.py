@@ -19,6 +19,11 @@ from datetime import datetime
 
 load_dotenv()
 
+# File storage backend selector.
+# Defaults to Azure to preserve the current production behavior until the
+# migration switches the environment explicitly.
+FILE_STORAGE_BACKEND = os.environ.get('FILE_STORAGE_BACKEND', 'azure').lower()
+
 # Environment Keys
 OPENAI_KEY = os.environ['OPENAI_KEY']
 DEEPL_KEY = os.environ['DEEPL_KEY']
@@ -26,22 +31,28 @@ DEEPL_KEY = os.environ['DEEPL_KEY']
 # Azure Storage
 AZURE_ACCOUNT_NAME = "jurixaistorage"
 AZURE_CONTAINER = 'jurixai-rbyc-storage'
-AZURE_ACCOUNT_KEY = os.environ['AZURE_ACCOUNT_KEY']
-AZURE_CONNECTION_STRING = os.environ['AZURE_CONNECTION_STRING']
+AZURE_ACCOUNT_KEY = os.environ.get('AZURE_ACCOUNT_KEY')
+AZURE_CONNECTION_STRING = os.environ.get('AZURE_CONNECTION_STRING')
 AZURE_OVERWRITE_FILES = True
 
 # OPENAI_ASSISTANT_ID_RBYC_LAW_CONSULTANT = os.environ.get('OPENAI_ASSISTANT_ID_RBYC_LAW_CONSULTANT')
 
 OPENAI_PROMPT_ID_RICERCA_DOCUMENTALE= os.environ.get('OPENAI_PROMPT_ID_RICERCA_DOCUMENTALE')
 OPENAI_PROMPT_ID_CHECK_COMPLIANCE_RBYC = os.environ.get('OPENAI_PROMPT_ID_CHECK_COMPLIANCE_RBYC')
-OPENAI_PROMPT_ID_QUICKDOC = os.environ.get('OPENAI_PROMPT_ID_QUICKDOC')
 OPENAI_PROMPT_ID_DRAFT_DOCUMENT = os.environ.get('OPENAI_PROMPT_ID_DRAFT_DOCUMENT')
+
 S3_UPLOAD_API_KEY = os.environ.get('S3_UPLOAD_API_KEY')
 S3_UPLOAD_JWT_SECRET = os.environ.get('S3_UPLOAD_JWT_SECRET')
+
 AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
 AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
-AWS_REGION = os.environ.get('AWS_REGION')
-S3_BUCKET_NAME = os.environ.get('S3_BUCKET_NAME')
+AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME')
+AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME')
+
+FUNCTIONALITY_DOCUMENTS_BUCKET_NAME = os.environ.get('FUNCTIONALITY_DOCUMENTS_BUCKET_NAME')
+
+QUICKDOC_VERBALE_CDA_TEMPLATE_KEY = os.environ.get('QUICKDOC_VERBALE_CDA_TEMPLATE_KEY')
+QUICKDOC_VERBALE_CDA_TEMPLATE_URL = os.environ.get('QUICKDOC_VERBALE_CDA_TEMPLATE_URL')
 
 MAILAPI_API_KEY = os.environ.get('MAILAPI_API_KEY')
 FRONTEND_URL = os.environ.get('FRONTEND_URL')
@@ -76,15 +87,13 @@ keys = [
     'OPENAI_PROMPT_ID_RICERCA_DOCUMENTALE',
     'OPENAI_PROMPT_ID_CHECK_COMPLIANCE_RBYC',
     'OPENAI_PROMPT_ID_DRAFT_DOCUMENT',
-    'OPENAI_PROMPT_ID_QUICKDOC',
-    'AZURE_ACCOUNT_KEY',
-    'AZURE_CONNECTION_STRING',
     'S3_UPLOAD_API_KEY',
     'S3_UPLOAD_JWT_SECRET',
     'AWS_ACCESS_KEY_ID',
     'AWS_SECRET_ACCESS_KEY',
-    'AWS_REGION',
-    'S3_BUCKET_NAME',
+    'AWS_S3_REGION_NAME',
+    'AWS_STORAGE_BUCKET_NAME',
+    'FUNCTIONALITY_DOCUMENTS_BUCKET_NAME',
     'MAILAPI_API_KEY',
     'FRONTEND_URL',
     'INTEGRATION_API_KEY',
@@ -94,14 +103,20 @@ keys = [
     'COST_AGGREGATOR_PROJECT_NAME'
 ]
 
+if FILE_STORAGE_BACKEND == 'azure':
+    keys.extend([
+        'AZURE_ACCOUNT_KEY',
+        'AZURE_CONNECTION_STRING',
+    ])
+
 missing_keys = [key for key in keys if not os.getenv(key)]
 
 if missing_keys:
     raise Exception(
         f"The following environment variables are not set: {', '.join(missing_keys)}")
 
-CELERY_BROKER_URL = "redis://localhost:6379/0"
-CELERY_RESULT_BACKEND = "redis://localhost:6379/0"
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', "redis://localhost:6379/0")
+CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', CELERY_BROKER_URL)
 CELERY_TIMEZONE = "Europe/Rome"
 
 now = datetime.now()
@@ -296,10 +311,17 @@ STATIC_URL = 'staticfiles/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 
-# # Storage configuration for handling static and media files
+# Storage configuration for handling static and media files.
+if FILE_STORAGE_BACKEND == 'azure':
+    default_storage_backend = "storages.backends.azure_storage.AzureStorage"
+elif FILE_STORAGE_BACKEND == 's3':
+    default_storage_backend = "storages.backends.s3.S3Storage"
+else:
+    default_storage_backend = "django.core.files.storage.FileSystemStorage"
+
 STORAGES = {
     "default": {
-        "BACKEND": "storages.backends.azure_storage.AzureStorage",
+        "BACKEND": default_storage_backend,
     },
     "staticfiles": {
         "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",

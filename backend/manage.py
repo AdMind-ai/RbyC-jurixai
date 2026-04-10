@@ -3,20 +3,12 @@
 import os
 import sys
 
+from backend.settings_selector import get_settings_module
+
 
 def main():
     """Run administrative tasks."""
-
-    settings_module = ''
-    if 'RUNNING_IN_PRODUCTION' in os.environ:
-        settings_module = 'backend.azure-production'
-    elif 'WEBSITE_HOSTNAME' in os.environ:
-        settings_module = 'backend.production'
-    else:
-        settings_module = 'backend.settings'
-    print(settings_module)
-
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', settings_module)
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', get_settings_module())
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:

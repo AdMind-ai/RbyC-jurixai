@@ -4,7 +4,7 @@ from rest_framework import status
 from django.conf import settings
 from django.utils import timezone
 from core.models.quickdoc_model import GeneratedDocument
-from core.utils.quickdoc import generate_doc_with_assistant, create_pdf_with_template, create_pdf_for_verbale_cda, create_word_with_template, create_word_for_verbale_cda, upload_to_blob_storage
+from core.utils.quickdoc import generate_doc_with_assistant, create_pdf_with_template, create_pdf_for_verbale_cda, create_word_with_template, create_word_for_verbale_cda, upload_to_storage
 
 class QuickDocGenerateView(APIView):
 
@@ -41,9 +41,8 @@ class QuickDocGenerateView(APIView):
                 generated_text, title)
             
         
-        # Enviar PDF ao Blob Storage
-        pdf_url = upload_to_blob_storage(pdf_data.getvalue(), f"quickdoc/{nome_arquivo}.pdf")
-        word_url = upload_to_blob_storage(word_data.getvalue(), f"quickdoc/{nome_arquivo}.docx")
+        pdf_key, pdf_url = upload_to_storage(pdf_data.getvalue(), f"quickdoc/{nome_arquivo}.pdf")
+        word_key, word_url = upload_to_storage(word_data.getvalue(), f"quickdoc/{nome_arquivo}.docx")
 
         # Salvar no banco
         doc = GeneratedDocument.objects.create(
@@ -51,8 +50,8 @@ class QuickDocGenerateView(APIView):
             doc_format=format, language=language, text=generated_text
         )
         
-        doc.pdf_file.name = f"documents/{nome_arquivo}.pdf"
-        doc.word_file.name = f"documents/{nome_arquivo}.docx"
+        doc.pdf_file.name = pdf_key
+        doc.word_file.name = word_key
         doc.save()
 
         return Response({

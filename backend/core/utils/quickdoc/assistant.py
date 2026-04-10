@@ -5,7 +5,7 @@ from datetime import datetime
 import json
 import logging
 from django.conf import settings
-from core.utils.quickdoc.upload_to_blob_storage import generate_sas_token
+from core.utils.storage import get_storage_url
 
 logging.basicConfig(level=logging.INFO)
 
@@ -33,21 +33,27 @@ def generate_doc_with_assistant(format, language, instructions):
     ]
     
     if format.lower() == "verbale cda":
+        template_url = settings.QUICKDOC_VERBALE_CDA_TEMPLATE_URL
+        if not template_url and settings.QUICKDOC_VERBALE_CDA_TEMPLATE_KEY:
+            template_url = get_storage_url(settings.QUICKDOC_VERBALE_CDA_TEMPLATE_KEY)
 
-        sas_token = generate_sas_token("quickdoc/templates/template_verbale_Cda.pdf")
-
-        input = [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "input_file",
-                        "file_url": f"https://jurixaistorage.blob.core.windows.net/jurixai-rbyc-storage/quickdoc/templates/template_verbale_Cda.pdf?{sas_token}",
-                    },
-                    {"type": "input_text", "text": user_prompt}
-                ]
-            }
-        ]
+        if not template_url:
+            logging.warning(
+                "QuickDoc verbale CDA template URL/key not configured. Proceeding without template attachment."
+            )
+        else:
+            input = [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_file",
+                            "file_url": template_url,
+                        },
+                        {"type": "input_text", "text": user_prompt}
+                    ]
+                }
+            ]
 
     # Usa Responses API com GPT-5 + prompt_id
     response = client.responses.create(

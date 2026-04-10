@@ -5,9 +5,11 @@ from django.conf import settings
 
 try:
     import boto3
+    from botocore.config import Config
     from botocore.exceptions import ClientError
 except Exception:  # pragma: no cover - boto3 may not be installed in some test envs
     boto3 = None
+    Config = None
     ClientError = Exception
 
 logger = logging.getLogger(__name__)
@@ -20,14 +22,20 @@ def _get_s3_client():
     # Allow settings to provide credentials or rely on environment / IAM role
     aws_key = getattr(settings, "AWS_ACCESS_KEY_ID", None)
     aws_secret = getattr(settings, "AWS_SECRET_ACCESS_KEY", None)
-    region = getattr(settings, "AWS_REGION", None)
+    region = getattr(settings, "AWS_S3_REGION_NAME", None)
 
-    kwargs = {}
+    kwargs = {
+        "config": Config(
+            signature_version="s3v4",
+            s3={"addressing_style": "virtual"},
+        )
+    }
     if aws_key and aws_secret:
         kwargs["aws_access_key_id"] = aws_key
         kwargs["aws_secret_access_key"] = aws_secret
     if region:
         kwargs["region_name"] = region
+        kwargs["endpoint_url"] = f"https://s3.{region}.amazonaws.com"
 
     return boto3.client("s3", **kwargs)
 
@@ -40,12 +48,19 @@ def get_presigned_urls(
     """
     Given a list of S3 object keys, return a mapping key->presigned GET URL for objects
 
-    - Reads bucket name from `bucket` arg or from settings `S3_BUCKET_NAME` or `AWS_S3_BUCKET_NAME`.
+    - Reads bucket name from `bucket` arg or from settings
+      `AWS_STORAGE_BUCKET_NAME`.
     - Returns only keys for which a URL could be generated (missing/permission errors are skipped).
     """
-    bucket = bucket or getattr(settings, "S3_BUCKET_NAME", None) or getattr(settings, "AWS_S3_BUCKET_NAME", None)
+    bucket = (
+        bucket
+        or getattr(settings, "AWS_STORAGE_BUCKET_NAME", None)
+    )
     if not bucket:
-        logger.error("S3 bucket name not configured (S3_BUCKET_NAME / AWS_S3_BUCKET_NAME)")
+        logger.error(
+            "S3 bucket name not configured "
+            "(AWS_STORAGE_BUCKET_NAME)"
+        )
         return {}
 
     try:
