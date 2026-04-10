@@ -7,7 +7,7 @@ services:
     env_file:
       - ../backend/.env
     environment:
-      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-backend.settings}
+      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-backend.aws_production}
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       RUN_MIGRATIONS: "1"
@@ -28,7 +28,7 @@ services:
     env_file:
       - ../backend/.env
     environment:
-      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-backend.settings}
+      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-backend.aws_production}
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       RUN_MIGRATIONS: "0"
@@ -48,7 +48,7 @@ services:
     env_file:
       - ../backend/.env
     environment:
-      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-backend.settings}
+      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-backend.aws_production}
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       RUN_MIGRATIONS: "0"
