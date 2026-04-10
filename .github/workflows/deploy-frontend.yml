@@ -55,6 +55,10 @@ jobs:
           key: ${{ secrets.LIGHTSAIL_SSH_PRIVATE_KEY }}
           script: |
             set -e
+            cd ${{ secrets.LIGHTSAIL_APP_PATH }}
+            git fetch --all
+            git checkout "${{ github.ref_name }}"
+            git pull origin "${{ github.ref_name }}"
             sudo mkdir -p /var/www/rbyc-frontend
             sudo rm -rf /var/www/rbyc-frontend/*
             sudo cp -r /tmp/rbyc-frontend/* /var/www/rbyc-frontend/
