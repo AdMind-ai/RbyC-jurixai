@@ -1,30 +1,33 @@
 #!/bin/sh
 
-set -e  
+set -e
 
-echo "💡 Aplicando migrações..."
-python manage.py migrate --noinput
+if [ "${RUN_MIGRATIONS:-0}" = "1" ]; then
+  echo "Applying migrations..."
+  python manage.py migrate --noinput
+fi
 
-echo "💡 Coletando arquivos estáticos..."
-python manage.py collectstatic --noinput
+if [ "${COLLECT_STATIC:-0}" = "1" ]; then
+  echo "Collecting static files..."
+  python manage.py collectstatic --noinput
+fi
 
-echo "Criando superusuário..."
-python manage.py shell << EOF
+if [ "${CREATE_SUPERUSER:-0}" = "1" ]; then
+  echo "Ensuring superuser exists..."
+  python manage.py shell << EOF
 import os
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
-# Superuser
 username = os.environ.get("DJANGO_SUPERUSER_USERNAME")
 email = os.environ.get("DJANGO_SUPERUSER_EMAIL")
 password = os.environ.get("DJANGO_SUPERUSER_PASSWORD")
 
-if not User.objects.filter(username=username).exists():
+if username and email and password and not User.objects.filter(username=username).exists():
     User.objects.create_superuser(username, email, password)
-    print("✅ Superuser created")
-
+    print("Superuser created")
 EOF
+fi
 
-echo "🚀 Iniciando servidor Gunicorn..."
+echo "Starting process..."
 exec "$@"
-# exec gunicorn backend.wsgi:application --bind 0.0.0.0:8000

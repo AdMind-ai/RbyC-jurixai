@@ -15,12 +15,9 @@ urlpatterns = [
          name='openai-chat-send-message'),
     path('openai/chat/create-conversation/', ConversationForChatView.as_view(),
          name='openai-chat-create-conversation'),
-    # QuickDoc
     path('extract-content/file/', ExtractContentView.as_view(),
          name='extract-file-content'),
-    path('quickdoc/generate/', QuickDocGenerateView.as_view(),
-         name='quickdoc-generate'),
-    
+
     # Company Document Layout (draft document)
     path('company/document-layout/', CompanyDocumentLayoutView.as_view(),
          name='company-document-layout'),

@@ -1,0 +1,29 @@
+name: Deploy Backend to Lightsail
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/**"
+      - "infra/**"
+      - ".github/workflows/deploy-backend.yml"
+
+jobs:
+  deploy-backend:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy backend over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST }}
+          username: ${{ secrets.LIGHTSAIL_USERNAME }}
+          key: ${{ secrets.LIGHTSAIL_SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd ${{ secrets.LIGHTSAIL_APP_PATH }}
+            git fetch --all
+            git checkout "${{ github.ref_name }}"
+            git pull origin "${{ github.ref_name }}"
+            docker compose -f infra/docker-compose.yml up -d --build

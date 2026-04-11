@@ -2,15 +2,9 @@
 
 import os
 from celery import Celery
+from .settings_selector import get_settings_module
 
-settings_module = ''
-if 'RUNNING_IN_PRODUCTION' in os.environ:
-    settings_module = 'backend.azure-production'
-elif 'WEBSITE_HOSTNAME' in os.environ:
-    settings_module = 'backend.production'
-else:
-    settings_module = 'backend.settings'
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', settings_module)
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', get_settings_module())
 
 
 app = Celery("backend")

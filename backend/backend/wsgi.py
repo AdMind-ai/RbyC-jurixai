@@ -10,14 +10,8 @@ https://docs.djangoproject.com/en/5.1/howto/deployment/wsgi/
 import os
 
 from django.core.wsgi import get_wsgi_application
+from .settings_selector import get_settings_module
 
-settings_module = ''
-if 'RUNNING_IN_PRODUCTION' in os.environ:
-    settings_module = 'backend.azure-production'
-elif 'WEBSITE_HOSTNAME' in os.environ:
-    settings_module = 'backend.production'
-else:
-    settings_module = 'backend.settings'
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', settings_module)
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', get_settings_module())
 
 application = get_wsgi_application()

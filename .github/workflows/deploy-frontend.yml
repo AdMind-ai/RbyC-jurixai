@@ -1,0 +1,66 @@
+name: Deploy Frontend to Lightsail
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "frontend/**"
+      - ".github/workflows/deploy-frontend.yml"
+
+jobs:
+  build-and-deploy-frontend:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.14.0
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend
+        env:
+          VITE_API_BASE_URL_PROD: /api
+          VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
+        run: npm run build
+
+      - name: Copy frontend build to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST }}
+          username: ${{ secrets.LIGHTSAIL_USERNAME }}
+          key: ${{ secrets.LIGHTSAIL_SSH_PRIVATE_KEY }}
+          source: "frontend/dist/*"
+          target: "/tmp/rbyc-frontend"
+          strip_components: 2
+
+      - name: Activate frontend on server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST }}
+          username: ${{ secrets.LIGHTSAIL_USERNAME }}
+          key: ${{ secrets.LIGHTSAIL_SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd ${{ secrets.LIGHTSAIL_APP_PATH }}
+            git fetch --all
+            git checkout "${{ github.ref_name }}"
+            git pull origin "${{ github.ref_name }}"
+            sudo mkdir -p /var/www/rbyc-frontend
+            sudo rm -rf /var/www/rbyc-frontend/*
+            sudo cp -r /tmp/rbyc-frontend/* /var/www/rbyc-frontend/
+            sudo chown -R www-data:www-data /var/www/rbyc-frontend
+            sudo nginx -t
+            sudo systemctl reload nginx
