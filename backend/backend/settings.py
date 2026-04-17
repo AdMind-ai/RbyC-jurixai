@@ -20,20 +20,11 @@ from datetime import datetime
 load_dotenv()
 
 # File storage backend selector.
-# Defaults to Azure to preserve the current production behavior until the
-# migration switches the environment explicitly.
-FILE_STORAGE_BACKEND = os.environ.get('FILE_STORAGE_BACKEND', 'azure').lower()
+FILE_STORAGE_BACKEND = os.environ.get('FILE_STORAGE_BACKEND', 'filesystem').lower()
 
 # Environment Keys
 OPENAI_KEY = os.environ['OPENAI_KEY']
 DEEPL_KEY = os.environ['DEEPL_KEY']
-
-# Azure Storage
-AZURE_ACCOUNT_NAME = "jurixaistorage"
-AZURE_CONTAINER = 'jurixai-rbyc-storage'
-AZURE_ACCOUNT_KEY = os.environ.get('AZURE_ACCOUNT_KEY')
-AZURE_CONNECTION_STRING = os.environ.get('AZURE_CONNECTION_STRING')
-AZURE_OVERWRITE_FILES = True
 
 # OPENAI_ASSISTANT_ID_RBYC_LAW_CONSULTANT = os.environ.get('OPENAI_ASSISTANT_ID_RBYC_LAW_CONSULTANT')
 
@@ -81,6 +72,8 @@ USAGE_DEFAULT_PRICES = {
     },
 }
 
+MCP_SERVER_URL = os.environ.get('MCP_SERVER_URL', 'https://mcp-server-ricerca-rbyc.onrender.com/sse')
+
 
 keys = [
     'OPENAI_KEY',
@@ -101,14 +94,9 @@ keys = [
     'PERPLEXITY_API_KEY',
     'COST_AGGREGATOR_API_KEY',
     'COST_AGGREGATOR_PROJECT_ID',
-    'COST_AGGREGATOR_PROJECT_NAME'
+    'COST_AGGREGATOR_PROJECT_NAME',
+    'MCP_SERVER_URL'
 ]
-
-if FILE_STORAGE_BACKEND == 'azure':
-    keys.extend([
-        'AZURE_ACCOUNT_KEY',
-        'AZURE_CONNECTION_STRING',
-    ])
 
 missing_keys = [key for key in keys if not os.getenv(key)]
 
@@ -313,9 +301,7 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 
 # Storage configuration for handling static and media files.
-if FILE_STORAGE_BACKEND == 'azure':
-    default_storage_backend = "storages.backends.azure_storage.AzureStorage"
-elif FILE_STORAGE_BACKEND == 's3':
+if FILE_STORAGE_BACKEND == 's3':
     default_storage_backend = "storages.backends.s3.S3Storage"
 else:
     default_storage_backend = "django.core.files.storage.FileSystemStorage"
