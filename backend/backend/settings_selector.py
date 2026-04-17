@@ -6,8 +6,4 @@ def get_settings_module() -> str:
     if explicit_settings:
         return explicit_settings
 
-    if 'RUNNING_IN_PRODUCTION' in os.environ:
-        return 'backend.azure_production'
-    if 'WEBSITE_HOSTNAME' in os.environ:
-        return 'backend.production'
     return 'backend.settings'
