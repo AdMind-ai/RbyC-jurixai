@@ -3,6 +3,7 @@ from time import perf_counter
 
 from django.conf import settings
 from django.db.models import Q
+from django.http import JsonResponse
 from rest_framework import serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -125,7 +126,6 @@ class InternalDocumentIndexView(APIView):
             for document in documents
         ]
 
-        serializer = self.OutputSerializer(payload, many=True)
         duration_ms = round((perf_counter() - started_at) * 1000, 2)
         logger.info(
             "[document_index] request_completed duration_ms=%s customer_code=%s returned_documents=%s limit=%s query=%s year=%s extension=%s filename_contains=%s path_contains=%s sort_by=%s sort_order=%s",
@@ -141,4 +141,4 @@ class InternalDocumentIndexView(APIView):
             sort_by,
             sort_order,
         )
-        return Response(serializer.data)
+        return JsonResponse(payload, safe=False)
