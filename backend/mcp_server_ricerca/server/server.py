@@ -3,6 +3,7 @@ import base64
 import logging
 import os
 import tempfile
+import unicodedata
 import urllib.parse
 from time import perf_counter
 from typing import Optional
@@ -50,6 +51,7 @@ s3 = boto3.client(
 INSTRUCTIONS = """
 Servidor MCP para listagem e leitura de documentos armazenados no S3.
 Ferramentas disponiveis:
+- search_documents: busca documentos relevantes no indice e retorna metadados com preview curto. Use primeiro para perguntas amplas, exploratorias ou tematicas.
 - list_documents: lista arquivos no bucket com filtros opcionais para reduzir o universo de busca
 - get_document: retorna um trecho do conteudo do arquivo por padrao. Use mode='full' apenas quando precisar de leitura completa. Use mode='ocr' somente como ultima alternativa para PDFs indispensaveis sem texto nativo.
 """
@@ -116,6 +118,7 @@ def _serialize_document_metadata(obj: dict) -> dict:
 def _list_documents_from_index(
     query: str = "",
     year: str = "",
+    document_type: str = "",
     extension: str = "",
     filename_contains: str = "",
     path_contains: str = "",
@@ -130,6 +133,7 @@ def _list_documents_from_index(
         "customer_code": MCP_CUSTOMER_CODE,
         "query": query,
         "year": year,
+        "document_type": document_type,
         "extension": extension,
         "filename_contains": filename_contains,
         "path_contains": path_contains,
@@ -188,6 +192,173 @@ def _list_documents_from_index(
             parsed_url.path or "<empty>",
         )
         return None
+
+
+def _normalize_search_value(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value or "")
+    normalized = "".join(
+        char for char in normalized if not unicodedata.combining(char)
+    )
+    return " ".join(normalized.casefold().split())
+
+
+def _query_terms(query: str) -> list[str]:
+    normalized = _normalize_search_value(query)
+    return [term for term in normalized.split() if len(term) > 2][:8]
+
+
+def _is_searchable_document(document: dict) -> bool:
+    filename = (document.get("filename") or "").strip()
+    key = (document.get("key") or document.get("path") or "").strip()
+    if not filename or key.endswith("/"):
+        return False
+    return True
+
+
+def _score_search_document(document: dict, query: str) -> int:
+    terms = _query_terms(query)
+    if not terms:
+        return 0
+
+    filename = _normalize_search_value(document.get("filename") or "")
+    key = _normalize_search_value(document.get("key") or document.get("path") or "")
+    document_type = _normalize_search_value(document.get("document_type") or "")
+    preview = _normalize_search_value(document.get("text_preview") or "")
+
+    score = 0
+    for term in terms:
+        if term in filename:
+            score += 6
+        if term in document_type:
+            score += 4
+        if term in key:
+            score += 3
+        if preview and term in preview:
+            score += 2
+
+    if document.get("text_preview"):
+        score += 1
+    return score
+
+
+def _compact_preview(document: dict, max_chars: int) -> str:
+    preview = " ".join((document.get("text_preview") or "").split())
+    if len(preview) <= max_chars:
+        return preview
+    return f"{preview[:max_chars].rstrip()}..."
+
+
+def _document_search_queries(query: str) -> list[str]:
+    cleaned = " ".join((query or "").strip().split())
+    normalized = _normalize_search_value(cleaned)
+    queries = []
+    for candidate in [cleaned, normalized]:
+        if candidate and candidate not in queries:
+            queries.append(candidate)
+
+    if len(_query_terms(cleaned)) > 1:
+        for term in _query_terms(cleaned):
+            if term not in queries:
+                queries.append(term)
+    return queries[:6] or [""]
+
+
+def _dedupe_documents(documents: list[dict]) -> list[dict]:
+    seen_keys = set()
+    deduped = []
+    for document in documents:
+        key = document.get("key") or document.get("path") or document.get("filename")
+        if not key or key in seen_keys:
+            continue
+        seen_keys.add(key)
+        deduped.append(document)
+    return deduped
+
+
+@mcp.tool()
+async def search_documents(
+    query: str,
+    year: str = "",
+    document_type: str = "",
+    extension: str = "",
+    limit: int = 5,
+    preview_chars: int = 1200,
+) -> list:
+    """
+    Busca documentos relevantes usando o indice e retorna metadados com preview.
+
+    Use esta ferramenta antes de get_document para perguntas amplas, exploratorias
+    ou tematicas. Ela reduz leituras completas e evita OCR desnecessario.
+    """
+    started_at = perf_counter()
+    limit = max(1, min(limit, 20))
+    preview_chars = max(300, min(preview_chars, 3000))
+    candidate_limit = max(20, min(limit * 8, 100))
+
+    candidate_documents = []
+    for search_query in _document_search_queries(query):
+        documents = _list_documents_from_index(
+            query=search_query,
+            year=year,
+            document_type=document_type,
+            extension=extension,
+            limit=candidate_limit,
+            sort_by="last_modified",
+            sort_order="desc",
+        )
+        if documents is None:
+            duration_ms = round((perf_counter() - started_at) * 1000, 2)
+            logger.warning(
+                "[mcp_ricerca] search_documents unavailable duration_ms=%s query=%s customer_code=%s",
+                duration_ms,
+                query or "<empty>",
+                MCP_CUSTOMER_CODE or "<empty>",
+            )
+            return []
+        candidate_documents.extend(documents)
+        if len(_dedupe_documents(candidate_documents)) >= candidate_limit:
+            break
+
+    unique_documents = [
+        document
+        for document in _dedupe_documents(candidate_documents)
+        if _is_searchable_document(document)
+    ]
+    ranked_documents = sorted(
+        unique_documents,
+        key=lambda document: _score_search_document(document, query),
+        reverse=True,
+    )
+
+    results = []
+    for document in ranked_documents[:limit]:
+        results.append(
+            {
+                "key": document.get("key") or document.get("path") or "",
+                "filename": document.get("filename") or "",
+                "extension": document.get("extension") or "",
+                "year": document.get("year") or "",
+                "document_type": document.get("document_type") or "",
+                "last_modified": document.get("last_modified"),
+                "size_bytes": document.get("size_bytes") or 0,
+                "preview": _compact_preview(document, preview_chars),
+                "relevance_score": _score_search_document(document, query),
+            }
+        )
+
+    duration_ms = round((perf_counter() - started_at) * 1000, 2)
+    logger.info(
+        "[mcp_ricerca] search_documents completed duration_ms=%s returned_documents=%s candidates=%s query=%s year=%s document_type=%s extension=%s customer_code=%s",
+        duration_ms,
+        len(results),
+        len(unique_documents),
+        query or "<empty>",
+        year or "<empty>",
+        document_type or "<empty>",
+        extension or "<empty>",
+        MCP_CUSTOMER_CODE or "<empty>",
+    )
+    return results
 
 
 def _resolve_document_from_index(filename: str) -> Optional[dict]:
