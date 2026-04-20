@@ -1,3 +1,6 @@
+import logging
+from time import perf_counter
+
 from django.conf import settings
 from django.db.models import Q
 from rest_framework import serializers, status
@@ -5,6 +8,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from integrations.models import DocumentIndex
+
+
+logger = logging.getLogger(__name__)
 
 
 class InternalDocumentIndexView(APIView):
@@ -23,6 +29,7 @@ class InternalDocumentIndexView(APIView):
         text_preview = serializers.CharField(allow_blank=True)
 
     def get(self, request):
+        started_at = perf_counter()
         expected_key = getattr(settings, "DOCUMENT_INDEX_API_KEY", None)
         provided_key = request.headers.get("X-Internal-API-Key")
         if not expected_key or provided_key != expected_key:
@@ -55,6 +62,18 @@ class InternalDocumentIndexView(APIView):
             client__customer_code=customer_code,
             client__active=True,
             active=True,
+        ).only(
+            "object_key",
+            "filename",
+            "extension",
+            "size_bytes",
+            "last_modified",
+            "year",
+            "document_type",
+            "text_preview",
+            "indexed_at",
+            "client__customer_code",
+            "client__active",
         )
 
         if year:
@@ -73,12 +92,12 @@ class InternalDocumentIndexView(APIView):
             documents = documents.filter(object_key__icontains=path_contains)
 
         if query:
-            for term in [item for item in query.split() if item]:
+            for term in [item for item in query.split() if item][:6]:
                 documents = documents.filter(
                     Q(filename__icontains=term)
                     | Q(object_key__icontains=term)
                     | Q(document_type__icontains=term)
-                    | Q(text_preview__icontains=term)
+                    | Q(year__icontains=term)
                 )
 
         order_fields = {
@@ -90,7 +109,7 @@ class InternalDocumentIndexView(APIView):
         if sort_order != "asc":
             order_field = f"-{order_field}"
 
-        documents = documents.order_by(order_field, "-indexed_at")[:limit]
+        documents = list(documents.order_by(order_field, "-indexed_at")[:limit])
         payload = [
             {
                 "key": document.object_key,
@@ -107,4 +126,19 @@ class InternalDocumentIndexView(APIView):
         ]
 
         serializer = self.OutputSerializer(payload, many=True)
+        duration_ms = round((perf_counter() - started_at) * 1000, 2)
+        logger.info(
+            "[document_index] request_completed duration_ms=%s customer_code=%s returned_documents=%s limit=%s query=%s year=%s extension=%s filename_contains=%s path_contains=%s sort_by=%s sort_order=%s",
+            duration_ms,
+            customer_code,
+            len(payload),
+            limit,
+            query or "<empty>",
+            year or "<empty>",
+            extension or "<empty>",
+            filename_contains or "<empty>",
+            path_contains or "<empty>",
+            sort_by,
+            sort_order,
+        )
         return Response(serializer.data)

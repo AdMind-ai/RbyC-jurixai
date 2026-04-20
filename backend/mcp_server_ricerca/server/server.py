@@ -3,13 +3,12 @@ import base64
 import logging
 import os
 import tempfile
-import urllib.error
 import urllib.parse
-import urllib.request
 from time import perf_counter
 from typing import Optional
 
 import boto3
+import requests
 from fastmcp import FastMCP
 from botocore.exceptions import ClientError
 
@@ -37,6 +36,9 @@ BUCKET_NAME = os.getenv("S3_BUCKET", "rbyc")
 DOCUMENT_INDEX_API_URL = os.getenv("DOCUMENT_INDEX_API_URL", "").strip()
 DOCUMENT_INDEX_API_KEY = os.getenv("DOCUMENT_INDEX_API_KEY", "").strip()
 MCP_CUSTOMER_CODE = os.getenv("MCP_CUSTOMER_CODE", "default").strip()
+DOCUMENT_INDEX_TIMEOUT_SECONDS = float(
+    os.getenv("DOCUMENT_INDEX_TIMEOUT_SECONDS", "10")
+)
 
 s3 = boto3.client(
     "s3",
@@ -136,31 +138,54 @@ def _list_documents_from_index(
         "sort_order": sort_order,
     }
     url = f"{DOCUMENT_INDEX_API_URL}?{urllib.parse.urlencode(params)}"
-    request = urllib.request.Request(
-        url,
-        headers={
-            "Accept": "application/json",
-            "X-Internal-API-Key": DOCUMENT_INDEX_API_KEY,
-        },
-        method="GET",
+    parsed_url = urllib.parse.urlparse(DOCUMENT_INDEX_API_URL)
+    request_started_at = perf_counter()
+    logger.info(
+        "[mcp_ricerca] document_index_request host=%s path=%s customer_code=%s timeout_seconds=%s",
+        parsed_url.netloc or "<empty>",
+        parsed_url.path or "<empty>",
+        MCP_CUSTOMER_CODE or "<empty>",
+        DOCUMENT_INDEX_TIMEOUT_SECONDS,
     )
-
     try:
-        with urllib.request.urlopen(request, timeout=10) as response:
-            if response.status != 200:
-                logger.warning(
-                    "[mcp_ricerca] document_index_unavailable status=%s",
-                    response.status,
-                )
-                return None
-            payload = response.read().decode("utf-8")
-            import json
+        response = requests.get(
+            url,
+            headers={
+                "Accept": "application/json",
+                "Accept-Encoding": "identity",
+                "Connection": "close",
+                "User-Agent": "rbyc-mcp-document-index/1.0",
+                "X-Internal-API-Key": DOCUMENT_INDEX_API_KEY,
+            },
+            timeout=DOCUMENT_INDEX_TIMEOUT_SECONDS,
+        )
+        duration_ms = round((perf_counter() - request_started_at) * 1000, 2)
+        if response.status_code != 200:
+            logger.warning(
+                "[mcp_ricerca] document_index_unavailable status=%s duration_ms=%s response_length=%s",
+                response.status_code,
+                duration_ms,
+                len(response.content),
+            )
+            return None
 
-            return json.loads(payload)
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError) as exc:
+        documents = response.json()
+        logger.info(
+            "[mcp_ricerca] document_index_response status=%s duration_ms=%s returned_documents=%s response_length=%s",
+            response.status_code,
+            duration_ms,
+            len(documents) if isinstance(documents, list) else "<unknown>",
+            len(response.content),
+        )
+        return documents
+    except (requests.RequestException, ValueError) as exc:
+        duration_ms = round((perf_counter() - request_started_at) * 1000, 2)
         logger.warning(
-            "[mcp_ricerca] document_index_unavailable error=%s",
+            "[mcp_ricerca] document_index_unavailable error=%s duration_ms=%s host=%s path=%s",
             exc,
+            duration_ms,
+            parsed_url.netloc or "<empty>",
+            parsed_url.path or "<empty>",
         )
         return None
 

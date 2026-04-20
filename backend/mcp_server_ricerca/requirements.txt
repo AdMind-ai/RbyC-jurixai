@@ -1,5 +1,6 @@
 fastmcp==2.13.1
 boto3==1.40.75
+requests==2.32.3
 aiohttp==3.8.1
 pypdf==5.6.0
 python-docx==1.2.0
