@@ -190,6 +190,79 @@ def _list_documents_from_index(
         return None
 
 
+def _resolve_document_key_from_index(filename: str) -> Optional[str]:
+    requested_filename = (filename or "").strip()
+    if not requested_filename or "/" in requested_filename:
+        return None
+
+    documents = _list_documents_from_index(
+        filename_contains=requested_filename,
+        limit=10,
+        sort_by="last_modified",
+        sort_order="desc",
+    )
+    if not documents:
+        return None
+
+    requested_lower = requested_filename.lower()
+    exact_matches = [
+        document
+        for document in documents
+        if (document.get("filename") or "").lower() == requested_lower
+        or (document.get("key") or "").lower().endswith(f"/{requested_lower}")
+    ]
+    if not exact_matches:
+        logger.info(
+            "[mcp_ricerca] resolve_document_key skipped filename=%s candidates=%s",
+            requested_filename,
+            len(documents),
+        )
+        return None
+
+    resolved_key = exact_matches[0].get("key")
+    if resolved_key and resolved_key != requested_filename:
+        logger.info(
+            "[mcp_ricerca] resolve_document_key completed filename=%s resolved_key=%s candidates=%s",
+            requested_filename,
+            resolved_key,
+            len(exact_matches),
+        )
+    return resolved_key
+
+
+def _get_document_preview_from_index(document_key: str) -> Optional[str]:
+    if not document_key:
+        return None
+
+    documents = _list_documents_from_index(
+        path_contains=document_key,
+        limit=5,
+        sort_by="last_modified",
+        sort_order="desc",
+    )
+    if not documents:
+        return None
+
+    exact_matches = [
+        document
+        for document in documents
+        if (document.get("key") or "") == document_key
+        or (document.get("path") or "") == document_key
+    ]
+    if not exact_matches:
+        return None
+
+    preview = (exact_matches[0].get("text_preview") or "").strip()
+    if preview:
+        logger.info(
+            "[mcp_ricerca] get_document_preview completed filename=%s preview_chars=%s",
+            document_key,
+            len(preview),
+        )
+        return preview
+    return None
+
+
 @mcp.tool()
 async def list_documents(
     query: str = "",
@@ -425,27 +498,53 @@ async def get_document(
 
     Use OCR apenas se o documento for claramente necessario e nao houver fonte alternativa mais leve.
     """
-    ext = os.path.splitext(filename)[1].lower()
     started_at = perf_counter()
+    requested_filename = filename
+    resolved_filename = _resolve_document_key_from_index(filename) or filename
+    ext = os.path.splitext(resolved_filename)[1].lower()
     mode = (mode or "excerpt").strip().lower()
     if mode not in {"excerpt", "full", "ocr"}:
         mode = "excerpt"
     max_chars = max(1000, min(max_chars, 50000))
 
+    if mode == "excerpt":
+        preview = _get_document_preview_from_index(resolved_filename)
+        if preview:
+            returned_content = _truncate_text(
+                preview,
+                max_chars=max_chars,
+                metadata_prefix=(
+                    f"filename={resolved_filename}\n"
+                    f"mode=preview\n"
+                    f"source=document_index"
+                ),
+            )
+            duration_ms = round((perf_counter() - started_at) * 1000, 2)
+            logger.info(
+                "[mcp_ricerca] get_document completed source=preview filename=%s requested_filename=%s ext=%s mode=%s duration_ms=%s returned_chars=%s",
+                resolved_filename,
+                requested_filename,
+                ext or "<none>",
+                mode,
+                duration_ms,
+                len(returned_content),
+            )
+            return returned_content
+
     with tempfile.NamedTemporaryFile(delete=True, suffix=ext) as tmp:
         try:
-            s3.download_fileobj(BUCKET_NAME, filename, tmp)
+            s3.download_fileobj(BUCKET_NAME, resolved_filename, tmp)
         except ClientError as exc:
             error_code = exc.response.get("Error", {}).get("Code")
             duration_ms = round((perf_counter() - started_at) * 1000, 2)
             logger.warning(
                 "[mcp_ricerca] get_document_not_found filename=%s duration_ms=%s error_code=%s",
-                filename,
+                resolved_filename,
                 duration_ms,
                 error_code or "<unknown>",
             )
             return (
-                f"[ERRO] Documento nao encontrado ou indisponivel: {filename}. "
+                f"[ERRO] Documento nao encontrado ou indisponivel: {requested_filename}. "
                 "Tente listar novamente os documentos antes de abrir este arquivo."
             )
 
@@ -471,7 +570,7 @@ async def get_document(
             returned_content = content
             if mode != "full" and ext not in {".txt", ".md", ".csv"}:
                 metadata_prefix = (
-                    f"filename={filename}\n"
+                    f"filename={resolved_filename}\n"
                     f"mode={mode}\n"
                     f"file_extension={ext or '<none>'}\n"
                     f"file_size_bytes={file_size_bytes}"
@@ -484,8 +583,9 @@ async def get_document(
 
             duration_ms = round((perf_counter() - started_at) * 1000, 2)
             logger.info(
-                "[mcp_ricerca] get_document completed filename=%s ext=%s mode=%s duration_ms=%s file_size_bytes=%s extracted_chars=%s returned_chars=%s",
-                filename,
+                "[mcp_ricerca] get_document completed filename=%s requested_filename=%s ext=%s mode=%s duration_ms=%s file_size_bytes=%s extracted_chars=%s returned_chars=%s",
+                resolved_filename,
+                requested_filename,
                 ext or "<none>",
                 mode,
                 duration_ms,
@@ -497,7 +597,7 @@ async def get_document(
         except Exception as e:
             logger.error(
                 "[ERROR] Falha ao processar arquivo %s: %s",
-                filename,
+                resolved_filename,
                 e,
                 exc_info=True,
             )
