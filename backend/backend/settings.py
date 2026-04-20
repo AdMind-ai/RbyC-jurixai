@@ -73,6 +73,9 @@ USAGE_DEFAULT_PRICES = {
 }
 
 MCP_SERVER_URL = os.environ.get('MCP_SERVER_URL', 'https://mcp-server-ricerca-rbyc.onrender.com/sse')
+DOCUMENT_INDEX_API_KEY = os.environ.get('DOCUMENT_INDEX_API_KEY')
+DOCUMENT_INDEX_API_URL = os.environ.get('DOCUMENT_INDEX_API_URL')
+DOCUMENT_INDEX_CUSTOMER_CODE = os.environ.get('DOCUMENT_INDEX_CUSTOMER_CODE', 'default')
 
 
 keys = [
@@ -92,9 +95,6 @@ keys = [
     'FRONTEND_URL',
     'INTEGRATION_API_KEY',
     'PERPLEXITY_API_KEY',
-    'COST_AGGREGATOR_API_KEY',
-    'COST_AGGREGATOR_PROJECT_ID',
-    'COST_AGGREGATOR_PROJECT_NAME',
     'MCP_SERVER_URL'
 ]
 
@@ -107,6 +107,7 @@ if missing_keys:
 CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', "redis://localhost:6379/0")
 CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', CELERY_BROKER_URL)
 CELERY_TIMEZONE = "Europe/Rome"
+DOCUMENT_INDEX_SYNC_MINUTES = int(os.environ.get('DOCUMENT_INDEX_SYNC_MINUTES', '15'))
 
 now = datetime.now()
 current_year = now.year
@@ -116,6 +117,11 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'core.tasks.test_task',
         'schedule': crontab(hour=8, minute=0),
         'args': ('test',)
+    },
+    'sync_document_indexes': {
+        'task': 'integrations.tasks.sync_all_document_indexes_task',
+        'schedule': crontab(minute=f'*/{DOCUMENT_INDEX_SYNC_MINUTES}'),
+        'kwargs': {'deactivate_missing': False},
     },
 }
 
@@ -242,12 +248,24 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+if os.environ.get("DB_ENGINE") == "django.db.backends.postgresql":
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.environ.get("DB_NAME"),
+            "USER": os.environ.get("DB_USER"),
+            "PASSWORD": os.environ.get("DB_PASSWORD"),
+            "HOST": os.environ.get("DB_HOST", "127.0.0.1"),
+            "PORT": os.environ.get("DB_PORT", "5432"),
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
 
 
 # Password validation

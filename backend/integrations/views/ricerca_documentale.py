@@ -69,12 +69,20 @@ class RicercaDocumentaleView(APIView):
         prompt = serializer.validated_data["input"]
         conversation_id = serializer.validated_data.get("conversation_id")
         prompt_length = len(prompt or "")
+        integration_client = getattr(request.auth, "client", None)
+        bucket_name = (
+            getattr(integration_client, "bucket_name", None)
+            or getattr(settings, "AWS_STORAGE_BUCKET_NAME", None)
+        )
+        client_name = getattr(integration_client, "client_name", None)
 
         logger.info(
-            "[ricerca_documentale][%s] request_started conversation_id=%s prompt_length=%s",
+            "[ricerca_documentale][%s] request_started conversation_id=%s prompt_length=%s client=%s bucket=%s",
             request_id,
             conversation_id or "<new>",
             prompt_length,
+            client_name or "<fallback>",
+            bucket_name or "<empty>",
         )
 
         thread_started_at = perf_counter()
@@ -198,7 +206,7 @@ class RicercaDocumentaleView(APIView):
         presign_started_at = perf_counter()
         if response_keys:
             try:
-                documents_urls = get_presigned_urls(response_keys)
+                documents_urls = get_presigned_urls(response_keys, bucket=bucket_name)
             except Exception:
                 logger.exception(
                     "[ricerca_documentale][%s] presigned_url_generation_failed keys_count=%s",
