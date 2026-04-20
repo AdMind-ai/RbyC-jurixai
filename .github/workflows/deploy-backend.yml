@@ -8,7 +8,8 @@ on:
       - "backend/**"
       - "infra/**"
       - ".github/workflows/deploy-backend.yml"
-
+  workflow_dispatch:
+    
 jobs:
   deploy-backend:
     runs-on: ubuntu-latest
