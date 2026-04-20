@@ -24,4 +24,4 @@ USER appuser
 
 
 ENTRYPOINT ["/app/entrypoint.sh"]
-CMD ["gunicorn", "backend.wsgi:application", "--bind", "0.0.0.0:8000", "--timeout", "600", "--access-logfile", "-", "--error-logfile", "-"]
+CMD ["sh", "-c", "gunicorn backend.wsgi:application --bind 0.0.0.0:8000 --worker-class gthread --workers ${WEB_CONCURRENCY:-3} --threads ${GUNICORN_THREADS:-4} --timeout ${GUNICORN_TIMEOUT:-600} --access-logfile - --error-logfile -"]

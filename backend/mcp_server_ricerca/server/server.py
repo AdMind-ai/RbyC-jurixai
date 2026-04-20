@@ -3,10 +3,12 @@ import base64
 import logging
 import os
 import tempfile
+import urllib.parse
 from time import perf_counter
 from typing import Optional
 
 import boto3
+import requests
 from fastmcp import FastMCP
 from botocore.exceptions import ClientError
 
@@ -31,6 +33,12 @@ def extract_text_from_doc(filepath: str) -> str:
 
 
 BUCKET_NAME = os.getenv("S3_BUCKET", "rbyc")
+DOCUMENT_INDEX_API_URL = os.getenv("DOCUMENT_INDEX_API_URL", "").strip()
+DOCUMENT_INDEX_API_KEY = os.getenv("DOCUMENT_INDEX_API_KEY", "").strip()
+MCP_CUSTOMER_CODE = os.getenv("MCP_CUSTOMER_CODE", "default").strip()
+DOCUMENT_INDEX_TIMEOUT_SECONDS = float(
+    os.getenv("DOCUMENT_INDEX_TIMEOUT_SECONDS", "10")
+)
 
 s3 = boto3.client(
     "s3",
@@ -43,7 +51,7 @@ INSTRUCTIONS = """
 Servidor MCP para listagem e leitura de documentos armazenados no S3.
 Ferramentas disponiveis:
 - list_documents: lista arquivos no bucket com filtros opcionais para reduzir o universo de busca
-- get_document: retorna um trecho do conteudo do arquivo por padrao, ou o conteudo completo quando explicitamente solicitado
+- get_document: retorna um trecho do conteudo do arquivo por padrao. Use mode='full' apenas quando precisar de leitura completa. Use mode='ocr' somente como ultima alternativa para PDFs indispensaveis sem texto nativo.
 """
 
 mcp = FastMCP(name=BUCKET_NAME, instructions=INSTRUCTIONS)
@@ -105,6 +113,177 @@ def _serialize_document_metadata(obj: dict) -> dict:
     }
 
 
+def _list_documents_from_index(
+    query: str = "",
+    year: str = "",
+    extension: str = "",
+    filename_contains: str = "",
+    path_contains: str = "",
+    limit: int = 200,
+    sort_by: str = "last_modified",
+    sort_order: str = "desc",
+) -> Optional[list]:
+    if not DOCUMENT_INDEX_API_URL or not DOCUMENT_INDEX_API_KEY:
+        return None
+
+    params = {
+        "customer_code": MCP_CUSTOMER_CODE,
+        "query": query,
+        "year": year,
+        "extension": extension,
+        "filename_contains": filename_contains,
+        "path_contains": path_contains,
+        "limit": str(limit),
+        "sort_by": sort_by,
+        "sort_order": sort_order,
+    }
+    url = f"{DOCUMENT_INDEX_API_URL}?{urllib.parse.urlencode(params)}"
+    parsed_url = urllib.parse.urlparse(DOCUMENT_INDEX_API_URL)
+    request_started_at = perf_counter()
+    logger.info(
+        "[mcp_ricerca] document_index_request host=%s path=%s customer_code=%s timeout_seconds=%s",
+        parsed_url.netloc or "<empty>",
+        parsed_url.path or "<empty>",
+        MCP_CUSTOMER_CODE or "<empty>",
+        DOCUMENT_INDEX_TIMEOUT_SECONDS,
+    )
+    try:
+        response = requests.get(
+            url,
+            headers={
+                "Accept": "application/json",
+                "Accept-Encoding": "identity",
+                "Connection": "close",
+                "User-Agent": "rbyc-mcp-document-index/1.0",
+                "X-Internal-API-Key": DOCUMENT_INDEX_API_KEY,
+            },
+            timeout=DOCUMENT_INDEX_TIMEOUT_SECONDS,
+        )
+        duration_ms = round((perf_counter() - request_started_at) * 1000, 2)
+        if response.status_code != 200:
+            logger.warning(
+                "[mcp_ricerca] document_index_unavailable status=%s duration_ms=%s response_length=%s",
+                response.status_code,
+                duration_ms,
+                len(response.content),
+            )
+            return None
+
+        documents = response.json()
+        logger.info(
+            "[mcp_ricerca] document_index_response status=%s duration_ms=%s returned_documents=%s response_length=%s",
+            response.status_code,
+            duration_ms,
+            len(documents) if isinstance(documents, list) else "<unknown>",
+            len(response.content),
+        )
+        return documents
+    except (requests.RequestException, ValueError) as exc:
+        duration_ms = round((perf_counter() - request_started_at) * 1000, 2)
+        logger.warning(
+            "[mcp_ricerca] document_index_unavailable error=%s duration_ms=%s host=%s path=%s",
+            exc,
+            duration_ms,
+            parsed_url.netloc or "<empty>",
+            parsed_url.path or "<empty>",
+        )
+        return None
+
+
+def _resolve_document_from_index(filename: str) -> Optional[dict]:
+    requested_filename = (filename or "").strip()
+    if not requested_filename or "/" in requested_filename:
+        return None
+
+    documents = _list_documents_from_index(
+        filename_contains=requested_filename,
+        limit=10,
+        sort_by="last_modified",
+        sort_order="desc",
+    )
+    if not documents:
+        return None
+
+    requested_lower = requested_filename.lower()
+    exact_matches = [
+        document
+        for document in documents
+        if (document.get("filename") or "").lower() == requested_lower
+        or (document.get("key") or "").lower().endswith(f"/{requested_lower}")
+    ]
+    if not exact_matches:
+        logger.info(
+            "[mcp_ricerca] resolve_document_key skipped filename=%s candidates=%s",
+            requested_filename,
+            len(documents),
+        )
+        return None
+
+    resolved_document = exact_matches[0]
+    resolved_key = resolved_document.get("key")
+    if resolved_key and resolved_key != requested_filename:
+        logger.info(
+            "[mcp_ricerca] resolve_document_key completed filename=%s resolved_key=%s candidates=%s",
+            requested_filename,
+            resolved_key,
+            len(exact_matches),
+        )
+    return resolved_document
+
+
+def _resolve_document_key_from_index(filename: str) -> Optional[str]:
+    document = _resolve_document_from_index(filename)
+    return document.get("key") if document else None
+
+
+def _get_document_preview_from_index(document_key: str) -> Optional[str]:
+    if not document_key:
+        return None
+
+    documents = _list_documents_from_index(
+        path_contains=document_key,
+        limit=5,
+        sort_by="last_modified",
+        sort_order="desc",
+    )
+    if not documents:
+        return None
+
+    exact_matches = [
+        document
+        for document in documents
+        if (document.get("key") or "") == document_key
+        or (document.get("path") or "") == document_key
+    ]
+    if not exact_matches:
+        return None
+
+    preview = (exact_matches[0].get("text_preview") or "").strip()
+    if preview:
+        logger.info(
+            "[mcp_ricerca] get_document_preview completed filename=%s preview_chars=%s",
+            document_key,
+            len(preview),
+        )
+        return preview
+    return None
+
+
+def _get_document_preview_from_document(document: Optional[dict]) -> Optional[str]:
+    if not document:
+        return None
+    document_key = document.get("key") or document.get("path") or ""
+    preview = (document.get("text_preview") or "").strip()
+    if preview:
+        logger.info(
+            "[mcp_ricerca] get_document_preview completed filename=%s preview_chars=%s source=resolved_document",
+            document_key,
+            len(preview),
+        )
+        return preview
+    return None
+
+
 @mcp.tool()
 async def list_documents(
     query: str = "",
@@ -118,7 +297,6 @@ async def list_documents(
 ) -> list:
     """Lista arquivos do bucket com filtros, ordenacao e metadados para descoberta rapida."""
     started_at = perf_counter()
-    response = s3.list_objects_v2(Bucket=BUCKET_NAME)
     limit = max(1, min(limit, 300))
     sort_by = (sort_by or "last_modified").strip().lower()
     sort_order = (sort_order or "desc").strip().lower()
@@ -126,6 +304,36 @@ async def list_documents(
         sort_by = "last_modified"
     if sort_order not in {"asc", "desc"}:
         sort_order = "desc"
+
+    indexed_documents = _list_documents_from_index(
+        query=query,
+        year=year,
+        extension=extension,
+        filename_contains=filename_contains,
+        path_contains=path_contains,
+        limit=limit,
+        sort_by=sort_by,
+        sort_order=sort_order,
+    )
+    if indexed_documents is not None:
+        duration_ms = round((perf_counter() - started_at) * 1000, 2)
+        logger.info(
+            "[mcp_ricerca] list_documents completed source=index duration_ms=%s returned_documents=%s limit=%s sort_by=%s sort_order=%s query=%s year=%s extension=%s filename_contains=%s path_contains=%s customer_code=%s",
+            duration_ms,
+            len(indexed_documents),
+            limit,
+            sort_by,
+            sort_order,
+            query or "<empty>",
+            year or "<empty>",
+            extension or "<empty>",
+            filename_contains or "<empty>",
+            path_contains or "<empty>",
+            MCP_CUSTOMER_CODE or "<empty>",
+        )
+        return indexed_documents
+
+    response = s3.list_objects_v2(Bucket=BUCKET_NAME)
     contents = response.get("Contents", [])
     filtered_documents = [
         obj
@@ -154,7 +362,7 @@ async def list_documents(
     ]
     duration_ms = round((perf_counter() - started_at) * 1000, 2)
     logger.info(
-        "[mcp_ricerca] list_documents completed duration_ms=%s total_documents=%s filtered_documents=%s returned_documents=%s limit=%s sort_by=%s sort_order=%s query=%s year=%s extension=%s filename_contains=%s path_contains=%s",
+        "[mcp_ricerca] list_documents completed source=s3 duration_ms=%s total_documents=%s filtered_documents=%s returned_documents=%s limit=%s sort_by=%s sort_order=%s query=%s year=%s extension=%s filename_contains=%s path_contains=%s",
         duration_ms,
         len(contents),
         len(filtered_documents),
@@ -193,7 +401,7 @@ except ImportError:
     pytesseract = None
 
 
-def extract_text_from_pdf(filepath: str) -> str:
+def extract_text_from_pdf(filepath: str, use_ocr: bool = False) -> str:
     if not pypdf:
         return "[ERROR] pypdf nao instalado."
 
@@ -217,7 +425,7 @@ def extract_text_from_pdf(filepath: str) -> str:
                 texts.append(f"[ERRO ao extrair texto da pagina {i + 1}]")
 
         result = "\n".join(texts)
-        if not result.strip() and convert_from_path and pytesseract:
+        if not result.strip() and use_ocr and convert_from_path and pytesseract:
             used_ocr = True
             try:
                 images = convert_from_path(filepath)
@@ -250,7 +458,11 @@ def extract_text_from_pdf(filepath: str) -> str:
             len(result),
         )
         if not result.strip():
-            return "[ERRO] Nao foi possivel extrair texto deste PDF. Pode estar protegido, corrompido ou em formato nao suportado."
+            return (
+                "[ERRO] Nao foi possivel extrair texto nativo deste PDF no modo rapido. "
+                "O documento pode ser escaneado ou conter apenas imagem; use mode='ocr' "
+                "apenas se a leitura OCR for realmente necessaria."
+            )
         return result
     except Exception as e:
         logger.error("[PDF ERROR] Falha geral ao abrir PDF: %s", e, exc_info=True)
@@ -297,28 +509,70 @@ async def get_document(
     mode: str = "excerpt",
     max_chars: int = 12000,
 ) -> str:
-    """Baixa o arquivo do S3 e retorna um trecho por padrao; use mode='full' para ler tudo."""
-    ext = os.path.splitext(filename)[1].lower()
+    """
+    Baixa o arquivo do S3 e retorna um trecho por padrao.
+
+    Modos:
+    - excerpt: modo rapido padrao, sem OCR.
+    - full: leitura completa sem OCR.
+    - ocr: ultima alternativa para PDFs indispensaveis sem texto nativo.
+
+    Use OCR apenas se o documento for claramente necessario e nao houver fonte alternativa mais leve.
+    """
     started_at = perf_counter()
+    requested_filename = filename
+    resolved_document = _resolve_document_from_index(filename)
+    resolved_filename = (
+        resolved_document.get("key")
+        if resolved_document and resolved_document.get("key")
+        else filename
+    )
+    ext = os.path.splitext(resolved_filename)[1].lower()
     mode = (mode or "excerpt").strip().lower()
-    if mode not in {"excerpt", "full"}:
+    if mode not in {"excerpt", "full", "ocr"}:
         mode = "excerpt"
     max_chars = max(1000, min(max_chars, 50000))
 
+    if mode == "excerpt":
+        preview = _get_document_preview_from_document(resolved_document)
+        if not preview:
+            preview = _get_document_preview_from_index(resolved_filename)
+        if preview:
+            returned_content = _truncate_text(
+                preview,
+                max_chars=max_chars,
+                metadata_prefix=(
+                    f"filename={resolved_filename}\n"
+                    f"mode=preview\n"
+                    f"source=document_index"
+                ),
+            )
+            duration_ms = round((perf_counter() - started_at) * 1000, 2)
+            logger.info(
+                "[mcp_ricerca] get_document completed source=preview filename=%s requested_filename=%s ext=%s mode=%s duration_ms=%s returned_chars=%s",
+                resolved_filename,
+                requested_filename,
+                ext or "<none>",
+                mode,
+                duration_ms,
+                len(returned_content),
+            )
+            return returned_content
+
     with tempfile.NamedTemporaryFile(delete=True, suffix=ext) as tmp:
         try:
-            s3.download_fileobj(BUCKET_NAME, filename, tmp)
+            s3.download_fileobj(BUCKET_NAME, resolved_filename, tmp)
         except ClientError as exc:
             error_code = exc.response.get("Error", {}).get("Code")
             duration_ms = round((perf_counter() - started_at) * 1000, 2)
             logger.warning(
                 "[mcp_ricerca] get_document_not_found filename=%s duration_ms=%s error_code=%s",
-                filename,
+                resolved_filename,
                 duration_ms,
                 error_code or "<unknown>",
             )
             return (
-                f"[ERRO] Documento nao encontrado ou indisponivel: {filename}. "
+                f"[ERRO] Documento nao encontrado ou indisponivel: {requested_filename}. "
                 "Tente listar novamente os documentos antes de abrir este arquivo."
             )
 
@@ -330,7 +584,7 @@ async def get_document(
                 tmp.seek(0)
                 content = tmp.read().decode("utf-8", errors="replace")
             elif ext == ".pdf":
-                content = extract_text_from_pdf(tmp.name)
+                content = extract_text_from_pdf(tmp.name, use_ocr=(mode == "ocr"))
             elif ext == ".docx":
                 content = extract_text_from_docx(tmp.name)
             elif ext == ".doc":
@@ -344,7 +598,7 @@ async def get_document(
             returned_content = content
             if mode != "full" and ext not in {".txt", ".md", ".csv"}:
                 metadata_prefix = (
-                    f"filename={filename}\n"
+                    f"filename={resolved_filename}\n"
                     f"mode={mode}\n"
                     f"file_extension={ext or '<none>'}\n"
                     f"file_size_bytes={file_size_bytes}"
@@ -357,8 +611,9 @@ async def get_document(
 
             duration_ms = round((perf_counter() - started_at) * 1000, 2)
             logger.info(
-                "[mcp_ricerca] get_document completed filename=%s ext=%s mode=%s duration_ms=%s file_size_bytes=%s extracted_chars=%s returned_chars=%s",
-                filename,
+                "[mcp_ricerca] get_document completed filename=%s requested_filename=%s ext=%s mode=%s duration_ms=%s file_size_bytes=%s extracted_chars=%s returned_chars=%s",
+                resolved_filename,
+                requested_filename,
                 ext or "<none>",
                 mode,
                 duration_ms,
@@ -370,7 +625,7 @@ async def get_document(
         except Exception as e:
             logger.error(
                 "[ERROR] Falha ao processar arquivo %s: %s",
-                filename,
+                resolved_filename,
                 e,
                 exc_info=True,
             )
