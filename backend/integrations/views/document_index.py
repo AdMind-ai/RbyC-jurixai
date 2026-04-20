@@ -33,6 +33,20 @@ def search_variants(value: str) -> list[str]:
     return variants
 
 
+def build_document_search_filter(term: str, include_preview: bool = False) -> Q:
+    search_filter = Q()
+    for variant in search_variants(term):
+        search_filter |= (
+            Q(filename__icontains=variant)
+            | Q(object_key__icontains=variant)
+            | Q(document_type__icontains=variant)
+            | Q(year__icontains=variant)
+        )
+        if include_preview:
+            search_filter |= Q(text_preview__icontains=variant)
+    return search_filter
+
+
 class InternalDocumentIndexView(APIView):
     authentication_classes = []
     permission_classes = []
@@ -117,19 +131,24 @@ class InternalDocumentIndexView(APIView):
                 path_filter |= Q(object_key__icontains=variant)
             documents = documents.filter(path_filter)
 
-        if query:
-            for term in [item for item in query.split() if item][:6]:
-                term_filter = Q()
-                for variant in search_variants(term):
-                    term_filter |= (
-                        Q(filename__icontains=variant)
-                        | Q(object_key__icontains=variant)
-                        | Q(document_type__icontains=variant)
-                        | Q(year__icontains=variant)
-                    )
-                documents = documents.filter(
-                    term_filter
+        query_terms = [item for item in query.split() if item][:6]
+        if query_terms:
+            strict_documents = documents
+            for term in query_terms:
+                strict_documents = strict_documents.filter(
+                    build_document_search_filter(term)
                 )
+
+            if strict_documents.exists() or len(query_terms) == 1:
+                documents = strict_documents
+            else:
+                broad_filter = Q()
+                for term in query_terms:
+                    broad_filter |= build_document_search_filter(
+                        term,
+                        include_preview=True,
+                    )
+                documents = documents.filter(broad_filter)
 
         order_fields = {
             "last_modified": "last_modified",
