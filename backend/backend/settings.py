@@ -108,6 +108,9 @@ CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', "redis://localhost:6379/
 CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', CELERY_BROKER_URL)
 CELERY_TIMEZONE = "Europe/Rome"
 DOCUMENT_INDEX_SYNC_MINUTES = int(os.environ.get('DOCUMENT_INDEX_SYNC_MINUTES', '15'))
+DOCUMENT_PREVIEW_SYNC_MINUTES = int(os.environ.get('DOCUMENT_PREVIEW_SYNC_MINUTES', '10'))
+DOCUMENT_PREVIEW_SYNC_LIMIT = int(os.environ.get('DOCUMENT_PREVIEW_SYNC_LIMIT', '100'))
+DOCUMENT_PREVIEW_SYNC_CUSTOMER_CODE = os.environ.get('DOCUMENT_PREVIEW_SYNC_CUSTOMER_CODE', DOCUMENT_INDEX_CUSTOMER_CODE)
 
 now = datetime.now()
 current_year = now.year
@@ -122,6 +125,15 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'integrations.tasks.sync_all_document_indexes_task',
         'schedule': crontab(minute=f'*/{DOCUMENT_INDEX_SYNC_MINUTES}'),
         'kwargs': {'deactivate_missing': False},
+    },
+    'build_document_previews': {
+        'task': 'integrations.tasks.build_missing_document_previews_task',
+        'schedule': crontab(minute=f'*/{DOCUMENT_PREVIEW_SYNC_MINUTES}'),
+        'kwargs': {
+            'customer_code': DOCUMENT_PREVIEW_SYNC_CUSTOMER_CODE,
+            'limit': DOCUMENT_PREVIEW_SYNC_LIMIT,
+            'force': False,
+        },
     },
 }
 

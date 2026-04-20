@@ -3,6 +3,7 @@ import logging
 from celery import shared_task
 
 from integrations.services.document_index_sync import sync_all_document_indexes
+from integrations.services.document_preview import build_missing_document_previews
 
 
 logger = logging.getLogger(__name__)
@@ -24,4 +25,25 @@ def sync_all_document_indexes_task(deactivate_missing=False):
         for result in results
     ]
     logger.info("[document_index_sync] task_completed results=%s", summary)
+    return summary
+
+
+@shared_task
+def build_missing_document_previews_task(
+    customer_code="",
+    limit=100,
+    force=False,
+):
+    result = build_missing_document_previews(
+        customer_code=customer_code,
+        limit=limit,
+        force=force,
+    )
+    summary = {
+        "customer_code": customer_code or "<all>",
+        "processed_count": result.processed_count,
+        "skipped_count": result.skipped_count,
+        "failed_count": result.failed_count,
+    }
+    logger.info("[document_preview] task_completed result=%s", summary)
     return summary

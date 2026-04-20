@@ -190,7 +190,7 @@ def _list_documents_from_index(
         return None
 
 
-def _resolve_document_key_from_index(filename: str) -> Optional[str]:
+def _resolve_document_from_index(filename: str) -> Optional[dict]:
     requested_filename = (filename or "").strip()
     if not requested_filename or "/" in requested_filename:
         return None
@@ -219,7 +219,8 @@ def _resolve_document_key_from_index(filename: str) -> Optional[str]:
         )
         return None
 
-    resolved_key = exact_matches[0].get("key")
+    resolved_document = exact_matches[0]
+    resolved_key = resolved_document.get("key")
     if resolved_key and resolved_key != requested_filename:
         logger.info(
             "[mcp_ricerca] resolve_document_key completed filename=%s resolved_key=%s candidates=%s",
@@ -227,7 +228,12 @@ def _resolve_document_key_from_index(filename: str) -> Optional[str]:
             resolved_key,
             len(exact_matches),
         )
-    return resolved_key
+    return resolved_document
+
+
+def _resolve_document_key_from_index(filename: str) -> Optional[str]:
+    document = _resolve_document_from_index(filename)
+    return document.get("key") if document else None
 
 
 def _get_document_preview_from_index(document_key: str) -> Optional[str]:
@@ -256,6 +262,21 @@ def _get_document_preview_from_index(document_key: str) -> Optional[str]:
     if preview:
         logger.info(
             "[mcp_ricerca] get_document_preview completed filename=%s preview_chars=%s",
+            document_key,
+            len(preview),
+        )
+        return preview
+    return None
+
+
+def _get_document_preview_from_document(document: Optional[dict]) -> Optional[str]:
+    if not document:
+        return None
+    document_key = document.get("key") or document.get("path") or ""
+    preview = (document.get("text_preview") or "").strip()
+    if preview:
+        logger.info(
+            "[mcp_ricerca] get_document_preview completed filename=%s preview_chars=%s source=resolved_document",
             document_key,
             len(preview),
         )
@@ -500,7 +521,12 @@ async def get_document(
     """
     started_at = perf_counter()
     requested_filename = filename
-    resolved_filename = _resolve_document_key_from_index(filename) or filename
+    resolved_document = _resolve_document_from_index(filename)
+    resolved_filename = (
+        resolved_document.get("key")
+        if resolved_document and resolved_document.get("key")
+        else filename
+    )
     ext = os.path.splitext(resolved_filename)[1].lower()
     mode = (mode or "excerpt").strip().lower()
     if mode not in {"excerpt", "full", "ocr"}:
@@ -508,7 +534,9 @@ async def get_document(
     max_chars = max(1000, min(max_chars, 50000))
 
     if mode == "excerpt":
-        preview = _get_document_preview_from_index(resolved_filename)
+        preview = _get_document_preview_from_document(resolved_document)
+        if not preview:
+            preview = _get_document_preview_from_index(resolved_filename)
         if preview:
             returned_content = _truncate_text(
                 preview,

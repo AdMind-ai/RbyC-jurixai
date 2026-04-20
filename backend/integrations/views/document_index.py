@@ -1,4 +1,5 @@
 import logging
+import unicodedata
 from time import perf_counter
 
 from django.conf import settings
@@ -12,6 +13,24 @@ from integrations.models import DocumentIndex
 
 
 logger = logging.getLogger(__name__)
+
+
+def normalize_search_value(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value or "")
+    normalized = "".join(
+        char for char in normalized if not unicodedata.combining(char)
+    )
+    return " ".join(normalized.casefold().split())
+
+
+def search_variants(value: str) -> list[str]:
+    cleaned = " ".join((value or "").strip().split())
+    normalized = normalize_search_value(cleaned)
+    variants = []
+    for item in [cleaned, normalized]:
+        if item and item not in variants:
+            variants.append(item)
+    return variants
 
 
 class InternalDocumentIndexView(APIView):
@@ -87,18 +106,29 @@ class InternalDocumentIndexView(APIView):
             documents = documents.filter(extension=normalized_extension)
 
         if filename_contains:
-            documents = documents.filter(filename__icontains=filename_contains)
+            filename_filter = Q()
+            for variant in search_variants(filename_contains):
+                filename_filter |= Q(filename__icontains=variant)
+            documents = documents.filter(filename_filter)
 
         if path_contains:
-            documents = documents.filter(object_key__icontains=path_contains)
+            path_filter = Q()
+            for variant in search_variants(path_contains):
+                path_filter |= Q(object_key__icontains=variant)
+            documents = documents.filter(path_filter)
 
         if query:
             for term in [item for item in query.split() if item][:6]:
+                term_filter = Q()
+                for variant in search_variants(term):
+                    term_filter |= (
+                        Q(filename__icontains=variant)
+                        | Q(object_key__icontains=variant)
+                        | Q(document_type__icontains=variant)
+                        | Q(year__icontains=variant)
+                    )
                 documents = documents.filter(
-                    Q(filename__icontains=term)
-                    | Q(object_key__icontains=term)
-                    | Q(document_type__icontains=term)
-                    | Q(year__icontains=term)
+                    term_filter
                 )
 
         order_fields = {
