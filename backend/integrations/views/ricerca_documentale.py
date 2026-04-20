@@ -125,9 +125,13 @@ class RicercaDocumentaleView(APIView):
                     {
                         "type": "mcp",
                         "server_label": "rbyc",
-                        "server_description": "Ferramenta para listar documentos do S3",
+                        "server_description": "Ferramenta para buscar documentos indexados, listar metadados e consultar trechos quando necessario",
                         "server_url": settings.MCP_SERVER_URL,
-                        "allowed_tools": ["list_documents", "get_document"],
+                        "allowed_tools": [
+                            "search_documents",
+                            "list_documents",
+                            "get_document",
+                        ],
                         "require_approval": "never",
                     }
                 ],

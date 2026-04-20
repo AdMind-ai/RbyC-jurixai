@@ -78,6 +78,9 @@ class InternalDocumentIndexView(APIView):
         )
         query = (request.query_params.get("query") or "").strip()
         year = (request.query_params.get("year") or "").strip()
+        document_type = (
+            request.query_params.get("document_type") or ""
+        ).strip()
         extension = (request.query_params.get("extension") or "").strip().lower()
         filename_contains = (
             request.query_params.get("filename_contains") or ""
@@ -112,6 +115,12 @@ class InternalDocumentIndexView(APIView):
 
         if year:
             documents = documents.filter(year=year)
+
+        if document_type:
+            document_type_filter = Q()
+            for variant in search_variants(document_type):
+                document_type_filter |= Q(document_type__icontains=variant)
+            documents = documents.filter(document_type_filter)
 
         if extension:
             normalized_extension = (
@@ -177,13 +186,14 @@ class InternalDocumentIndexView(APIView):
 
         duration_ms = round((perf_counter() - started_at) * 1000, 2)
         logger.info(
-            "[document_index] request_completed duration_ms=%s customer_code=%s returned_documents=%s limit=%s query=%s year=%s extension=%s filename_contains=%s path_contains=%s sort_by=%s sort_order=%s",
+            "[document_index] request_completed duration_ms=%s customer_code=%s returned_documents=%s limit=%s query=%s year=%s document_type=%s extension=%s filename_contains=%s path_contains=%s sort_by=%s sort_order=%s",
             duration_ms,
             customer_code,
             len(payload),
             limit,
             query or "<empty>",
             year or "<empty>",
+            document_type or "<empty>",
             extension or "<empty>",
             filename_contains or "<empty>",
             path_contains or "<empty>",
