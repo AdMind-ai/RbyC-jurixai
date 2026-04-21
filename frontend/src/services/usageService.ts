@@ -10,7 +10,6 @@ export interface UsageReportParams {
 export interface UsageMonthOption {
   value: string;
   label: string;
-  totalCost: number;
 }
 
 export const usageService = {

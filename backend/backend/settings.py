@@ -57,20 +57,19 @@ COST_AGGREGATOR_PROJECT_ID = os.environ.get('COST_AGGREGATOR_PROJECT_ID')
 COST_AGGREGATOR_PROJECT_NAME = os.environ.get('COST_AGGREGATOR_PROJECT_NAME')
 COST_AGGREGATOR_DEFAULT_CURRENCY = os.environ.get('COST_AGGREGATOR_DEFAULT_CURRENCY', 'EUR')
 
-USAGE_DEFAULT_PRICES = {
-    "RICERCA_DOCUMENTALE": "0.10",  # euros por consulta
-    "DRAFT_DOCUMENT": "0.10",  # euros por página analisada
-    "CHECK_COMPLIANCE": "0.45",  # euros por página analisada
-    "CHAT_ASSISTANT": {
-        "GPT-5.2": "0.10",
-        "GEMINI_3_PRO_PREVIEW": "0.10",
-        "PERPLEXITY": "0.20",
-    },
-    "SEGRETERIA_SOCIETARIA": {
-        "DOCUMENTI_AI": "0.10",
-        "ASSISTENTE_LEGALE": "0.10",
-    },
-}
+STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY')
+STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
+BILLING_DEFAULT_CURRENCY = os.environ.get('BILLING_DEFAULT_CURRENCY', 'EUR')
+BILLING_STRIPE_IDEMPOTENCY_PREFIX = os.environ.get('BILLING_STRIPE_IDEMPOTENCY_PREFIX', 'rbyc')
+BILLING_INVOICE_DESCRIPTION_PREFIX = os.environ.get(
+    'BILLING_INVOICE_DESCRIPTION_PREFIX',
+    'RbyC AI - Invoice for {period_month:%Y-%m}'
+)
+BILLING_COMPANY_MARKUP_PERCENTAGE = os.environ.get('BILLING_COMPANY_MARKUP_PERCENTAGE', '20')
+BILLING_IVA_PERCENTAGE = os.environ.get('BILLING_IVA_PERCENTAGE', '22')
+OPENAI_ADMIN_KEY = os.environ.get('OPENAI_ADMIN_KEY')
+OPENAI_COSTS_PROJECT_ID = os.environ.get('OPENAI_COSTS_PROJECT_ID') or os.environ.get('OPENAI_PROJECT_ID')
+
 
 MCP_SERVER_URL = os.environ.get('MCP_SERVER_URL', 'https://mcp-server-ricerca-rbyc.onrender.com/sse')
 DOCUMENT_INDEX_API_KEY = os.environ.get('DOCUMENT_INDEX_API_KEY')
@@ -135,6 +134,10 @@ CELERY_BEAT_SCHEDULE = {
             'force': False,
         },
     },
+    'generate_monthly_billing_invoice': {
+        'task': 'billing.tasks.generate_monthly_billing_invoice',
+        'schedule': crontab(day_of_month=1, hour=6, minute=0),
+    },
 }
 
 LOGGING = {
@@ -197,6 +200,7 @@ THIRD_PARTY_APPS = [
 
 LOCAL_APPS = [
     'core.apps.CoreConfig',
+    'billing.apps.BillingConfig',
     'users',
     'integrations'
 ]

@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { ToolId, SubToolId, ConsumptionStats } from '../../types/types';
-import { TOOL_CONFIG, METRIC_LABELS, formatEuro } from '../../constants/usage';
+import { TOOL_CONFIG, METRIC_LABELS } from '../../constants/usage';
 
 interface ConsumptionCardProps {
   id: ToolId | SubToolId;
@@ -19,15 +19,15 @@ const ConsumptionCard: React.FC<ConsumptionCardProps> = ({ id, data, onOpenDetai
 
   return (
     <div className="bg-white border border-gray-100 rounded-2xl p-8 shadow-sm hover:shadow-md transition-all flex flex-col h-full group relative border-opacity-60 font-sans">
-      {/* Header: Icona e Prezzo in alto a destra */}
+      {/* Header: Icona e utilizzo in alto a destra */}
       <div className="flex justify-between items-start mb-6">
         <div className="bg-[#EEF2FF] p-4 rounded-2xl text-[#1F3A8B]">
           {config.icon}
         </div>
         <div className="text-right pt-1">
-          <p className="text-[10px] font-bold text-gray-400 mb-0.5 lowercase">costo del mese</p>
+          <p className="text-[10px] font-bold text-gray-400 mb-0.5 lowercase">utilizzo</p>
           <p className="text-xl font-black text-[#172554] tracking-tight">
-            {formatEuro(data.cost)}
+            {data.count}
           </p>
         </div>
       </div>

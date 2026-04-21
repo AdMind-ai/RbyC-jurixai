@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { ToolId, SubToolId, MonthlyReport } from '../../types/types';
-import { TOOL_CONFIG, METRIC_LABELS, formatEuro } from '../../constants/usage';
+import { TOOL_CONFIG, METRIC_LABELS } from '../../constants/usage';
 
 interface ConsumptionTableProps {
   report: MonthlyReport;
@@ -39,9 +39,9 @@ const ConsumptionTable: React.FC<ConsumptionTableProps> = ({ report }) => {
     ];
     
     return tools.sort((a, b) => {
-      const costA = getToolData(a)?.cost || 0;
-      const costB = getToolData(b)?.cost || 0;
-      return costB - costA;
+      const countA = getToolData(a)?.count || 0;
+      const countB = getToolData(b)?.count || 0;
+      return countB - countA;
     });
   }, [report]);
 
@@ -50,9 +50,8 @@ const ConsumptionTable: React.FC<ConsumptionTableProps> = ({ report }) => {
       <table className="w-full border-collapse table-fixed">
         <thead>
           <tr className="bg-gray-50/50 border-b border-gray-100">
-            <th className="w-[40%] px-8 py-5 text-left text-sm font-normal text-gray-400">Strumento</th>
-            <th className="w-[25%] px-8 py-5 text-left text-sm font-normal text-gray-400">Utilizzo</th>
-            <th className="w-[20%] px-8 py-5 text-right text-sm font-normal text-gray-400">Costo mensile</th>
+            <th className="w-[55%] px-8 py-5 text-left text-sm font-normal text-gray-400">Strumento</th>
+            <th className="w-[30%] px-8 py-5 text-left text-sm font-normal text-gray-400">Utilizzo</th>
             <th className="w-[15%] px-8 py-5 text-center text-sm font-normal text-gray-400"></th>
           </tr>
         </thead>
@@ -94,9 +93,6 @@ const ConsumptionTable: React.FC<ConsumptionTableProps> = ({ report }) => {
                       </span>
                     </div>
                   </td>
-                  <td className="px-8 py-6 text-right">
-                    <p className="text-lg font-bold text-[#1F3A8B]">{formatEuro(data.cost)}</p>
-                  </td>
                   <td className="px-8 py-6 text-center">
                     <button className="inline-flex items-center gap-2 text-base font-normal text-[#1F3A8B] hover:text-[#172554] transition-colors whitespace-nowrap">
                       {isExpanded ? 'Chiudi' : 'Dettagli'}
@@ -106,22 +102,19 @@ const ConsumptionTable: React.FC<ConsumptionTableProps> = ({ report }) => {
                 </tr>
                 {isExpanded && (
                   <tr>
-                    <td colSpan={4} className="bg-gray-50/50 p-0">
+                    <td colSpan={3} className="bg-gray-50/50 p-0">
                       <div className="py-6 space-y-3 animate-in slide-in-from-top-2 duration-200">
                         <p className="text-sm font-normal text-gray-400 mb-4 px-8">Dettaglio per utente</p>
                         <div className="px-4 space-y-3">
                           {report.userBreakdown.map((user) => {
                             const toolKey = isSubTool ? ToolId.SEGRETERIA_SOCIETARIA : id;
                             const subToolKey = String(id);
-                            const userCost = isSubTool
-                              ? user.subToolCosts?.[toolKey]?.[subToolKey] ?? 0
-                              : user.costs[toolKey] || 0;
                             const userCount = isSubTool
                               ? user.subToolCounts?.[toolKey]?.[subToolKey] ?? 0
                               : user.counts[toolKey] || 0;
                             return (
                               <div key={user.userId} className="bg-white rounded-xl border border-gray-100/50 shadow-sm overflow-hidden">
-                                <div className="grid grid-cols-[40%_25%_20%_15%] items-center">
+                                <div className="grid grid-cols-[55%_30%_15%] items-center">
                                   {/* Info Utente - padding a sinistra calibrato per allineamento con cella 1 */}
                                   <div className="pl-4 pr-4 py-4 flex items-center gap-3">
                                     <div className="w-9 h-9 shrink-0 rounded-full bg-[#1F3A8B]/10 text-[#1F3A8B] flex items-center justify-center font-bold text-xs">
@@ -143,13 +136,6 @@ const ConsumptionTable: React.FC<ConsumptionTableProps> = ({ report }) => {
                                     <p className="text-base font-bold text-[#172554]">{userCount}</p>
                                     <p className="text-[11px] text-gray-400 font-normal leading-tight truncate">
                                       {METRIC_LABELS[id] || 'Unità'}
-                                    </p>
-                                  </div>
-
-                                  {/* Costo Utente - padding calibrato per allineamento con cella 3 */}
-                                  <div className="px-4 py-4 text-right">
-                                    <p className="text-base font-bold text-[#1F3A8B]">
-                                      {formatEuro(userCost)}
                                     </p>
                                   </div>
 

@@ -116,7 +116,6 @@ export enum SubToolId {
 }
 
 export interface ConsumptionStats {
-  cost: number;
   count: number;
   subItems?: Record<string, ConsumptionStats>; // Per gestire Documenti AI e Assistente legale
 }
@@ -127,18 +126,14 @@ export interface UserConsumption {
   userEmail: string;
   role: 'Admin' | 'Utente';
   isCompanyAdmin?: boolean;
-  costs: Record<string, number>; // Costo per tool in €
   counts: Record<string, number>; // Utilizzo per tool (richieste, messaggi, etc.)
-  subToolCosts?: Record<string, Record<string, number>>;
   subToolCounts?: Record<string, Record<string, number>>;
-  totalCost?: number;
 }
 
 export interface MonthlyReport {
   month: string;
   monthLabel?: string;
   currency?: string;
-  totalCost: number;
   totalRequests: number;
   toolUsage: Record<string, ConsumptionStats>;
   userBreakdown: UserConsumption[];

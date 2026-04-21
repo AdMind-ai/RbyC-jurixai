@@ -67,10 +67,7 @@ class UsageReportService:
         month_ref, start_dt, end_dt = compute_month_bounds(filters.month)
         queryset = cls._apply_filters(UsageRecord.objects.all(), filters, start_dt, end_dt)
 
-        totals = queryset.aggregate(
-            total_cost=Sum("total_cost_eur", default=Decimal("0")),
-            total_qty=Sum("quantity", default=Decimal("0")),
-        )
+        totals = queryset.aggregate(total_qty=Sum("quantity", default=Decimal("0")))
 
         tool_usage = cls._aggregate_tool_usage(queryset)
         user_breakdown = cls._aggregate_user_breakdown(queryset)
@@ -79,7 +76,6 @@ class UsageReportService:
             "month": month_ref.strftime("%Y-%m"),
             "monthLabel": f"{MONTH_NAMES_IT[month_ref.month]} {month_ref.year}",
             "currency": cls.currency,
-            "totalCost": cls._money_to_float(totals["total_cost"]),
             "totalRequests": cls._decimal_to_int(totals["total_qty"]),
             "toolUsage": tool_usage,
             "userBreakdown": user_breakdown,
@@ -104,7 +100,6 @@ class UsageReportService:
         tool_rows = (
             queryset.values("tool", "sub_tool")
             .annotate(
-                total_cost=Sum("total_cost_eur", default=Decimal("0")),
                 total_qty=Sum("quantity", default=Decimal("0")),
             )
         )
@@ -115,21 +110,18 @@ class UsageReportService:
             sub_key = row["sub_tool"]
             tool_bucket = totals.setdefault(
                 tool_key,
-                {"cost": Decimal("0"), "count": Decimal("0"), "subItems": {}},
+                {"count": Decimal("0"), "subItems": {}},
             )
-            tool_bucket["cost"] += row["total_cost"]
             tool_bucket["count"] += row["total_qty"]
 
             if sub_key:
                 tool_bucket["subItems"][sub_key] = {
-                    "cost": cls._money_to_float(row["total_cost"]),
                     "count": cls._decimal_to_int(row["total_qty"]),
                 }
 
         formatted: Dict[str, Dict] = {}
         for tool, data in totals.items():
             entry = {
-                "cost": cls._money_to_float(data["cost"]),
                 "count": cls._decimal_to_int(data["count"]),
             }
             if data["subItems"]:
@@ -142,7 +134,6 @@ class UsageReportService:
         user_rows = (
             queryset.values("user", "tool", "sub_tool")
             .annotate(
-                total_cost=Sum("total_cost_eur", default=Decimal("0")),
                 total_qty=Sum("quantity", default=Decimal("0")),
             )
         )
@@ -151,9 +142,7 @@ class UsageReportService:
 
         user_buckets: Dict[int, Dict[str, Dict]] = defaultdict(
             lambda: {
-                "costs": defaultdict(lambda: Decimal("0")),
                 "counts": defaultdict(lambda: Decimal("0")),
-                "sub_costs": defaultdict(_decimal_dict),
                 "sub_counts": defaultdict(_decimal_dict),
             }
         )
@@ -163,11 +152,9 @@ class UsageReportService:
             user_id = row["user"]
             user_ids.add(user_id)
             bucket = user_buckets[user_id]
-            bucket["costs"][row["tool"]] += row["total_cost"]
             bucket["counts"][row["tool"]] += row["total_qty"]
             sub_tool_key = row["sub_tool"]
             if sub_tool_key:
-                bucket["sub_costs"][row["tool"]][sub_tool_key] += row["total_cost"]
                 bucket["sub_counts"][row["tool"]][sub_tool_key] += row["total_qty"]
 
         users = {user.id: user for user in UserModel.objects.filter(id__in=user_ids)}
@@ -178,22 +165,10 @@ class UsageReportService:
             user = users.get(user_id)
             if not user:
                 continue
-            costs = {tool: 0.0 for tool in tool_keys}
             counts = {tool: 0 for tool in tool_keys}
-            for tool, value in aggregates["costs"].items():
-                costs[tool] = cls._money_to_float(value)
             for tool, value in aggregates["counts"].items():
                 counts[tool] = cls._decimal_to_int(value)
-            total_cost_decimal = sum(aggregates["costs"].values(), Decimal("0"))
-
-            sub_tool_costs = {
-                tool: {
-                    sub_tool: cls._money_to_float(val)
-                    for sub_tool, val in sub_dict.items()
-                }
-                for tool, sub_dict in aggregates["sub_costs"].items()
-                if sub_dict
-            }
+            total_count = sum(aggregates["counts"].values(), Decimal("0"))
 
             sub_tool_counts = {
                 tool: {
@@ -211,15 +186,13 @@ class UsageReportService:
                     "userEmail": user.email,
                     "role": "Admin" if getattr(user, "is_company_admin", False) else "Utente",
                     "isCompanyAdmin": getattr(user, "is_company_admin", False),
-                    "costs": costs,
                     "counts": counts,
-                    "subToolCosts": sub_tool_costs,
                     "subToolCounts": sub_tool_counts,
-                    "totalCost": cls._money_to_float(total_cost_decimal),
+                    "totalCount": cls._decimal_to_int(total_count),
                 }
             )
 
-        breakdown.sort(key=lambda item: item["totalCost"], reverse=True)
+        breakdown.sort(key=lambda item: item["totalCount"], reverse=True)
         return breakdown
 
     @classmethod
@@ -233,7 +206,6 @@ class UsageReportService:
         months = (
             queryset.annotate(month=TruncMonth("occurred_at"))
             .values("month")
-            .annotate(total_cost=Sum("total_cost_eur", default=Decimal("0")))
             .order_by("-month")
         )
 
@@ -251,7 +223,6 @@ class UsageReportService:
                 {
                     "value": month_date.strftime("%Y-%m"),
                     "label": label,
-                    "totalCost": cls._money_to_float(entry["total_cost"]),
                 }
             )
         return results

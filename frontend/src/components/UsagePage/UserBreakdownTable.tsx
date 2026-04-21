@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { UserConsumption, ToolId } from '../../types/types';
-import { TOOL_CONFIG, formatEuro } from '../../constants/usage';
+import { TOOL_CONFIG } from '../../constants/usage';
 
 interface UserBreakdownTableProps {
   users: UserConsumption[];
@@ -33,7 +33,7 @@ const UserBreakdownTable: React.FC<UserBreakdownTableProps> = ({ users }) => {
           </thead>
           <tbody className="divide-y divide-gray-50">
             {users.map(user => {
-              const total = (Object.values(user.costs) as number[]).reduce<number>((a, b) => a + (Number(b) || 0), 0);
+              const total = (Object.values(user.counts) as number[]).reduce<number>((a, b) => a + (Number(b) || 0), 0);
               return (
                 <tr key={user.userId} className="hover:bg-[#F1F5F9]/50 transition-colors group">
                   <td className="px-6 py-4">
@@ -49,11 +49,11 @@ const UserBreakdownTable: React.FC<UserBreakdownTableProps> = ({ users }) => {
                   </td>
                   {toolIds.map(id => (
                     <td key={id} className="px-6 py-4 text-right text-sm text-gray-500 font-medium">
-                      {formatEuro(Number(user.costs[id]) || 0)}
+                      {Number(user.counts[id]) || 0}
                     </td>
                   ))}
                   <td className="px-6 py-4 text-right text-sm font-black text-[#1F3A8B]">
-                    {formatEuro(total)}
+                    {total}
                   </td>
                 </tr>
               );

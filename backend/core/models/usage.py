@@ -27,42 +27,6 @@ class UsageSubTool(models.TextChoices):
     DOCUMENTI_AI = "DOCUMENTI_AI", "Documenti AI"
     ASSISTENTE_LEGALE = "ASSISTENTE_LEGALE", "Assistente legale"
 
-class UsageRate(models.Model):
-    tool = models.CharField(max_length=64, choices=UsageTool.choices)
-    sub_tool = models.CharField(
-        max_length=64,
-        choices=UsageSubTool.choices,
-        blank=True,
-        null=True,
-    )
-    currency = models.CharField(max_length=3, default="EUR")
-    unit_price_eur = models.DecimalField(
-        max_digits=10,
-        decimal_places=4,
-        validators=[MinValueValidator(Decimal("0"))],
-    )
-    effective_from = models.DateField()
-    effective_to = models.DateField(blank=True, null=True)
-    metadata = models.JSONField(default=dict, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        verbose_name = "Tariffa di utilizzo"
-        verbose_name_plural = "Tariffe di utilizzo"
-        constraints = [
-            models.UniqueConstraint(
-                fields=["tool", "sub_tool", "effective_from"],
-                name="uniq_usage_rate_by_period",
-            )
-        ]
-        ordering = ["tool", "sub_tool", "-effective_from"]
-
-    def __str__(self) -> str:  # pragma: no cover - rappresentazione semplice
-        target = self.sub_tool or self.tool
-        return f"{target} @ {self.unit_price_eur} EUR dal {self.effective_from}"
-
-
 class UsageRecord(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
@@ -91,16 +55,6 @@ class UsageRecord(models.Model):
         default=Decimal("1"),
         validators=[MinValueValidator(Decimal("0.0001"))],
     )
-    unit_price_eur = models.DecimalField(
-        max_digits=10,
-        decimal_places=4,
-        validators=[MinValueValidator(Decimal("0"))],
-    )
-    total_cost_eur = models.DecimalField(
-        max_digits=12,
-        decimal_places=4,
-        validators=[MinValueValidator(Decimal("0"))],
-    )
     metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -115,14 +69,7 @@ class UsageRecord(models.Model):
         ordering = ["-occurred_at"]
 
     def __str__(self) -> str:  # pragma: no cover - rappresentazione semplice
-        return f"{self.tool} - {self.user} - {self.total_cost_eur} €"
-
-    def save(self, *args, **kwargs):
-        if self.total_cost_eur in (None, Decimal("0")):
-            base_unit = self.unit_price_eur or Decimal("0")
-            qty = self.quantity or Decimal("0")
-            self.total_cost_eur = (base_unit * qty).quantize(Decimal("0.0001"))
-        super().save(*args, **kwargs)
+        return f"{self.tool} - {self.user} - {self.quantity}"
 
     @property
     def month_key(self) -> str:
