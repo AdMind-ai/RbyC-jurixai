@@ -146,7 +146,7 @@ class OpenAISendMessageView(APIView):
                     user=request.user,
                     tool=UsageTool.CHAT_ASSISTANT,
                     sub_tool=UsageSubTool.GPT_5_2,
-                    quantity=1/2, # 2 interações = 1 uso
+                    quantity=1,
                     company=getattr(request.user, "company", None),
                     metadata={
                         "conversation_id": conversation.id,

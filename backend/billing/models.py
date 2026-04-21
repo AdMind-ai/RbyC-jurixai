@@ -174,3 +174,46 @@ class ProviderMonthlyCost(models.Model):
 
     def __str__(self) -> str:
         return f"{self.provider} - {self.period_month:%Y-%m} - {self.amount} {self.currency}"
+
+
+class ProviderUsageCost(models.Model):
+    provider = models.CharField(max_length=32, choices=ProviderCostProvider.choices)
+    usage_record = models.ForeignKey(
+        "core.UsageRecord",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="provider_usage_costs",
+    )
+    external_request_id = models.CharField(max_length=255, blank=True, null=True)
+    occurred_at = models.DateTimeField(default=timezone.now, db_index=True)
+    amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        default=Decimal("0.0000"),
+        validators=[MinValueValidator(Decimal("0"))],
+    )
+    currency = models.CharField(max_length=3, default="EUR")
+    provider_currency = models.CharField(max_length=3, blank=True, null=True)
+    raw_payload = models.JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Provider usage cost"
+        verbose_name_plural = "Provider usage costs"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["provider", "external_request_id"],
+                condition=models.Q(external_request_id__isnull=False),
+                name="uniq_provider_usage_cost_request",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["provider", "occurred_at"], name="provider_usage_cost_date_idx"),
+        ]
+        ordering = ["-occurred_at", "provider"]
+
+    def __str__(self) -> str:
+        return f"{self.provider} - {self.amount} {self.currency} - {self.occurred_at:%Y-%m-%d}"

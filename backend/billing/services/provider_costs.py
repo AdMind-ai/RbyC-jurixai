@@ -16,6 +16,7 @@ from billing.models import (
     ProviderCostSource,
     ProviderMonthlyCost,
 )
+from billing.services.provider_usage_costs import ProviderUsageCostService
 from core.services.usage_service import compute_month_bounds
 
 logger = logging.getLogger(__name__)
@@ -30,6 +31,13 @@ class ProviderCostTotal:
 
 class ProviderCostService:
     OPENAI_COSTS_URL = "https://api.openai.com/v1/organization/costs"
+    SOURCE_PRIORITY = {
+        ProviderCostSource.NOT_CONFIGURED: 0,
+        ProviderCostSource.ESTIMATED: 1,
+        ProviderCostSource.MANUAL: 2,
+        ProviderCostSource.BILLING_EXPORT: 3,
+        ProviderCostSource.ACTUAL_API: 4,
+    }
 
     @classmethod
     def refresh_monthly_costs(cls, period_month: date) -> list[ProviderMonthlyCost]:
@@ -40,11 +48,7 @@ class ProviderCostService:
                 period_month=period_month,
                 reason="Gemini billing integration is not configured yet.",
             ),
-            cls.ensure_not_configured_cost(
-                provider=ProviderCostProvider.PERPLEXITY,
-                period_month=period_month,
-                reason="Perplexity billing integration is not configured yet.",
-            ),
+            cls.refresh_perplexity_cost(period_month),
         ]
 
     @classmethod
@@ -89,6 +93,36 @@ class ProviderCostService:
         )
 
     @classmethod
+    def refresh_perplexity_cost(cls, period_month: date) -> ProviderMonthlyCost:
+        aggregate = ProviderUsageCostService.get_provider_monthly_total(
+            provider=ProviderCostProvider.PERPLEXITY,
+            period_month=period_month,
+        )
+        if aggregate.entry_count == 0:
+            return cls.ensure_not_configured_cost(
+                provider=ProviderCostProvider.PERPLEXITY,
+                period_month=period_month,
+                reason="Perplexity provider costs have not been captured yet.",
+            )
+
+        return cls.upsert_provider_cost(
+            provider=ProviderCostProvider.PERPLEXITY,
+            period_month=period_month,
+            amount=aggregate.amount,
+            currency=aggregate.currency,
+            source=ProviderCostSource.ACTUAL_API,
+            raw_payload={
+                "entry_count": aggregate.entry_count,
+                "provider_currency": aggregate.provider_currency,
+            },
+            metadata={
+                "provider_currency": aggregate.provider_currency,
+                "entry_count": aggregate.entry_count,
+                "billing_basis": "provider_usage_costs",
+            },
+        )
+
+    @classmethod
     def ensure_not_configured_cost(
         cls,
         *,
@@ -125,6 +159,9 @@ class ProviderCostService:
                 provider=provider,
                 period_month=period_month,
             )
+            if cls._should_keep_existing(existing_source=cost.source, incoming_source=source):
+                return cost
+
             provider_amount = amount.quantize(Decimal("0.0001"), ROUND_HALF_UP)
             markup_percentage = cls.markup_percentage()
             vat_percentage = cls.vat_percentage()
@@ -149,6 +186,12 @@ class ProviderCostService:
             cost.metadata = metadata or {}
             cost.save()
             return cost
+
+    @classmethod
+    def _should_keep_existing(cls, *, existing_source: str, incoming_source: str) -> bool:
+        existing_priority = cls.SOURCE_PRIORITY.get(existing_source, -1)
+        incoming_priority = cls.SOURCE_PRIORITY.get(incoming_source, -1)
+        return existing_priority > incoming_priority
 
     @classmethod
     def _fetch_openai_cost_payload(cls, period_month: date, admin_key: str) -> dict:

@@ -51,7 +51,7 @@ const ConsumptionTable: React.FC<ConsumptionTableProps> = ({ report }) => {
         <thead>
           <tr className="bg-gray-50/50 border-b border-gray-100">
             <th className="w-[55%] px-8 py-5 text-left text-sm font-normal text-gray-400">Strumento</th>
-            <th className="w-[30%] px-8 py-5 text-left text-sm font-normal text-gray-400">Utilizzo</th>
+            <th className="w-[30%] px-8 py-5 text-left text-sm font-normal text-gray-400">Interazioni</th>
             <th className="w-[15%] px-8 py-5 text-center text-sm font-normal text-gray-400"></th>
           </tr>
         </thead>
@@ -131,7 +131,7 @@ const ConsumptionTable: React.FC<ConsumptionTableProps> = ({ report }) => {
                                     </div>
                                   </div>
 
-                                  {/* Utilizzo Utente - padding calibrato per allineamento con cella 2 */}
+                                  {/* Interazioni utente - padding calibrato per allineamento con cella 2 */}
                                   <div className="px-4 py-4 text-left">
                                     <p className="text-base font-bold text-[#172554]">{userCount}</p>
                                     <p className="text-[11px] text-gray-400 font-normal leading-tight truncate">

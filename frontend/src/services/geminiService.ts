@@ -61,7 +61,7 @@ const recordComplianceUsage = async (
   try {
     await api.post('/usage/manual/', {
       tool: 'CHECK_COMPLIANCE',
-      quantity: totalPages,
+      quantity: 1,
       metadata: {
         "pages": totalPages,
         "docs": documents,
@@ -245,7 +245,7 @@ class GeminiService {
       api.post('/usage/manual/', {
         tool: 'SEGRETERIA_SOCIETARIA',
         subTool: 'ASSISTENTE_LEGALE',
-        quantity: 0.5, // 2 interazioni = 1 uso
+        quantity: 1,
       });
 
       return response.text || "Non ho capito la domanda.";
@@ -445,7 +445,7 @@ export const generateGeminiResponse = async (
     api.post('/usage/manual/', {
       tool: 'CHAT_ASSISTANT',
       subTool: 'GEMINI_3_PRO_PREVIEW',
-      quantity: 0.5, // 2 interazioni = 1 uso
+      quantity: 1,
     });
 
     return response.text || "No response text generated.";

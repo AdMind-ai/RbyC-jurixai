@@ -19,6 +19,8 @@ class UsageRecordingResult:
 
 
 class UsageTrackingService:
+    DEFAULT_INTERACTION_QUANTITY = Decimal("1")
+
     @classmethod
     def record_usage_event(
         cls,
@@ -36,7 +38,7 @@ class UsageTrackingService:
         occurred_at = occurred_at or timezone.now()
 
         try:
-            quantity_decimal = cls._to_decimal(quantity, default=Decimal("1"))
+            quantity_decimal = cls.DEFAULT_INTERACTION_QUANTITY
             safe_metadata = cls._sanitize_metadata(metadata)
 
             with transaction.atomic():

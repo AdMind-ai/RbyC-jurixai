@@ -126,7 +126,7 @@ export interface UserConsumption {
   userEmail: string;
   role: 'Admin' | 'Utente';
   isCompanyAdmin?: boolean;
-  counts: Record<string, number>; // Utilizzo per tool (richieste, messaggi, etc.)
+  counts: Record<string, number>; // Interazioni registrate per tool
   subToolCounts?: Record<string, Record<string, number>>;
 }
 

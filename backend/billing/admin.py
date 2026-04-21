@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from billing.models import BillingAccount, BillingInvoice, ProviderMonthlyCost
+from billing.models import BillingAccount, BillingInvoice, ProviderMonthlyCost, ProviderUsageCost
 
 
 @admin.register(BillingAccount)
@@ -54,3 +54,20 @@ class ProviderMonthlyCostAdmin(admin.ModelAdmin):
     search_fields = ("provider", "external_project_id")
     readonly_fields = ("created_at", "updated_at")
     date_hierarchy = "period_month"
+
+
+@admin.register(ProviderUsageCost)
+class ProviderUsageCostAdmin(admin.ModelAdmin):
+    list_display = (
+        "provider",
+        "external_request_id",
+        "amount",
+        "currency",
+        "provider_currency",
+        "usage_record",
+        "occurred_at",
+    )
+    list_filter = ("provider", "currency", "provider_currency")
+    search_fields = ("provider", "external_request_id")
+    readonly_fields = ("created_at", "updated_at")
+    date_hierarchy = "occurred_at"
