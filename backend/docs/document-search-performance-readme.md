@@ -195,6 +195,7 @@ DOCUMENT_INDEX_API_URL=<url-interna-ou-publica-do-endpoint-de-indice>
 DOCUMENT_INDEX_API_KEY=<chave-interna>
 DOCUMENT_INDEX_CUSTOMER_CODE=default
 INTEGRATION_API_KEY=<chave-global-atual>
+DB_CONN_MAX_AGE=60
 ```
 
 ### MCP
@@ -218,6 +219,19 @@ GUNICORN_TIMEOUT=600
 ```
 
 Com essa configuracao, o container web pode atender cerca de 12 requisicoes concorrentes, considerando 3 workers com 4 threads cada.
+
+### Banco e Celery
+
+Configuracao recomendada para reduzir risco de excesso de conexoes no Postgres:
+
+```env
+DB_CONN_MAX_AGE=60
+CELERY_WORKER_CONCURRENCY=2
+```
+
+O Django usa `CONN_MAX_AGE` para reaproveitar conexoes por um periodo curto, com `CONN_HEALTH_CHECKS` ativo para validar conexoes antes do uso.
+
+O Celery worker deve manter concorrencia explicita e conservadora na instancia atual. Para 2 vCPUs, `CELERY_WORKER_CONCURRENCY=2` e um ponto de partida seguro.
 
 ## Infra atual
 
@@ -344,4 +358,3 @@ Para mais usuarios simultaneos:
 Status atual: versao validada como base de performance.
 
 Faixa observada em producao: aproximadamente 20s a 30s por chamada de pesquisa documental.
-

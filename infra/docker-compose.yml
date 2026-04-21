@@ -34,7 +34,12 @@ services:
       RUN_MIGRATIONS: "0"
       COLLECT_STATIC: "0"
       CREATE_SUPERUSER: "0"
-    command: ["celery", "-A", "backend", "worker", "--loglevel=info"]
+    command:
+      [
+        "sh",
+        "-c",
+        "celery -A backend worker --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY:-2}",
+      ]
     depends_on:
       redis:
         condition: service_healthy
