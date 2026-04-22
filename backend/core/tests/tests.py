@@ -1,11 +1,14 @@
 from django.contrib.auth import get_user_model
 from django.test import override_settings
 from django.test import TestCase
+from django.utils import timezone
+from datetime import datetime
 from unittest.mock import Mock, patch
 
 from rest_framework.test import APIClient
 
-from core.models.usage import UsageTool
+from core.models.usage import UsageRecord, UsageTool
+from core.services.usage_service import UsageReportFilters, UsageReportService
 from core.services.usage_tracking import UsageTrackingService
 
 
@@ -99,4 +102,45 @@ class CheckComplianceAnalyzeViewTests(TestCase):
 		self.assertEqual(
 			request_kwargs["tools"][0]["server_url"],
 			"https://mcp.example.test/sse",
+		)
+
+
+class UsageReportServiceMonthTests(TestCase):
+	def setUp(self):
+		user_model = get_user_model()
+		self.user = user_model.objects.create_user(
+			email="usage-months@example.com",
+			username="usage-months",
+			password="secret123",
+		)
+
+	def test_list_available_months_returns_unique_months(self):
+		tz = timezone.get_current_timezone()
+		records = [
+			UsageRecord(
+				user=self.user,
+				tool=UsageTool.CHECK_COMPLIANCE,
+				occurred_at=timezone.make_aware(datetime(2026, 4, 1, 10, 0), tz),
+			),
+			UsageRecord(
+				user=self.user,
+				tool=UsageTool.CHAT_ASSISTANT,
+				occurred_at=timezone.make_aware(datetime(2026, 4, 20, 10, 0), tz),
+			),
+			UsageRecord(
+				user=self.user,
+				tool=UsageTool.DRAFT_DOCUMENT,
+				occurred_at=timezone.make_aware(datetime(2026, 3, 15, 10, 0), tz),
+			),
+		]
+		UsageRecord.objects.bulk_create(records)
+
+		months = list(UsageReportService.list_available_months(UsageReportFilters()))
+
+		self.assertEqual(
+			months,
+			[
+				{"value": "2026-04", "label": "Aprile 2026"},
+				{"value": "2026-03", "label": "Marzo 2026"},
+			],
 		)
