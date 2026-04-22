@@ -5,6 +5,7 @@ from time import perf_counter
 from django.conf import settings
 from django.db.models import Q
 from django.http import JsonResponse
+from drf_spectacular.utils import extend_schema
 from rest_framework import serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -47,6 +48,7 @@ def build_document_search_filter(term: str, include_preview: bool = False) -> Q:
     return search_filter
 
 
+@extend_schema(exclude=True)
 class InternalDocumentIndexView(APIView):
     authentication_classes = []
     permission_classes = []
