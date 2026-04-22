@@ -20,7 +20,6 @@ class UsageTool(models.TextChoices):
 class UsageSubTool(models.TextChoices):
     # Chat assistant sub-tools
     GPT_5_2 = "GPT-5.2", "GPT-5.2"
-    GEMINI_3_PRO_PREVIEW = "GEMINI_3_PRO_PREVIEW", "Gemini 3 Pro Preview"
     PERPLEXITY = "PERPLEXITY", "Perplexity"
 
     # Segreteria societaria sub-tools

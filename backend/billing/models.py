@@ -21,7 +21,6 @@ class BillingInvoiceStatus(models.TextChoices):
 
 class ProviderCostProvider(models.TextChoices):
     OPENAI = "openai", "OpenAI"
-    GEMINI = "gemini", "Gemini"
     PERPLEXITY = "perplexity", "Perplexity"
 
 

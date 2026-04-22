@@ -7,7 +7,6 @@ class StoredChatSession(models.Model):
     class ProviderChoices(models.TextChoices):
         GPT = "gpt", "GPT / OpenAI"
         PERPLEXITY = "perplexity", "Perplexity"
-        GEMINI = "gemini", "Gemini"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(

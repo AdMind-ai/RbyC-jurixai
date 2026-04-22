@@ -31,6 +31,10 @@ class ProviderCostTotal:
 
 class ProviderCostService:
     OPENAI_COSTS_URL = "https://api.openai.com/v1/organization/costs"
+    BILLABLE_PROVIDERS = (
+        ProviderCostProvider.OPENAI,
+        ProviderCostProvider.PERPLEXITY,
+    )
     SOURCE_PRIORITY = {
         ProviderCostSource.NOT_CONFIGURED: 0,
         ProviderCostSource.ESTIMATED: 1,
@@ -43,18 +47,16 @@ class ProviderCostService:
     def refresh_monthly_costs(cls, period_month: date) -> list[ProviderMonthlyCost]:
         return [
             cls.refresh_openai_cost(period_month),
-            cls.ensure_not_configured_cost(
-                provider=ProviderCostProvider.GEMINI,
-                period_month=period_month,
-                reason="Gemini billing integration is not configured yet.",
-            ),
             cls.refresh_perplexity_cost(period_month),
         ]
 
     @classmethod
     def get_total_for_month(cls, period_month: date, *, refresh: bool = True) -> ProviderCostTotal:
         costs = cls.refresh_monthly_costs(period_month) if refresh else list(
-            ProviderMonthlyCost.objects.filter(period_month=period_month)
+            ProviderMonthlyCost.objects.filter(
+                period_month=period_month,
+                provider__in=cls.BILLABLE_PROVIDERS,
+            )
         )
         billing_currency = cls.billing_currency()
         total = Decimal("0.0000")

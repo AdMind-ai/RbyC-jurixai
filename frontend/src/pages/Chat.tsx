@@ -17,8 +17,7 @@ interface Message {
 }
 
 const providerToModel: Record<StoredChatProvider, ModelId> = {
-  gpt: ModelId.GPT_5_2,
-  gemini: ModelId.GEMINI_3_PRO,
+  gpt: ModelId.GPT_5_4,
   perplexity: ModelId.PERPLEXITY,
 };
 
@@ -58,15 +57,14 @@ const flattenStoredContent = (content: unknown): string => {
 };
 
 const Chat: React.FC = () => {
-  const [selectedModel, setSelectedModel] = useState<ModelId>(ModelId.GEMINI_3_PRO)
+  const [selectedModel, setSelectedModel] = useState<ModelId>(ModelId.GPT_5_4)
   const [messages, setMessages] = useState<Message[]>([])
   const [isTyping, setIsTyping] = useState(false);
   const [isOverview, setIsOverview] = useState(false);
   const [searchWebEnabled, setSearchWebEnabled] = useState(false)
   const [selectedChat, setSelectedChat] = useState<StoredChatSelection | null>(null);
   const [conversationRefs, setConversationRefs] = useState<Record<ModelId, string | null>>({
-    [ModelId.GPT_5_2]: null,
-    [ModelId.GEMINI_3_PRO]: null,
+    [ModelId.GPT_5_4]: null,
     [ModelId.PERPLEXITY]: null,
   });
   const [shouldPersist, setShouldPersist] = useState(false);
@@ -92,7 +90,7 @@ const Chat: React.FC = () => {
   );
 
   const requestNewConversation = useCallback(async () => {
-    updateConversationRef(ModelId.GPT_5_2, null);
+    updateConversationRef(ModelId.GPT_5_4, null);
     try {
       const resp = await fetchWithoutAuth('/openai/chat/create-conversation/', {
         method: "POST",
@@ -102,7 +100,7 @@ const Chat: React.FC = () => {
         throw new Error(`Failed with status ${resp.status}`);
       }
       const data = await resp.json();
-      updateConversationRef(ModelId.GPT_5_2, data.conversation_id);
+      updateConversationRef(ModelId.GPT_5_4, data.conversation_id);
       return data.conversation_id as string;
     } catch (err) {
       console.error("Erro ao criar nova conversa:", err);
@@ -123,7 +121,7 @@ const Chat: React.FC = () => {
   const handleResetConversationContext = useCallback(async () => {
     setMessages([]);
     setSelectedChat(null);
-    if (selectedModel === ModelId.GPT_5_2) {
+    if (selectedModel === ModelId.GPT_5_4) {
       await requestNewConversation();
     } else {
       updateConversationRef(selectedModel, null);

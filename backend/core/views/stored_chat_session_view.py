@@ -59,11 +59,8 @@ class StoredChatSessionSaveView(APIView):
                 conversation_id=conversation_id,
                 fallback_messages=provided_messages,
             )
-        else:  # gemini or any provider without backend history
-            normalized_messages = self._normalize_from_payload(provided_messages)
-            metadata = {}
-            if not normalized_messages:
-                raise ValidationError("messages são obrigatórias para este provedor.")
+        else:
+            raise ValidationError("Provedor de chat invalido.")
 
         session, created = self._resolve_session(
             user=user,
