@@ -206,6 +206,7 @@ class UsageReportService:
         months = (
             queryset.annotate(month=TruncMonth("occurred_at"))
             .values("month")
+            .distinct()
             .order_by("-month")
         )
 
