@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   analyzeCompliance,
   DocumentSegment,
-} from '../services/geminiService'
+} from '../services/complianceService'
 import {
   ArrowLeft,
   Upload,

@@ -52,6 +52,8 @@ urlpatterns = [
            name='perplexity-chat-assistant'),
    
     # Check Compliance
+    path('openai/check-compliance/analyze/', CheckComplianceAnalyzeView.as_view(),
+         name='openai-check-compliance-analyze'),
     path('check-compliance', CheckComplianceView.as_view(),
          name='check-compliance'),
 

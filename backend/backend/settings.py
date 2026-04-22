@@ -72,6 +72,7 @@ OPENAI_COSTS_PROJECT_ID = os.environ.get('OPENAI_COSTS_PROJECT_ID') or os.enviro
 
 
 MCP_SERVER_URL = os.environ.get('MCP_SERVER_URL', 'https://mcp-server-ricerca-rbyc.onrender.com/sse')
+CHECK_COMPLIANCE_MCP_SERVER_URL = os.environ.get('CHECK_COMPLIANCE_MCP_SERVER_URL')
 DOCUMENT_INDEX_API_KEY = os.environ.get('DOCUMENT_INDEX_API_KEY')
 DOCUMENT_INDEX_API_URL = os.environ.get('DOCUMENT_INDEX_API_URL')
 DOCUMENT_INDEX_CUSTOMER_CODE = os.environ.get('DOCUMENT_INDEX_CUSTOMER_CODE', 'default')
