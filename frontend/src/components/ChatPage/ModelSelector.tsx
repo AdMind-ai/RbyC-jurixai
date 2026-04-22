@@ -8,9 +8,8 @@ interface ModelSelectorProps {
 
 const ModelSelector: React.FC<ModelSelectorProps> = ({ currentModel, onSelectModel }) => {
   const models = [
-    { id: ModelId.GEMINI_3_PRO, label: 'Gemini 3 Pro Preview' },
+    { id: ModelId.GPT_5_4, label: 'GPT 5.4' },
     { id: ModelId.PERPLEXITY, label: 'Perplexity' },
-    { id: ModelId.GPT_5_2, label: 'GPT 5.2' }
   ]
 
   return (

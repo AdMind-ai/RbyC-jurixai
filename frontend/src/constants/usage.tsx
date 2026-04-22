@@ -49,13 +49,13 @@ export const TOOL_CONFIG: Record<string, { name: string; icon: React.ReactNode; 
 };
 
 export const METRIC_LABELS: Record<string, string> = {
-  [ToolId.RICERCA_DOCUMENTALE]: 'Messaggi scambiati',
-  [ToolId.CHECK_COMPLIANCE]: 'Pagine analizzate',
-  [ToolId.DRAFT_DOCUMENT]: 'Pagine generate',
-  [ToolId.CHAT_ASSISTANT]: 'Messaggi scambiati',
-  [ToolId.SEGRETERIA_SOCIETARIA]: 'Operazioni totali',
-  [SubToolId.DOCUMENTI_AI]: 'Documenti gestiti',
-  [SubToolId.ASSISTENTE_LEGALE]: 'Messaggi scambiati'
+  [ToolId.RICERCA_DOCUMENTALE]: 'Interazioni registrate',
+  [ToolId.CHECK_COMPLIANCE]: 'Interazioni registrate',
+  [ToolId.DRAFT_DOCUMENT]: 'Interazioni registrate',
+  [ToolId.CHAT_ASSISTANT]: 'Interazioni registrate',
+  [ToolId.SEGRETERIA_SOCIETARIA]: 'Interazioni registrate',
+  [SubToolId.DOCUMENTI_AI]: 'Interazioni registrate',
+  [SubToolId.ASSISTENTE_LEGALE]: 'Interazioni registrate'
 };
 
 export const formatEuro = (val: number) =>

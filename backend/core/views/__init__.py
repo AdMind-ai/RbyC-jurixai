@@ -12,7 +12,7 @@ from .openai import (OpenAIConversationViewSet,
 from .company_document_layout_view import CompanyDocumentLayoutView, CompanyDocumentLayoutDetailView
 from .draft_document.generate_document_view import DraftDocumentView, DraftDocumentFileView
 from .extract_content_view import ExtractContentView
-from .check_compliance_view import CheckComplianceView
+from .check_compliance_view import CheckComplianceAnalyzeView, CheckComplianceView
 from .s3_upload_view import S3UploadView, S3TokenView
 from .segretaria_societaria.deadline_view import DeadlineListCreateView, DeadlineUpdateView
 from .segretaria_societaria.company_view import CompanyListCreateView, CompanyUpdateView, CompanyLetterheadProxyView, GenerateDocumentPDFView
@@ -25,7 +25,6 @@ from .stored_chat_session_view import (
     StoredChatSessionDetailView,
 )
 from .usage_view import UsageManualRecordView, UsageMonthListView, UsageReportView
-from .costs_view import CostAggregatorView
 
 __all__ = [
     'DeeplTranslateFileView',
@@ -38,6 +37,7 @@ __all__ = [
     'SaveConversationView',
     'ConversationForChatView',
     'CheckComplianceView',
+    'CheckComplianceAnalyzeView',
     'DeadlineListCreateView',
     'DeadlineUpdateView',
     'CompanyListCreateView',
@@ -61,5 +61,4 @@ __all__ = [
     'UsageReportView',
     'UsageMonthListView',
     'UsageManualRecordView',
-    'CostAggregatorView',
 ]

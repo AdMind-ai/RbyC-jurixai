@@ -198,7 +198,7 @@ class AssistantStreamingView(APIView):
         UsageTrackingService.record_usage_event(
             user=request.user,
             tool=UsageTool.RICERCA_DOCUMENTALE,
-            quantity=1/2,
+            quantity=1,
             company=getattr(request.user, "company", None),
             metadata={
                 "conversation_id": conversation.id

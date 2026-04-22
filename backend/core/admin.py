@@ -8,7 +8,7 @@ from core.models.segreteria_societaria.officer_model import Officer
 from core.models.segreteria_societaria.shareholder_model import Shareholder
 from core.models.segreteria_societaria.deadline import Deadline
 from core.models.draft_document.company_document_layout import CompanyDocumentLayout
-from core.models.usage import UsageRate, UsageRecord
+from core.models.usage import UsageRecord
 # Register your models here.
 @admin.register(Company)
 class CompanyAdmin(admin.ModelAdmin):
@@ -74,14 +74,6 @@ class CompanyDocumentLayoutAdmin(admin.ModelAdmin):
     readonly_fields = ('created_at', 'updated_at')
 
 
-@admin.register(UsageRate)
-class UsageRateAdmin(admin.ModelAdmin):
-    list_display = ('tool', 'sub_tool', 'unit_price_eur', 'currency', 'effective_from', 'effective_to')
-    search_fields = ('tool', 'sub_tool')
-    list_filter = ('tool', 'sub_tool')
-    readonly_fields = ('created_at', 'updated_at')
-
-
 @admin.register(UsageRecord)
 class UsageRecordAdmin(admin.ModelAdmin):
     list_display = (
@@ -91,8 +83,6 @@ class UsageRecordAdmin(admin.ModelAdmin):
         'tool',
         'sub_tool',
         'quantity',
-        'unit_price_eur',
-        'total_cost_eur',
         'occurred_at',
     )
     list_filter = ('tool', 'sub_tool', 'occurred_at')

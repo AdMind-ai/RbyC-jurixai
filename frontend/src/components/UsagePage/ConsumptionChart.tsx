@@ -34,7 +34,7 @@ const ConsumptionChart: React.FC<ConsumptionChartProps> = ({ report }) => {
       return (
         <div className="bg-white p-4 border border-gray-100 shadow-lg rounded-xl">
           <p className="text-xs font-bold text-[#172554] uppercase tracking-wider mb-1">{payload[0].payload.fullName}</p>
-          <p className="text-xl font-black text-[#1F3A8B]">{payload[0].value} <span className="text-sm font-normal text-gray-400">richieste</span></p>
+          <p className="text-xl font-black text-[#1F3A8B]">{payload[0].value} <span className="text-sm font-normal text-gray-400">interazioni</span></p>
         </div>
       );
     }

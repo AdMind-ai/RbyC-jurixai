@@ -38,7 +38,7 @@ const ToolCard: React.FC<ToolCardProps> = ({ toolId, usage, description, subTool
                 <div className="w-2 h-2 rounded-full bg-[#1F3A8B]"></div>
                 <span className="text-xs font-medium text-gray-600">{TOOL_CONFIG[sub.id].name}</span>
               </div>
-              <span className="text-xs font-bold text-[#172554]">{sub.usage} <span className="text-[10px] font-normal text-gray-400">richieste</span></span>
+              <span className="text-xs font-bold text-[#172554]">{sub.usage} <span className="text-[10px] font-normal text-gray-400">usi</span></span>
             </div>
           ))}
         </div>
@@ -46,10 +46,10 @@ const ToolCard: React.FC<ToolCardProps> = ({ toolId, usage, description, subTool
 
       <div className="flex items-center justify-between pt-6 border-t border-gray-50 mt-auto">
         <div>
-          <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider">Consumo Mensile</p>
+          <p className="text-[10px] text-gray-400 uppercase font-semibold tracking-wider">Interazioni Mensili</p>
           <p className="text-2xl font-bold text-[#172554] flex items-baseline gap-1">
             {usage}
-            <span className="text-sm font-normal text-gray-500">crediti</span>
+            <span className="text-sm font-normal text-gray-500">usi</span>
           </p>
         </div>
         <button className="flex items-center gap-1.5 text-xs font-bold text-[#1F3A8B] hover:text-[#172554] uppercase tracking-wider transition-colors">

@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { fetchWithAuth } from '../../api/fetchWithAuth';
 import { Bot, Paperclip, Upload, X } from 'lucide-react';
 import { ModelId } from '../../types/types'
-import { generateGeminiResponse, GeminiAttachment } from '../../services/geminiService';
 import { perplexityService } from '../../services/perplexityService';
 import { StoredChatSelection } from '../../types/chat';
 
@@ -55,16 +54,10 @@ const ChatInputArea: React.FC<ChatInputAreaProps & { messages: Message[] }> = ({
   const showEmptyState = !selectedChat && messages.length === 0;
 
   const modelMessaging = {
-    [ModelId.GPT_5_2]: {
+    [ModelId.GPT_5_4]: {
       color: '#1e3a8a',
-      label: 'GPT-5.2',
+      label: 'GPT-5.4',
       body: 'Posso cercare sul web per normative aggiornate, analizzare documenti allegati e rispondere a quesiti complessi.',
-      accept: ".pdf,.txt,.jpg,.png"
-    },
-    [ModelId.GEMINI_3_PRO]: {
-      color: '#0f9d58',
-      label: 'Gemini 3 Pro',
-      body: 'Eccello nel ragionamento multimodale, analisi di codice complessa e comprensione contestuale profonda.',
       accept: ".pdf,.txt,.jpg,.png"
     },
     [ModelId.PERPLEXITY]: {
@@ -75,7 +68,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps & { messages: Message[] }> = ({
     }
   } satisfies Record<ModelId, { color: string; label: string; body: string, accept: string }>;
 
-  const currentMessaging = modelMessaging[selectedModel] ?? modelMessaging[ModelId.GPT_5_2];
+  const currentMessaging = modelMessaging[selectedModel] ?? modelMessaging[ModelId.GPT_5_4];
 
 
   useEffect(() => {
@@ -98,42 +91,6 @@ const ChatInputArea: React.FC<ChatInputAreaProps & { messages: Message[] }> = ({
     setSearchWebEnabled(false);
     fileInputRef.current?.click();
   };
-
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result;
-        if (typeof result === 'string') {
-          const base64 = result.split(',')[1] ?? '';
-          resolve(base64);
-        } else {
-          reject(new Error('Conversão inválida de arquivo.'));
-        }
-      };
-      reader.onerror = () => reject(reader.error || new Error('Erro ao ler arquivo.'));
-      reader.readAsDataURL(file);
-    });
-  };
-
-  const buildGeminiAttachments = async (fileList: File[]): Promise<GeminiAttachment[]> => {
-    const attachments: GeminiAttachment[] = [];
-    for (const file of fileList) {
-      try {
-        const data = await fileToBase64(file);
-        if (data) {
-          attachments.push({
-            mimeType: file.type || 'application/octet-stream',
-            data
-          });
-        }
-      } catch (error) {
-        console.error('Erro ao converter arquivo para Gemini:', error);
-      }
-    }
-    return attachments;
-  };
-
 
   function handleDeepResearchReady(e: CustomEvent<{
     conversationId: string | number,
@@ -182,22 +139,6 @@ const ChatInputArea: React.FC<ChatInputAreaProps & { messages: Message[] }> = ({
 
     onConversationUpdated?.();
 
-    setIsTyping(false);
-  };
-
-  const sendMessageWithGemini = async (
-    prompt: string,
-    attachments: GeminiAttachment[] = [],
-    historyOverride?: Message[]
-  ) => {
-    const historySource = historyOverride ?? messages;
-    const historyForGemini = historySource.map(message => ({
-      role: message.sender,
-      content: message.content
-    }));
-    const responseText = await generateGeminiResponse(prompt, selectedModel, historyForGemini, attachments);
-    onSend(responseText, 'ai');
-    onConversationUpdated?.();
     setIsTyping(false);
   };
 
@@ -254,10 +195,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps & { messages: Message[] }> = ({
     setFiles([]);
 
     try {
-      if (selectedModel === ModelId.GEMINI_3_PRO) {
-        const geminiAttachments = await buildGeminiAttachments(filesToUpload);
-        await sendMessageWithGemini(userMessage, geminiAttachments, historyWithUser);
-      } else if (selectedModel === ModelId.PERPLEXITY) {
+      if (selectedModel === ModelId.PERPLEXITY) {
         await sendMessageWithPerplexity(userMessage, filesToUpload, historyWithUser, conversationRef);
       } else {
         const formData = new FormData();

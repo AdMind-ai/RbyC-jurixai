@@ -40,15 +40,10 @@ interface ChatHeaderProps {
 }
 
 const modelDescriptions: Record<ModelId, { name: string, desc: string, subtitle: string }> = {
-  [ModelId.GPT_5_2]: {
-    name: 'GPT-5.2 Pro',
-    desc: 'GPT-5.2 Pro è la scelta principale per ragionamento avanzato, tool usage e automazioni multi-step.',
+  [ModelId.GPT_5_4]: {
+    name: 'GPT-5.4',
+    desc: 'GPT-5.4 e la scelta principale per ragionamento avanzato, tool usage e automazioni multi-step.',
     subtitle: 'Accesso internet attivo - Ragionamento complesso'
-  },
-  [ModelId.GEMINI_3_PRO]: {
-    name: 'Gemini 3 Pro Preview',
-    desc: 'Gemini 3 Pro offre contesto esteso, multimodalità avanzata e gestione affidabile di documenti lunghi.',
-    subtitle: 'Analisi multimodale - Contesto esteso'
   },
   [ModelId.PERPLEXITY]: {
     name: 'Perplexity',
@@ -87,10 +82,9 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
   const [newChatName, setNewChatName] = useState('');
   const [chatPendingDeletion, setChatPendingDeletion] = useState<Chat | null>(null);
 
-  const currentModelInfo = modelDescriptions[selectedModel] ?? modelDescriptions[ModelId.GPT_5_2];
+  const currentModelInfo = modelDescriptions[selectedModel] ?? modelDescriptions[ModelId.GPT_5_4];
   const modelToProvider: Record<ModelId, StoredChatProvider> = {
-    [ModelId.GPT_5_2]: 'gpt',
-    [ModelId.GEMINI_3_PRO]: 'gemini',
+    [ModelId.GPT_5_4]: 'gpt',
     [ModelId.PERPLEXITY]: 'perplexity',
   };
 

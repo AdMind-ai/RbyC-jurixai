@@ -3,7 +3,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { fetchWithAuth } from '../../api/fetchWithAuth';
 import { Send, Bot, User, Info } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { geminiService } from '../../services/geminiService';
 import { Company, Deadline } from '../../types/types';
 
 interface Message {
@@ -11,6 +10,45 @@ interface Message {
   sender: 'user' | 'bot';
   text: string;
 }
+
+const askOpenAILegalAssistant = async (query: string, contextData: string): Promise<string> => {
+  const formData = new FormData();
+  formData.append(
+    'content',
+    [
+      'Rispondi come assistente legale per la segreteria societaria di uno studio legale.',
+      'Usa solo il contesto fornito quando parli di societa, scadenze, cariche sociali o dati interni.',
+      '',
+      'CONTESTO DATI:',
+      contextData,
+      '',
+      'DOMANDA UTENTE:',
+      query,
+    ].join('\n')
+  );
+
+  const response = await fetchWithAuth('/openai/chat/send-message/', {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok || !response.body) {
+    throw new Error(`OpenAI request failed with status ${response.status}`);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder('utf-8');
+  let done = false;
+  let text = '';
+
+  while (!done) {
+    const { value, done: doneReading } = await reader.read();
+    done = doneReading;
+    text += decoder.decode(value, { stream: true });
+  }
+
+  return text || 'Non ho trovato una risposta utile.';
+};
 
 
 const AIAssistant: React.FC = () => {
@@ -66,11 +104,23 @@ const AIAssistant: React.FC = () => {
       deadlines: deadlines.filter((d: Deadline) => !d.completed)
     });
 
-    const responseText = await geminiService.chatWithLegalAssistant(userMsg.text, contextData);
-
-    const botMsg: Message = { id: Date.now() + 1, sender: 'bot', text: responseText };
-    setMessages(prev => [...prev, botMsg]);
-    setIsTyping(false);
+    try {
+      const responseText = await askOpenAILegalAssistant(userMsg.text, contextData);
+      const botMsg: Message = { id: Date.now() + 1, sender: 'bot', text: responseText };
+      setMessages(prev => [...prev, botMsg]);
+    } catch (error) {
+      console.error('Erro ao consultar assistente OpenAI:', error);
+      setMessages(prev => [
+        ...prev,
+        {
+          id: Date.now() + 1,
+          sender: 'bot',
+          text: 'Si e verificato un errore durante la comunicazione con l assistente.',
+        },
+      ]);
+    } finally {
+      setIsTyping(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

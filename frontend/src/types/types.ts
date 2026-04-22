@@ -15,9 +15,8 @@ export enum Role {
 }
 
 export enum ModelId {
-  GEMINI_3_PRO = 'gemini-3-pro-preview',
   PERPLEXITY = 'perplexity',
-  GPT_5_2 = 'gpt-5-2'
+  GPT_5_4 = 'gpt-5-4'
 }
 
 export interface Officer {
@@ -116,7 +115,6 @@ export enum SubToolId {
 }
 
 export interface ConsumptionStats {
-  cost: number;
   count: number;
   subItems?: Record<string, ConsumptionStats>; // Per gestire Documenti AI e Assistente legale
 }
@@ -127,18 +125,14 @@ export interface UserConsumption {
   userEmail: string;
   role: 'Admin' | 'Utente';
   isCompanyAdmin?: boolean;
-  costs: Record<string, number>; // Costo per tool in €
-  counts: Record<string, number>; // Utilizzo per tool (richieste, messaggi, etc.)
-  subToolCosts?: Record<string, Record<string, number>>;
+  counts: Record<string, number>; // Interazioni registrate per tool
   subToolCounts?: Record<string, Record<string, number>>;
-  totalCost?: number;
 }
 
 export interface MonthlyReport {
   month: string;
   monthLabel?: string;
   currency?: string;
-  totalCost: number;
   totalRequests: number;
   toolUsage: Record<string, ConsumptionStats>;
   userBreakdown: UserConsumption[];

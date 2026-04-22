@@ -82,9 +82,6 @@ class UsageManualRecordView(APIView):
             {
                 "status": "ok",
                 "recordId": str(result.record.id),
-                "unitPrice": float(result.unit_price),
-                "totalCost": float(result.total_cost),
-                "rateId": result.used_rate_id,
             },
             status=status.HTTP_201_CREATED,
         )

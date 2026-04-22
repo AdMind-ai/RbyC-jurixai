@@ -2,6 +2,7 @@ import base64
 from typing import List, Optional
 
 from backend import settings
+from billing.services.provider_usage_costs import ProviderUsageCostService
 from core.models.usage import UsageSubTool, UsageTool
 from core.services.usage_tracking import UsageTrackingService
 from perplexity import Perplexity
@@ -75,6 +76,8 @@ class PerplexityChatAssistant(APIView):
 
         def event_stream():
             assistant_reply = ""
+            usage_metadata = None
+            external_request_id = None
             try:
                 stream = client.chat.completions.create(
                     model="sonar-pro",
@@ -83,14 +86,24 @@ class PerplexityChatAssistant(APIView):
                 )
 
                 for chunk in stream:
-                    if chunk.choices[0].delta.content:
-                        assistant_reply += chunk.choices[0].delta.content
-                        yield chunk.choices[0].delta.content
+                    chunk_text = self._extract_chunk_text(chunk)
+                    if chunk_text:
+                        assistant_reply += chunk_text
+                        yield chunk_text
+
+                    external_request_id = (
+                        ProviderUsageCostService.extract_perplexity_request_id(chunk)
+                        or external_request_id
+                    )
+                    chunk_usage = ProviderUsageCostService.extract_perplexity_usage_metadata(chunk)
+                    if chunk_usage:
+                        usage_metadata = chunk_usage
 
             except Exception as e:
                 print(f"Error in event_stream: {e}")
                 yield "Error occurred during streaming."
             else:
+                usage_result = None
                 if assistant_reply:
                     PerplexityMessage.objects.create(
                         conversation=conversation,
@@ -98,11 +111,11 @@ class PerplexityChatAssistant(APIView):
                         content=[{"type": "text", "text": assistant_reply}],
                     )
                     
-                    UsageTrackingService.record_usage_event(
+                    usage_result = UsageTrackingService.record_usage_event(
                         user=request.user,
                         tool=UsageTool.CHAT_ASSISTANT,
                         sub_tool=UsageSubTool.PERPLEXITY,
-                        quantity=1/2,  # 2 interazioni = 1 uso
+                        quantity=1,
                         company=getattr(request.user, "company", None),
                         metadata={
                             "conversation_id": str(conversation.conversation_id),
@@ -111,6 +124,17 @@ class PerplexityChatAssistant(APIView):
                         },
                     )
                     self._update_memory_summary(conversation)
+
+                if usage_metadata:
+                    ProviderUsageCostService.record_perplexity_usage_cost(
+                        usage_payload=usage_metadata,
+                        usage_record=getattr(usage_result, "record", None),
+                        external_request_id=external_request_id,
+                        metadata={
+                            "conversation_id": str(conversation.conversation_id),
+                            "files_attached": len(uploaded_files),
+                        },
+                    )
 
         response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
         response["X-Conversation-ID"] = str(conversation.conversation_id)
@@ -146,6 +170,23 @@ class PerplexityChatAssistant(APIView):
                 )
             }
         ]
+
+    @staticmethod
+    def _extract_chunk_text(chunk) -> str:
+        choices = getattr(chunk, "choices", None)
+        if not choices:
+            return ""
+
+        delta = getattr(choices[0], "delta", None)
+        if delta is None and isinstance(choices[0], dict):
+            delta = choices[0].get("delta")
+        if delta is None:
+            return ""
+
+        content = getattr(delta, "content", None)
+        if content is None and isinstance(delta, dict):
+            content = delta.get("content")
+        return content or ""
 
     @staticmethod
     def _extract_text_snippet(content_block):

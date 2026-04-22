@@ -1,6 +1,6 @@
 import { api } from '../api/api';
 
-export type StoredChatProvider = 'gpt' | 'perplexity' | 'gemini';
+export type StoredChatProvider = 'gpt' | 'perplexity';
 
 export interface StoredChatMessageDTO {
   role: 'system' | 'user' | 'assistant';
