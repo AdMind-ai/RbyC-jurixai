@@ -277,6 +277,7 @@ export function useDocSearch() {
     options?: {
       sources?: Source[]
       preservePrefix?: boolean
+      initialContent?: string
       keepStreaming?: boolean
       charsPerStep?: number
       intervalMs?: number
@@ -285,6 +286,7 @@ export function useDocSearch() {
     const {
       sources = [],
       preservePrefix = true,
+      initialContent = '',
       keepStreaming = true,
       charsPerStep = 3,
       intervalMs = 18,
@@ -297,14 +299,14 @@ export function useDocSearch() {
     streamSequenceRef.current += 1
     const sequence = streamSequenceRef.current
 
-    let baseContent = ''
+    let baseContent = initialContent
     setMessages((currentMessages) => {
       const lastMessage =
         currentMessages.length > 0
           ? currentMessages[currentMessages.length - 1]
           : null
 
-      if (lastMessage?.sender === 'ai' && preservePrefix) {
+      if (!baseContent && lastMessage?.sender === 'ai' && preservePrefix) {
         const existing = lastMessage.content || ''
         if (targetContent.startsWith(existing)) {
           baseContent = existing
@@ -431,6 +433,7 @@ export function useDocSearch() {
         animateAssistantMessage(nextContent, {
           preservePrefix:
             Boolean(previousContent) && nextContent.startsWith(previousContent),
+          initialContent: previousContent,
           keepStreaming: true,
           charsPerStep: 4,
           intervalMs: 20,
