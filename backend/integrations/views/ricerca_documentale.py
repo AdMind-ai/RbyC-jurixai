@@ -11,6 +11,15 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.models.assistant_thread_model import AssistantThread
+from core.services.document_retrieval.intent_classifier import (
+    classify_document_search_intent,
+)
+from core.services.document_retrieval.prompt_context import (
+    build_document_search_input,
+)
+from core.services.document_retrieval.retrieval_strategies import (
+    get_retrieval_strategy,
+)
 from core.utils.openai_client import client
 from core.utils.s3_utils import get_presigned_urls
 from integrations.authentication import APIKeyAuthentication
@@ -69,6 +78,15 @@ class RicercaDocumentaleView(APIView):
         prompt = serializer.validated_data["input"]
         conversation_id = serializer.validated_data.get("conversation_id")
         prompt_length = len(prompt or "")
+        intent_classification = classify_document_search_intent(prompt)
+        retrieval_strategy = get_retrieval_strategy(
+            intent_classification.intent_type
+        )
+        model_input = build_document_search_input(
+            prompt,
+            intent_classification,
+            retrieval_strategy,
+        )
         integration_client = getattr(request.auth, "client", None)
         bucket_name = (
             getattr(integration_client, "bucket_name", None)
@@ -83,6 +101,23 @@ class RicercaDocumentaleView(APIView):
             prompt_length,
             client_name or "<fallback>",
             bucket_name or "<empty>",
+        )
+        logger.info(
+            "[ricerca_documentale][%s] intent_detected intent_type=%s confidence=%s matched_signals=%s primary_tool=%s prefer_preview_only=%s max_documents_to_open=%s group_by=%s",
+            request_id,
+            intent_classification.intent_type,
+            intent_classification.confidence,
+            ",".join(intent_classification.matched_signals) or "<none>",
+            retrieval_strategy.primary_tool,
+            retrieval_strategy.prefer_preview_only,
+            retrieval_strategy.max_documents_to_open,
+            retrieval_strategy.group_by or "<none>",
+        )
+        logger.info(
+            "[ricerca_documentale][%s] model_input_prepared original_prompt_length=%s model_input_length=%s",
+            request_id,
+            len(prompt or ""),
+            len(model_input or ""),
         )
 
         thread_started_at = perf_counter()
@@ -119,7 +154,7 @@ class RicercaDocumentaleView(APIView):
         try:
             response = client.responses.create(
                 prompt={"id": settings.OPENAI_PROMPT_ID_RICERCA_DOCUMENTALE},
-                input=prompt,
+                input=model_input,
                 conversation=assistant_thread.thread_id or None,
                 tools=[
                     {
@@ -222,8 +257,9 @@ class RicercaDocumentaleView(APIView):
 
         total_duration_ms = round((perf_counter() - request_started_at) * 1000, 2)
         logger.info(
-            "[ricerca_documentale][%s] request_completed total_duration_ms=%s openai_duration_ms=%s presign_duration_ms=%s raw_output_length=%s response_text_length=%s response_keys_count=%s documents_urls_count=%s",
+            "[ricerca_documentale][%s] request_completed intent_type=%s total_duration_ms=%s openai_duration_ms=%s presign_duration_ms=%s raw_output_length=%s response_text_length=%s response_keys_count=%s documents_urls_count=%s model_input_length=%s",
             request_id,
+            intent_classification.intent_type,
             total_duration_ms,
             openai_duration_ms,
             presign_duration_ms,
@@ -231,6 +267,7 @@ class RicercaDocumentaleView(APIView):
             len(response_text or ""),
             len(response_keys),
             len(documents_urls),
+            len(model_input or ""),
         )
 
         return Response(

@@ -1,6 +1,9 @@
 from django.core.management.base import BaseCommand
 
-from integrations.services.document_preview import build_missing_document_previews
+from integrations.services.document_preview import (
+    build_document_previews_in_batches,
+    build_missing_document_previews,
+)
 
 
 class Command(BaseCommand):
@@ -48,24 +51,49 @@ class Command(BaseCommand):
             action="store_true",
             help="Rebuild previews even when extraction_status is ready.",
         )
+        parser.add_argument(
+            "--all-batches",
+            action="store_true",
+            help="Process consecutive batches until the filtered document set is exhausted.",
+        )
+        parser.add_argument(
+            "--max-batches",
+            type=int,
+            default=0,
+            help="Optional cap for --all-batches. Use 0 for no cap.",
+        )
 
     def handle(self, *args, **options):
-        result = build_missing_document_previews(
-            customer_code=options["customer_code"],
-            filename_contains=options["filename_contains"],
-            path_contains=options["path_contains"],
-            document_type=options["document_type"],
-            year=options["year"],
-            limit=options["limit"],
-            force=options["force"],
-        )
+        if options["all_batches"]:
+            result = build_document_previews_in_batches(
+                customer_code=options["customer_code"],
+                filename_contains=options["filename_contains"],
+                path_contains=options["path_contains"],
+                document_type=options["document_type"],
+                year=options["year"],
+                batch_size=options["limit"],
+                force=options["force"],
+                max_batches=max(0, options["max_batches"]),
+            )
+        else:
+            result = build_missing_document_previews(
+                customer_code=options["customer_code"],
+                filename_contains=options["filename_contains"],
+                path_contains=options["path_contains"],
+                document_type=options["document_type"],
+                year=options["year"],
+                limit=options["limit"],
+                force=options["force"],
+            )
         self.stdout.write(
             self.style.SUCCESS(
-                "Built document previews processed=%s skipped=%s failed=%s"
+                "Built document previews processed=%s skipped=%s failed=%s batches=%s attempted=%s"
                 % (
                     result.processed_count,
                     result.skipped_count,
                     result.failed_count,
+                    result.batch_count,
+                    len(result.attempted_ids),
                 )
             )
         )
