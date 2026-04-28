@@ -119,6 +119,9 @@ def _list_documents_from_index(
     query: str = "",
     year: str = "",
     document_type: str = "",
+    document_family: str = "",
+    control_function_tags: str = "",
+    topic_tags: str = "",
     extension: str = "",
     filename_contains: str = "",
     path_contains: str = "",
@@ -134,6 +137,9 @@ def _list_documents_from_index(
         "query": query,
         "year": year,
         "document_type": document_type,
+        "document_family": document_family,
+        "control_function_tags": control_function_tags,
+        "topic_tags": topic_tags,
         "extension": extension,
         "filename_contains": filename_contains,
         "path_contains": path_contains,
@@ -223,6 +229,13 @@ def _score_search_document(document: dict, query: str) -> int:
     filename = _normalize_search_value(document.get("filename") or "")
     key = _normalize_search_value(document.get("key") or document.get("path") or "")
     document_type = _normalize_search_value(document.get("document_type") or "")
+    document_family = _normalize_search_value(
+        document.get("document_family") or ""
+    )
+    control_function_tags = _normalize_search_value(
+        document.get("control_function_tags") or ""
+    )
+    topic_tags = _normalize_search_value(document.get("topic_tags") or "")
     preview = _normalize_search_value(document.get("text_preview") or "")
 
     score = 0
@@ -231,6 +244,12 @@ def _score_search_document(document: dict, query: str) -> int:
             score += 6
         if term in document_type:
             score += 4
+        if document_family and term in document_family:
+            score += 5
+        if control_function_tags and term in control_function_tags:
+            score += 5
+        if topic_tags and term in topic_tags:
+            score += 5
         if term in key:
             score += 3
         if preview and term in preview:
@@ -275,11 +294,38 @@ def _dedupe_documents(documents: list[dict]) -> list[dict]:
     return deduped
 
 
+def _read_cost_tier(
+    *,
+    mode: str,
+    ext: str,
+    file_size_bytes: int = 0,
+    source: str = "download",
+) -> str:
+    if source == "preview":
+        return "light"
+
+    if mode == "ocr":
+        return "heavy"
+
+    if mode == "full":
+        if ext == ".pdf" or file_size_bytes >= 1_000_000:
+            return "heavy"
+        return "medium"
+
+    if ext == ".pdf" or file_size_bytes >= 1_000_000:
+        return "medium"
+
+    return "light"
+
+
 @mcp.tool()
 async def search_documents(
     query: str,
     year: str = "",
     document_type: str = "",
+    document_family: str = "",
+    control_function_tags: str = "",
+    topic_tags: str = "",
     extension: str = "",
     limit: int = 5,
     preview_chars: int = 1200,
@@ -301,6 +347,9 @@ async def search_documents(
             query=search_query,
             year=year,
             document_type=document_type,
+            document_family=document_family,
+            control_function_tags=control_function_tags,
+            topic_tags=topic_tags,
             extension=extension,
             limit=candidate_limit,
             sort_by="last_modified",
@@ -339,6 +388,11 @@ async def search_documents(
                 "extension": document.get("extension") or "",
                 "year": document.get("year") or "",
                 "document_type": document.get("document_type") or "",
+                "document_family": document.get("document_family") or "",
+                "control_function_tags": (
+                    document.get("control_function_tags") or ""
+                ),
+                "topic_tags": document.get("topic_tags") or "",
                 "last_modified": document.get("last_modified"),
                 "size_bytes": document.get("size_bytes") or 0,
                 "preview": _compact_preview(document, preview_chars),
@@ -348,13 +402,16 @@ async def search_documents(
 
     duration_ms = round((perf_counter() - started_at) * 1000, 2)
     logger.info(
-        "[mcp_ricerca] search_documents completed duration_ms=%s returned_documents=%s candidates=%s query=%s year=%s document_type=%s extension=%s customer_code=%s",
+        "[mcp_ricerca] search_documents completed duration_ms=%s returned_documents=%s candidates=%s query=%s year=%s document_type=%s document_family=%s control_function_tags=%s topic_tags=%s extension=%s customer_code=%s",
         duration_ms,
         len(results),
         len(unique_documents),
         query or "<empty>",
         year or "<empty>",
         document_type or "<empty>",
+        document_family or "<empty>",
+        control_function_tags or "<empty>",
+        topic_tags or "<empty>",
         extension or "<empty>",
         MCP_CUSTOMER_CODE or "<empty>",
     )
@@ -459,6 +516,9 @@ def _get_document_preview_from_document(document: Optional[dict]) -> Optional[st
 async def list_documents(
     query: str = "",
     year: str = "",
+    document_family: str = "",
+    control_function_tags: str = "",
+    topic_tags: str = "",
     extension: str = "",
     filename_contains: str = "",
     path_contains: str = "",
@@ -479,6 +539,9 @@ async def list_documents(
     indexed_documents = _list_documents_from_index(
         query=query,
         year=year,
+        document_family=document_family,
+        control_function_tags=control_function_tags,
+        topic_tags=topic_tags,
         extension=extension,
         filename_contains=filename_contains,
         path_contains=path_contains,
@@ -489,7 +552,7 @@ async def list_documents(
     if indexed_documents is not None:
         duration_ms = round((perf_counter() - started_at) * 1000, 2)
         logger.info(
-            "[mcp_ricerca] list_documents completed source=index duration_ms=%s returned_documents=%s limit=%s sort_by=%s sort_order=%s query=%s year=%s extension=%s filename_contains=%s path_contains=%s customer_code=%s",
+            "[mcp_ricerca] list_documents completed source=index duration_ms=%s returned_documents=%s limit=%s sort_by=%s sort_order=%s query=%s year=%s document_family=%s control_function_tags=%s topic_tags=%s extension=%s filename_contains=%s path_contains=%s customer_code=%s",
             duration_ms,
             len(indexed_documents),
             limit,
@@ -497,6 +560,9 @@ async def list_documents(
             sort_order,
             query or "<empty>",
             year or "<empty>",
+            document_family or "<empty>",
+            control_function_tags or "<empty>",
+            topic_tags or "<empty>",
             extension or "<empty>",
             filename_contains or "<empty>",
             path_contains or "<empty>",
@@ -640,6 +706,66 @@ def extract_text_from_pdf(filepath: str, use_ocr: bool = False) -> str:
         return f"[ERRO] Nao foi possivel abrir ou ler o PDF: {e}"
 
 
+def extract_text_from_pdf_excerpt(
+    filepath: str,
+    *,
+    max_chars: int = 12000,
+    max_pages: int = 8,
+) -> str:
+    if not pypdf:
+        return "[ERROR] pypdf nao instalado."
+
+    started_at = perf_counter()
+
+    try:
+        reader = pypdf.PdfReader(filepath)
+        total_pages = len(reader.pages)
+        texts = []
+        extracted_chars = 0
+        scanned_pages = 0
+
+        for i, page in enumerate(reader.pages[: max(1, max_pages)]):
+            scanned_pages = i + 1
+            try:
+                page_text = page.extract_text() or ""
+                texts.append(page_text)
+                extracted_chars += len(page_text)
+                if extracted_chars >= max_chars:
+                    break
+            except Exception as e:
+                logger.error(
+                    "[PDF ERROR] Falha ao extrair texto da pagina %s no modo excerpt: %s",
+                    i + 1,
+                    e,
+                    exc_info=True,
+                )
+                texts.append(f"[ERRO ao extrair texto da pagina {i + 1}]")
+
+        result = "\n".join(texts)
+        duration_ms = round((perf_counter() - started_at) * 1000, 2)
+        logger.info(
+            "[mcp_ricerca] extract_text_from_pdf_excerpt completed duration_ms=%s pages_scanned=%s total_pages=%s extracted_chars=%s",
+            duration_ms,
+            scanned_pages,
+            total_pages,
+            len(result),
+        )
+        if not result.strip():
+            return (
+                "[ERRO] Nao foi possivel extrair texto nativo deste PDF no modo excerpt. "
+                "O documento pode ser escaneado ou conter apenas imagem; use mode='full' "
+                "ou mode='ocr' apenas se a leitura ampliada for realmente necessaria."
+            )
+        return result
+    except Exception as e:
+        logger.error(
+            "[PDF ERROR] Falha geral ao abrir PDF no modo excerpt: %s",
+            e,
+            exc_info=True,
+        )
+        return f"[ERRO] Nao foi possivel abrir ou ler o PDF: {e}"
+
+
 def extract_text_from_docx(filepath: str) -> str:
     if not docx:
         return "[ERROR] python-docx nao instalado."
@@ -720,13 +846,19 @@ async def get_document(
             )
             duration_ms = round((perf_counter() - started_at) * 1000, 2)
             logger.info(
-                "[mcp_ricerca] get_document completed source=preview filename=%s requested_filename=%s ext=%s mode=%s duration_ms=%s returned_chars=%s",
+                "[mcp_ricerca] get_document completed source=preview filename=%s requested_filename=%s ext=%s mode=%s duration_ms=%s returned_chars=%s cost_tier=%s",
                 resolved_filename,
                 requested_filename,
                 ext or "<none>",
                 mode,
                 duration_ms,
                 len(returned_content),
+                _read_cost_tier(
+                    mode=mode,
+                    ext=ext,
+                    file_size_bytes=0,
+                    source="preview",
+                ),
             )
             return returned_content
 
@@ -755,7 +887,17 @@ async def get_document(
                 tmp.seek(0)
                 content = tmp.read().decode("utf-8", errors="replace")
             elif ext == ".pdf":
-                content = extract_text_from_pdf(tmp.name, use_ocr=(mode == "ocr"))
+                if mode == "excerpt":
+                    # Keep excerpt mode conservative on long PDFs when no index preview exists.
+                    content = extract_text_from_pdf_excerpt(
+                        tmp.name,
+                        max_chars=min(max(max_chars * 2, 4000), 20000),
+                    )
+                else:
+                    content = extract_text_from_pdf(
+                        tmp.name,
+                        use_ocr=(mode == "ocr"),
+                    )
             elif ext == ".docx":
                 content = extract_text_from_docx(tmp.name)
             elif ext == ".doc":
@@ -782,7 +924,7 @@ async def get_document(
 
             duration_ms = round((perf_counter() - started_at) * 1000, 2)
             logger.info(
-                "[mcp_ricerca] get_document completed filename=%s requested_filename=%s ext=%s mode=%s duration_ms=%s file_size_bytes=%s extracted_chars=%s returned_chars=%s",
+                "[mcp_ricerca] get_document completed filename=%s requested_filename=%s ext=%s mode=%s duration_ms=%s file_size_bytes=%s extracted_chars=%s returned_chars=%s cost_tier=%s",
                 resolved_filename,
                 requested_filename,
                 ext or "<none>",
@@ -791,6 +933,12 @@ async def get_document(
                 file_size_bytes,
                 len(content),
                 len(returned_content),
+                _read_cost_tier(
+                    mode=mode,
+                    ext=ext,
+                    file_size_bytes=file_size_bytes,
+                    source="download",
+                ),
             )
             return returned_content
         except Exception as e:

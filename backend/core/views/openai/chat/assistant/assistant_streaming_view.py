@@ -1,5 +1,14 @@
 from django.conf import settings
 from core.models.usage import UsageTool
+from core.services.document_retrieval.intent_classifier import (
+    classify_document_search_intent,
+)
+from core.services.document_retrieval.prompt_context import (
+    build_document_search_input,
+)
+from core.services.document_retrieval.retrieval_strategies import (
+    get_retrieval_strategy,
+)
 from core.services.usage_tracking import UsageTrackingService
 from core.utils.common import safe_load_json
 from rest_framework.views import APIView
@@ -8,6 +17,7 @@ from rest_framework.response import Response
 from openai import OpenAI
 from rest_framework import serializers
 import logging
+from time import perf_counter
 from typing import Any, Dict, Optional
 
 # Functions
@@ -34,11 +44,37 @@ class AssistantStreamingView(APIView):
     #            STREAMING OPENAI + MCP
     # -----------------------------------------------------
     def post(self, request, *args, **kwargs):
+        request_started_at = perf_counter()
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         prompt = serializer.validated_data["content"]
         thread_id = serializer.validated_data["thread_id"]
+        intent_classification = classify_document_search_intent(prompt)
+        retrieval_strategy = get_retrieval_strategy(
+            intent_classification.intent_type
+        )
+        model_input = build_document_search_input(
+            prompt,
+            intent_classification,
+            retrieval_strategy,
+        )
+
+        logger.info(
+            "[assistant_streaming] intent_detected intent_type=%s confidence=%s matched_signals=%s primary_tool=%s prefer_preview_only=%s max_documents_to_open=%s group_by=%s",
+            intent_classification.intent_type,
+            intent_classification.confidence,
+            ",".join(intent_classification.matched_signals) or "<none>",
+            retrieval_strategy.primary_tool,
+            retrieval_strategy.prefer_preview_only,
+            retrieval_strategy.max_documents_to_open,
+            retrieval_strategy.group_by or "<none>",
+        )
+        logger.info(
+            "[assistant_streaming] model_input_prepared original_prompt_length=%s model_input_length=%s",
+            len(prompt or ""),
+            len(model_input or ""),
+        )
 
         # ------------------------------------------
         #   SETUP CONVERSA
@@ -78,14 +114,18 @@ class AssistantStreamingView(APIView):
         try:
             response = client.responses.create(
                 prompt={"id": settings.OPENAI_PROMPT_ID_RICERCA_DOCUMENTALE},
-                input=prompt,
+                input=model_input,
                 conversation=assistant_thread.thread_id,
                 tools=[{
                     "type": "mcp",
                     "server_label": 'rbyc',
-                    "server_description": "Ferramenta para listar documentos do S3",
+                    "server_description": "Ferramenta para buscar documentos indexados, listar metadados e consultar trechos quando necessario",
                     "server_url": settings.MCP_SERVER_URL,
-                    "allowed_tools": ["list_documents", "get_document"],
+                    "allowed_tools": [
+                        "search_documents",
+                        "list_documents",
+                        "get_document",
+                    ],
                     "require_approval": "never",
                 }],
                 store=True,
@@ -209,5 +249,16 @@ class AssistantStreamingView(APIView):
             "response_text": response_text,
             "documents_urls": documents_urls,
         }
+
+        total_duration_ms = round((perf_counter() - request_started_at) * 1000, 2)
+        logger.info(
+            "[assistant_streaming] request_completed intent_type=%s total_duration_ms=%s response_text_length=%s response_keys_count=%s documents_urls_count=%s model_input_length=%s",
+            intent_classification.intent_type,
+            total_duration_ms,
+            len(response_text or ""),
+            len(response_keys),
+            len(documents_urls),
+            len(model_input or ""),
+        )
 
         return Response(res)

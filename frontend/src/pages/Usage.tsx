@@ -1,6 +1,6 @@
 
 import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, CreditCard, ExternalLink } from 'lucide-react';
+import { ChevronDown, CreditCard } from 'lucide-react';
 
 import ConsumptionTable from '../components/UsagePage/ConsumptionTable';
 import { formatEuro } from '../constants/usage';
@@ -212,11 +212,6 @@ const UsagePage: React.FC = () => {
                   <p className="text-xs text-gray-400 font-semibold uppercase">Metodo di pagamento</p>
                   <p className="text-base font-bold text-[#172554] mt-1 truncate">{billingLoading ? 'Caricamento...' : cardLabel}</p>
                   <p className="text-xs text-gray-500 mt-1">{cardExpiry}</p>
-                  {billingStatus?.latestInvoice && (
-                    <p className="text-xs text-gray-400 mt-2 truncate">
-                      Ultima fattura {billingStatus.latestInvoice.periodMonth}: {formatEuro(billingStatus.latestInvoice.amountEur)} - {billingStatus.latestInvoice.status}
-                    </p>
-                  )}
                   {billingError && (
                     <p className="text-xs text-red-600 mt-2">{billingError}</p>
                   )}
@@ -233,17 +228,6 @@ const UsagePage: React.FC = () => {
                     <CreditCard className="w-4 h-4" />
                     {billingStatus?.paymentMethodReady ? 'Aggiorna carta' : 'Registra carta'}
                   </button>
-                )}
-                {billingStatus?.latestInvoice?.hostedInvoiceUrl && (
-                  <a
-                    href={billingStatus.latestInvoice.hostedInvoiceUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center justify-center gap-2 border border-gray-200 text-[#172554] bg-white hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                    Apri fattura
-                  </a>
                 )}
               </div>
             </div>
