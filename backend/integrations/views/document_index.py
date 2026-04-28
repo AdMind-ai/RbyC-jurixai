@@ -41,6 +41,8 @@ def build_document_search_filter(term: str, include_preview: bool = False) -> Q:
             Q(filename__icontains=variant)
             | Q(object_key__icontains=variant)
             | Q(document_type__icontains=variant)
+            | Q(document_family__icontains=variant)
+            | Q(topic_tags__icontains=variant)
             | Q(year__icontains=variant)
         )
         if include_preview:
@@ -62,6 +64,9 @@ class InternalDocumentIndexView(APIView):
         path = serializers.CharField()
         year = serializers.CharField(allow_blank=True)
         document_type = serializers.CharField()
+        document_family = serializers.CharField()
+        control_function_tags = serializers.CharField(allow_blank=True)
+        topic_tags = serializers.CharField(allow_blank=True)
         text_preview = serializers.CharField(allow_blank=True)
 
     def get(self, request):
@@ -83,6 +88,13 @@ class InternalDocumentIndexView(APIView):
         document_type = (
             request.query_params.get("document_type") or ""
         ).strip()
+        document_family = (
+            request.query_params.get("document_family") or ""
+        ).strip()
+        control_function_tags = (
+            request.query_params.get("control_function_tags") or ""
+        ).strip()
+        topic_tags = (request.query_params.get("topic_tags") or "").strip()
         extension = (request.query_params.get("extension") or "").strip().lower()
         filename_contains = (
             request.query_params.get("filename_contains") or ""
@@ -109,6 +121,9 @@ class InternalDocumentIndexView(APIView):
             "last_modified",
             "year",
             "document_type",
+            "document_family",
+            "control_function_tags",
+            "topic_tags",
             "text_preview",
             "indexed_at",
             "client__customer_code",
@@ -123,6 +138,28 @@ class InternalDocumentIndexView(APIView):
             for variant in search_variants(document_type):
                 document_type_filter |= Q(document_type__icontains=variant)
             documents = documents.filter(document_type_filter)
+
+        if document_family:
+            document_family_filter = Q()
+            for variant in search_variants(document_family):
+                document_family_filter |= Q(
+                    document_family__icontains=variant
+                )
+            documents = documents.filter(document_family_filter)
+
+        if control_function_tags:
+            control_function_filter = Q()
+            for variant in search_variants(control_function_tags):
+                control_function_filter |= Q(
+                    control_function_tags__icontains=variant
+                )
+            documents = documents.filter(control_function_filter)
+
+        if topic_tags:
+            topic_filter = Q()
+            for variant in search_variants(topic_tags):
+                topic_filter |= Q(topic_tags__icontains=variant)
+            documents = documents.filter(topic_filter)
 
         if extension:
             normalized_extension = (
@@ -181,6 +218,9 @@ class InternalDocumentIndexView(APIView):
                 "path": document.object_key,
                 "year": document.year,
                 "document_type": document.document_type,
+                "document_family": document.document_family,
+                "control_function_tags": document.control_function_tags,
+                "topic_tags": document.topic_tags,
                 "text_preview": document.text_preview,
             }
             for document in documents
@@ -188,7 +228,7 @@ class InternalDocumentIndexView(APIView):
 
         duration_ms = round((perf_counter() - started_at) * 1000, 2)
         logger.info(
-            "[document_index] request_completed duration_ms=%s customer_code=%s returned_documents=%s limit=%s query=%s year=%s document_type=%s extension=%s filename_contains=%s path_contains=%s sort_by=%s sort_order=%s",
+            "[document_index] request_completed duration_ms=%s customer_code=%s returned_documents=%s limit=%s query=%s year=%s document_type=%s document_family=%s control_function_tags=%s topic_tags=%s extension=%s filename_contains=%s path_contains=%s sort_by=%s sort_order=%s",
             duration_ms,
             customer_code,
             len(payload),
@@ -196,6 +236,9 @@ class InternalDocumentIndexView(APIView):
             query or "<empty>",
             year or "<empty>",
             document_type or "<empty>",
+            document_family or "<empty>",
+            control_function_tags or "<empty>",
+            topic_tags or "<empty>",
             extension or "<empty>",
             filename_contains or "<empty>",
             path_contains or "<empty>",

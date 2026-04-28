@@ -3,7 +3,7 @@ import os
 import tempfile
 import xml.etree.ElementTree as ET
 import zipfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from django.utils import timezone
 
@@ -25,6 +25,8 @@ class DocumentPreviewResult:
     processed_count: int = 0
     skipped_count: int = 0
     failed_count: int = 0
+    batch_count: int = 0
+    attempted_ids: list[int] = field(default_factory=list)
 
 
 def build_missing_document_previews(
@@ -35,6 +37,7 @@ def build_missing_document_previews(
     year: str = "",
     limit: int = 100,
     force: bool = False,
+    exclude_ids: set[int] | None = None,
 ) -> DocumentPreviewResult:
     documents = DocumentIndex.objects.select_related("client").filter(
         active=True,
@@ -52,16 +55,30 @@ def build_missing_document_previews(
         documents = documents.filter(year=year)
     if not force:
         documents = documents.filter(extraction_status=DocumentIndex.STATUS_PENDING)
+    if exclude_ids:
+        documents = documents.exclude(id__in=exclude_ids)
 
     documents = documents.order_by("-last_modified", "id")[: max(1, limit)]
     s3_client = _get_s3_client()
     result = DocumentPreviewResult()
+    result.batch_count = 1
 
     for document in documents:
+        result.attempted_ids.append(document.id)
         try:
             preview = extract_document_preview(document, s3_client=s3_client)
             if preview:
                 document.text_preview = preview
+                document.control_function_tags = (
+                    DocumentIndex.infer_control_function_tags(
+                        document.object_key,
+                        preview,
+                    )
+                )
+                document.topic_tags = DocumentIndex.infer_topic_tags(
+                    document.object_key,
+                    preview,
+                )
                 document.extraction_status = DocumentIndex.STATUS_READY
                 document.extraction_error = ""
                 result.processed_count += 1
@@ -74,6 +91,8 @@ def build_missing_document_previews(
             document.save(
                 update_fields=[
                     "text_preview",
+                    "control_function_tags",
+                    "topic_tags",
                     "extraction_status",
                     "extraction_error",
                     "indexed_at",
@@ -104,6 +123,55 @@ def build_missing_document_previews(
         result.failed_count,
     )
     return result
+
+
+def build_document_previews_in_batches(
+    customer_code: str = "",
+    filename_contains: str = "",
+    path_contains: str = "",
+    document_type: str = "",
+    year: str = "",
+    batch_size: int = 100,
+    force: bool = False,
+    max_batches: int = 0,
+) -> DocumentPreviewResult:
+    aggregate = DocumentPreviewResult()
+    seen_ids: set[int] = set()
+
+    while True:
+        if max_batches and aggregate.batch_count >= max_batches:
+            break
+
+        batch_result = build_missing_document_previews(
+            customer_code=customer_code,
+            filename_contains=filename_contains,
+            path_contains=path_contains,
+            document_type=document_type,
+            year=year,
+            limit=batch_size,
+            force=force,
+            exclude_ids=seen_ids,
+        )
+        if not batch_result.attempted_ids:
+            break
+
+        aggregate.processed_count += batch_result.processed_count
+        aggregate.skipped_count += batch_result.skipped_count
+        aggregate.failed_count += batch_result.failed_count
+        aggregate.batch_count += 1
+        aggregate.attempted_ids.extend(batch_result.attempted_ids)
+        seen_ids.update(batch_result.attempted_ids)
+
+    logger.info(
+        "[document_preview] batched_completed customer_code=%s processed=%s skipped=%s failed=%s batches=%s attempted=%s",
+        customer_code or "<all>",
+        aggregate.processed_count,
+        aggregate.skipped_count,
+        aggregate.failed_count,
+        aggregate.batch_count,
+        len(aggregate.attempted_ids),
+    )
+    return aggregate
 
 
 def extract_document_preview(document: DocumentIndex, s3_client=None) -> str:
