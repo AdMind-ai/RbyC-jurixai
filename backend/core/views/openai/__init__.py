@@ -5,6 +5,7 @@ __all__ = [
     'OpenAIConversationViewSet',
     'OpenAISendMessageView',
     'OpenAISendAssistantMessageView',
+    'AssistantDocumentSearchStreamView',
     'AssistantStreamingView',
     'ThreadsView',
     'SaveConversationView',
