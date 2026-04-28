@@ -13,6 +13,7 @@ interface Message {
   sender: 'user' | 'ai'
   content: string
   sources?: SourceItem[]
+  isStreaming?: boolean
 }
 
 interface DocSearchMessageListProps {
@@ -279,6 +280,27 @@ const DocSearchMessageList: React.FC<DocSearchMessageListProps> = ({
                     {/* Render sources panel when present (outside ReactMarkdown to satisfy types) */}
                     {msg.sources && msg.sources.length > 0 && (
                       <SourcesPanel sources={msg.sources} />
+                    )}
+
+                    {msg.sender === 'ai' && msg.isStreaming && (
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1,
+                          mt: 1,
+                          color: '#6B7280',
+                          fontSize: '0.92rem',
+                        }}
+                      >
+                        <Typography
+                          component="span"
+                          sx={{ fontSize: '0.92rem', color: '#6B7280' }}
+                        >
+                          Scrivendo
+                        </Typography>
+                        <DotTyping />
+                      </Box>
                     )}
                 </Typography>
               </Paper>

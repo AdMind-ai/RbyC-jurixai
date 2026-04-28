@@ -5,6 +5,7 @@ from .deepl import DeeplTranslateTextView
 from .openai import (OpenAIConversationViewSet,
                      OpenAISendMessageView,
                      AssistantStreamingView,
+                     AssistantDocumentSearchStreamView,
                      ThreadsView,
                      SaveConversationView,
                      ConversationForChatView)
@@ -33,6 +34,7 @@ __all__ = [
     'OpenAISendMessageView',
     'ExtractContentView',
     'AssistantStreamingView',
+    'AssistantDocumentSearchStreamView',
     'ThreadsView',
     'SaveConversationView',
     'ConversationForChatView',

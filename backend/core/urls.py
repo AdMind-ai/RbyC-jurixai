@@ -36,6 +36,8 @@ urlpatterns = [
     # Chat with assistant
     path('openai/chat/assistant/send-message',
          AssistantStreamingView.as_view(), name='openai-chat-assistant-send-message'),
+    path('openai/chat/assistant/send-message-stream',
+         AssistantDocumentSearchStreamView.as_view(), name='openai-chat-assistant-send-message-stream'),
     path('openai/chat/assistant/thread', ThreadsView.as_view(),
          name='openai-chat-assistant-thread'),
     path('openai/chat/assistant/save-conversation', SaveConversationView.as_view(),
