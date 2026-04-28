@@ -68,11 +68,12 @@ def sync_client_document_index(
                     object_key = obj["Key"]
                     seen_keys.add(object_key)
                     defaults = build_document_defaults(client, obj)
-                    _, created = DocumentIndex.objects.update_or_create(
+                    document, created = DocumentIndex.objects.update_or_create(
                         client=client,
                         object_key=object_key,
                         defaults=defaults,
                     )
+                    refresh_enriched_tags(document)
                     if created:
                         created_count += 1
                     else:
@@ -144,6 +145,33 @@ def build_document_defaults(client: IntegrationClient, obj: dict):
         "etag": (obj.get("ETag") or "").strip('"'),
         "year": DocumentIndex.infer_year(object_key),
         "document_type": DocumentIndex.infer_document_type(object_key),
+        "document_family": DocumentIndex.infer_document_family(object_key),
+        "control_function_tags": DocumentIndex.infer_control_function_tags(
+            object_key
+        ),
+        "topic_tags": DocumentIndex.infer_topic_tags(object_key),
         "active": True,
         "indexed_at": timezone.now(),
     }
+
+
+def refresh_enriched_tags(document: DocumentIndex):
+    control_function_tags = DocumentIndex.infer_control_function_tags(
+        document.object_key,
+        document.text_preview,
+    )
+    topic_tags = DocumentIndex.infer_topic_tags(
+        document.object_key,
+        document.text_preview,
+    )
+
+    update_fields = []
+    if document.control_function_tags != control_function_tags:
+        document.control_function_tags = control_function_tags
+        update_fields.append("control_function_tags")
+    if document.topic_tags != topic_tags:
+        document.topic_tags = topic_tags
+        update_fields.append("topic_tags")
+
+    if update_fields:
+        document.save(update_fields=update_fields)

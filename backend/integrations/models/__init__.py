@@ -84,6 +84,9 @@ class DocumentIndex(models.Model):
     etag = models.CharField(max_length=128, blank=True)
     year = models.CharField(max_length=4, blank=True)
     document_type = models.CharField(max_length=64, default="altro")
+    document_family = models.CharField(max_length=64, default="altro")
+    control_function_tags = models.CharField(max_length=128, blank=True)
+    topic_tags = models.CharField(max_length=256, blank=True)
     text_preview = models.TextField(blank=True)
     extracted_text = models.TextField(blank=True)
     extraction_status = models.CharField(
@@ -106,6 +109,9 @@ class DocumentIndex(models.Model):
         ]
         indexes = [
             models.Index(fields=["client", "active", "document_type"]),
+            models.Index(fields=["client", "active", "document_family"]),
+            models.Index(fields=["client", "active", "control_function_tags"]),
+            models.Index(fields=["client", "active", "topic_tags"]),
             models.Index(fields=["client", "active", "year"]),
             models.Index(fields=["client", "active", "last_modified"]),
             models.Index(fields=["bucket_name"]),
@@ -137,3 +143,132 @@ class DocumentIndex(models.Model):
             if any(pattern in value for pattern in patterns):
                 return document_type
         return "altro"
+
+    @staticmethod
+    def infer_document_family(object_key: str) -> str:
+        value = (object_key or "").lower()
+
+        if (
+            "verbale" in value
+            and (
+                "cda" in value
+                or "consiglio di amministrazione" in value
+            )
+        ):
+            return "verbale_cda"
+
+        if (
+            "estratto" in value
+            and (
+                "cda" in value
+                or "consiglio di amministrazione" in value
+            )
+        ):
+            return "estratto_cda"
+
+        if "bilancio" in value:
+            return "bilancio"
+
+        if (
+            "relazione" in value
+            and "struttura organizzativa" in value
+        ):
+            return "relazione_struttura_organizzativa"
+
+        if any(
+            pattern in value
+            for pattern in [
+                "internal audit",
+                "audit",
+                "compliance",
+                "risk management",
+                "relazione ia",
+                "relazione rm",
+                "relazione cpl",
+                "antiriciclaggio",
+                "aml",
+            ]
+        ):
+            return "report_controlli"
+
+        if (
+            "policy" in value
+            and any(
+                pattern in value
+                for pattern in [
+                    "invest",
+                    "portafogli",
+                    "delega",
+                ]
+            )
+        ):
+            return "policy_investimento"
+
+        if any(pattern in value for pattern in ["materiali", "documenti"]):
+            return "materiale_supporto"
+
+        return "altro"
+
+    @staticmethod
+    def infer_control_function_tags(
+        object_key: str,
+        text_preview: str = "",
+    ) -> str:
+        value = " ".join(
+            item for item in [(object_key or "").lower(), (text_preview or "").lower()] if item
+        )
+        tags = []
+
+        tag_patterns = [
+            ("risk", ["risk management", "risk", "rm"]),
+            ("compliance", ["compliance", "cpl"]),
+            ("internal_audit", ["internal audit", "audit", "ia"]),
+            ("aml", ["aml", "antiriciclaggio"]),
+        ]
+
+        for tag, patterns in tag_patterns:
+            if any(pattern in value for pattern in patterns):
+                tags.append(tag)
+
+        return ",".join(tags)
+
+    @staticmethod
+    def infer_topic_tags(
+        object_key: str,
+        text_preview: str = "",
+    ) -> str:
+        value = " ".join(
+            item
+            for item in [(object_key or "").lower(), (text_preview or "").lower()]
+            if item
+        )
+        tags = []
+
+        tag_patterns = [
+            ("consob", ["consob"]),
+            ("contestazioni", ["contestazione", "contestazioni"]),
+            ("nomina", ["nomina", "nominato", "nominare"]),
+            ("poteri", ["poteri", "potere"]),
+            ("deleghe", ["deleghe", "delega"]),
+            ("bilancio", ["bilancio"]),
+            (
+                "market_abuse",
+                ["market abuse", "operazioni sospette", "ordini sospetti"],
+            ),
+            (
+                "struttura_organizzativa",
+                ["struttura organizzativa"],
+            ),
+            (
+                "politica_investimento",
+                ["politica di investimento", "politiche di investimento"],
+            ),
+            ("rimedi", ["rimedi", "remediation", "azioni correttive"]),
+            ("rilievi", ["rilievi", "finding", "findings", "raccomandazioni"]),
+        ]
+
+        for tag, patterns in tag_patterns:
+            if any(pattern in value for pattern in patterns):
+                tags.append(tag)
+
+        return ",".join(tags)
