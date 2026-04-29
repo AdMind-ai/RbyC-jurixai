@@ -5,11 +5,12 @@ import jwt
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
-from integrations.models import IntegrationApiKey, IntegrationClient
+from integrations.models import DocumentIndex, IntegrationApiKey, IntegrationClient
 from integrations.services.mcp_auth import (
     build_mcp_access_token,
     decode_mcp_access_token,
 )
+from integrations.views.document_index import query_terms_for_search, search_variants
 
 
 class MCPAuthServiceTests(TestCase):
@@ -78,7 +79,7 @@ class RicercaDocumentaleViewMCPAuthTests(TestCase):
         )
 
         response = self.api_client.post(
-            "/api/integrations/ricerca-documentale/",
+            "/api/integrations/v1/ricerca-documentale/",
             {"input": "Liste os documentos sobre compliance"},
             format="json",
         )
@@ -128,7 +129,7 @@ class RicercaDocumentaleViewMCPAuthTests(TestCase):
         )
 
         response = legacy_client.post(
-            "/api/integrations/ricerca-documentale/",
+            "/api/integrations/v1/ricerca-documentale/",
             {"input": "Liste os documentos sobre compliance"},
             format="json",
         )
@@ -176,7 +177,7 @@ class RicercaDocumentaleViewMCPAuthTests(TestCase):
         }
 
         response = self.api_client.post(
-            "/api/integrations/ricerca-documentale/",
+            "/api/integrations/v1/ricerca-documentale/",
             {"input": "Liste os documentos sobre compliance"},
             format="json",
         )
@@ -215,7 +216,7 @@ class InternalDocumentIndexAuthTests(TestCase):
     def test_internal_document_index_requires_bearer_token(self):
         client = APIClient()
         response = client.get(
-            "/api/integrations/internal/document-index/",
+            "/api/integrations/v1/internal/document-index/",
             HTTP_X_INTERNAL_API_KEY="internal-index-key",
         )
 
@@ -233,7 +234,7 @@ class InternalDocumentIndexAuthTests(TestCase):
         client = APIClient()
         token = build_mcp_access_token(self.integration_client)
         response = client.get(
-            "/api/integrations/internal/document-index/?customer_code=outro_cliente",
+            "/api/integrations/v1/internal/document-index/?customer_code=outro_cliente",
             HTTP_X_INTERNAL_API_KEY="internal-index-key",
             HTTP_AUTHORIZATION=f"Bearer {token}",
         )
@@ -243,3 +244,54 @@ class InternalDocumentIndexAuthTests(TestCase):
             response.data["detail"],
             "customer_code mismatch for MCP bearer token.",
         )
+
+    @override_settings(
+        DOCUMENT_INDEX_API_KEY="internal-index-key",
+        MCP_INTERNAL_AUTH_SECRET="test-mcp-secret",
+        MCP_INTERNAL_AUTH_ISSUER="backend-integrations",
+        MCP_INTERNAL_AUTH_AUDIENCE="mcp-ricerca",
+        MCP_INTERNAL_AUTH_TTL_SECONDS=300,
+    )
+    def test_internal_document_index_query_matches_ad_dg_abbreviations(self):
+        DocumentIndex.objects.create(
+            client=self.integration_client,
+            bucket_name="bucket-cliente-teste",
+            object_key="CDA/2023/2023.06.13/Documenti/5. Direttore Generale/Replica SIM - Poteri AD e DG - 13.06.23.pdf",
+            filename="Replica SIM - Poteri AD e DG - 13.06.23.pdf",
+            extension=".pdf",
+            size_bytes=1234,
+            year="2023",
+            document_type="nomina",
+            document_family="nomina",
+            topic_tags="direttore_generale,amministratore_delegato,nomina,poteri,deleghe",
+            text_preview="Documento relativo ai poteri attribuiti ad AD e DG.",
+            active=True,
+        )
+
+        client = APIClient()
+        token = build_mcp_access_token(self.integration_client)
+        response = client.get(
+            (
+                "/api/integrations/v1/internal/document-index/"
+                "?query=amministratore delegato direttore generale poteri deleghe"
+                "&year=2023"
+                "&document_family=nomina"
+                "&topic_tags=nomina,poteri,deleghe"
+            ),
+            HTTP_X_INTERNAL_API_KEY="internal-index-key",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()), 1)
+        self.assertIn("Poteri AD e DG", response.json()[0]["filename"])
+
+
+class DocumentIndexSearchHelpersTests(TestCase):
+    def test_search_variants_expand_common_abbreviations(self):
+        variants = search_variants("amministratore delegato")
+        self.assertIn("ad", variants)
+
+    def test_query_terms_for_search_includes_bigrams(self):
+        terms = query_terms_for_search("direttore generale nomina")
+        self.assertIn("direttore generale", terms)

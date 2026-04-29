@@ -110,7 +110,17 @@ CELERY_TIMEZONE = "Europe/Rome"
 DOCUMENT_INDEX_SYNC_MINUTES = int(os.environ.get('DOCUMENT_INDEX_SYNC_MINUTES', '15'))
 DOCUMENT_PREVIEW_SYNC_MINUTES = int(os.environ.get('DOCUMENT_PREVIEW_SYNC_MINUTES', '10'))
 DOCUMENT_PREVIEW_SYNC_LIMIT = int(os.environ.get('DOCUMENT_PREVIEW_SYNC_LIMIT', '100'))
-DOCUMENT_PREVIEW_SYNC_CUSTOMER_CODE = os.environ.get('DOCUMENT_PREVIEW_SYNC_CUSTOMER_CODE', DOCUMENT_INDEX_CUSTOMER_CODE)
+DOCUMENT_PREVIEW_SYNC_CUSTOMER_CODE = os.environ.get(
+    'DOCUMENT_PREVIEW_SYNC_CUSTOMER_CODE',
+    '',
+).strip()
+DOCUMENT_PREVIEW_SYNC_PROCESS_ALL = os.environ.get(
+    'DOCUMENT_PREVIEW_SYNC_PROCESS_ALL',
+    'false',
+).strip().lower() in {'1', 'true', 'yes', 'on'}
+DOCUMENT_PREVIEW_SYNC_MAX_BATCHES = int(
+    os.environ.get('DOCUMENT_PREVIEW_SYNC_MAX_BATCHES', '0')
+)
 
 now = datetime.now()
 current_year = now.year
@@ -133,6 +143,8 @@ CELERY_BEAT_SCHEDULE = {
             'customer_code': DOCUMENT_PREVIEW_SYNC_CUSTOMER_CODE,
             'limit': DOCUMENT_PREVIEW_SYNC_LIMIT,
             'force': False,
+            'process_all': DOCUMENT_PREVIEW_SYNC_PROCESS_ALL,
+            'max_batches': DOCUMENT_PREVIEW_SYNC_MAX_BATCHES,
         },
     },
     'generate_monthly_billing_invoice': {
