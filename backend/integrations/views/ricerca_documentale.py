@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Mapping, Sequence
 from time import perf_counter
 from typing import Any, Optional
 from uuid import uuid4
@@ -24,9 +25,117 @@ from core.utils.openai_client import client
 from core.utils.s3_utils import get_presigned_urls
 from integrations.authentication import APIKeyAuthentication
 from integrations.permissions import HasValidAPIKey
+from integrations.services.mcp_auth import build_mcp_access_token
 
 
 logger = logging.getLogger(__name__)
+
+
+def _looks_like_document_key(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    normalized = value.strip()
+    if not normalized or normalized.endswith("/"):
+        return False
+    return "/" in normalized or "." in normalized
+
+
+def _coerce_to_plain_data(value: Any) -> Any:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, Mapping):
+        return dict(value)
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return list(value)
+
+    for method_name in ("model_dump", "dict"):
+        method = getattr(value, method_name, None)
+        if callable(method):
+            try:
+                return method()
+            except Exception:
+                continue
+
+    if hasattr(value, "__dict__"):
+        try:
+            return vars(value)
+        except Exception:
+            return value
+    return value
+
+
+def _collect_document_keys_from_payload(payload: Any) -> list[str]:
+    from core.utils.common import safe_load_json
+
+    collected: list[str] = []
+    seen_ids: set[int] = set()
+
+    def visit(node: Any) -> None:
+        node = _coerce_to_plain_data(node)
+        node_id = id(node)
+        if node_id in seen_ids:
+            return
+        seen_ids.add(node_id)
+
+        if node is None:
+            return
+
+        if isinstance(node, str):
+            text = node.strip()
+            if not text:
+                return
+            parsed = None
+            if text.startswith("{") or text.startswith("["):
+                try:
+                    parsed = safe_load_json(text)
+                except Exception:
+                    parsed = None
+            if parsed not in (None, text):
+                visit(parsed)
+            return
+
+        if isinstance(node, Mapping):
+            keys_value = node.get("keys")
+            if isinstance(keys_value, (list, tuple)):
+                for item in keys_value:
+                    if _looks_like_document_key(item):
+                        collected.append(item.strip())
+
+            key_value = node.get("key")
+            if _looks_like_document_key(key_value):
+                collected.append(key_value.strip())
+
+            path_value = node.get("path")
+            if _looks_like_document_key(path_value):
+                collected.append(path_value.strip())
+
+            output_value = node.get("output")
+            if output_value is not None:
+                visit(output_value)
+
+            content_value = node.get("content")
+            if content_value is not None:
+                visit(content_value)
+
+            for child in node.values():
+                if child in {keys_value, key_value, path_value, output_value, content_value}:
+                    continue
+                visit(child)
+            return
+
+        if isinstance(node, Sequence) and not isinstance(node, (str, bytes, bytearray)):
+            for item in node:
+                visit(item)
+
+    visit(payload)
+
+    deduped: list[str] = []
+    seen_keys: set[str] = set()
+    for item in collected:
+        if item not in seen_keys:
+            seen_keys.add(item)
+            deduped.append(item)
+    return deduped
 
 
 @extend_schema(
@@ -93,6 +202,11 @@ class RicercaDocumentaleView(APIView):
             or getattr(settings, "AWS_STORAGE_BUCKET_NAME", None)
         )
         client_name = getattr(integration_client, "client_name", None)
+        mcp_token = (
+            build_mcp_access_token(integration_client)
+            if integration_client is not None
+            else None
+        )
 
         logger.info(
             "[ricerca_documentale][%s] request_started conversation_id=%s prompt_length=%s client=%s bucket=%s",
@@ -152,24 +266,28 @@ class RicercaDocumentaleView(APIView):
 
         openai_started_at = perf_counter()
         try:
+            mcp_tool = {
+                "type": "mcp",
+                "server_label": "rbyc",
+                "server_description": "Ferramenta para buscar documentos indexados, listar metadados e consultar trechos quando necessario",
+                "server_url": settings.MCP_SERVER_URL,
+                "allowed_tools": [
+                    "search_documents",
+                    "list_documents",
+                    "get_document",
+                ],
+                "require_approval": "never",
+            }
+            if mcp_token:
+                mcp_tool["headers"] = {
+                    "Authorization": f"Bearer {mcp_token}",
+                }
+
             response = client.responses.create(
                 prompt={"id": settings.OPENAI_PROMPT_ID_RICERCA_DOCUMENTALE},
                 input=model_input,
                 conversation=assistant_thread.thread_id or None,
-                tools=[
-                    {
-                        "type": "mcp",
-                        "server_label": "rbyc",
-                        "server_description": "Ferramenta para buscar documentos indexados, listar metadados e consultar trechos quando necessario",
-                        "server_url": settings.MCP_SERVER_URL,
-                        "allowed_tools": [
-                            "search_documents",
-                            "list_documents",
-                            "get_document",
-                        ],
-                        "require_approval": "never",
-                    }
-                ],
+                tools=[mcp_tool],
                 store=True,
                 timeout=900,
             )
@@ -222,11 +340,6 @@ class RicercaDocumentaleView(APIView):
             )
             if "keys" in json_res and isinstance(json_res["keys"], (list, tuple)):
                 response_keys = list(json_res["keys"])
-            else:
-                try:
-                    response_keys = list(json_res.keys())
-                except Exception:
-                    response_keys = []
         elif json_res is None:
             response_text = raw_output or ""
         else:
@@ -240,6 +353,17 @@ class RicercaDocumentaleView(APIView):
             response_text = ""
         elif not isinstance(response_text, str):
             response_text = str(response_text)
+
+        if not response_keys:
+            try:
+                response_keys = _collect_document_keys_from_payload(response)
+            except Exception:
+                logger.exception(
+                    "[ricerca_documentale][%s] response_key_extraction_failed raw_output_length=%s",
+                    request_id,
+                    raw_output_length,
+                )
+                response_keys = []
 
         documents_urls = {}
         presign_started_at = perf_counter()
