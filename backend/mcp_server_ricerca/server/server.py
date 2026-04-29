@@ -437,11 +437,13 @@ def _document_search_queries(query: str) -> list[str]:
         if candidate and candidate not in queries:
             queries.append(candidate)
 
-    if len(_query_terms(cleaned)) > 1:
-        for term in _query_terms(cleaned):
-            if term not in queries:
-                queries.append(term)
-    return queries[:6] or [""]
+    terms = _query_terms(cleaned)
+    if terms:
+        # Keep the fallback space narrow: prefer the strongest lexical anchor only.
+        longest_term = max(terms, key=len)
+        if longest_term not in queries:
+            queries.append(longest_term)
+    return queries[:3] or [""]
 
 
 def _dedupe_documents(documents: list[dict]) -> list[dict]:
@@ -522,10 +524,23 @@ async def search_documents(
         limit = max(1, min(limit, 20))
         preview_chars = max(300, min(preview_chars, 3000))
         candidate_limit = max(20, min(limit * 8, 100))
+        enough_candidate_count = max(3, min(limit, 5))
+        strong_structured_filters = any(
+            (
+                (year or "").strip(),
+                (document_type or "").strip(),
+                (document_family or "").strip(),
+                (control_function_tags or "").strip(),
+                (topic_tags or "").strip(),
+            )
+        )
 
         candidate_documents = []
         index_unavailable = False
-        for search_query in _document_search_queries(query):
+        for attempt_index, search_query in enumerate(
+            _document_search_queries(query),
+            start=1,
+        ):
             documents = _list_documents_from_index(
                 query=search_query,
                 year=year,
@@ -543,7 +558,12 @@ async def search_documents(
                 candidate_documents = []
                 break
             candidate_documents.extend(documents)
-            if len(_dedupe_documents(candidate_documents)) >= candidate_limit:
+            unique_count = len(_dedupe_documents(candidate_documents))
+            if unique_count >= enough_candidate_count:
+                break
+            if unique_count >= candidate_limit:
+                break
+            if strong_structured_filters and unique_count == 0 and attempt_index >= 2:
                 break
 
         used_source = "index"
