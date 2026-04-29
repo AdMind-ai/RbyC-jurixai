@@ -167,6 +167,23 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-a!$duvz(gemholwmq(0q3y5&aeh@b$%g(2hgajbyh%^2i!jcbx'
 
+MCP_INTERNAL_AUTH_SECRET = (
+    os.environ.get('MCP_INTERNAL_AUTH_SECRET')
+    or INTEGRATION_API_KEY
+    or SECRET_KEY
+)
+MCP_INTERNAL_AUTH_ISSUER = os.environ.get(
+    'MCP_INTERNAL_AUTH_ISSUER',
+    'backend-integrations',
+)
+MCP_INTERNAL_AUTH_AUDIENCE = os.environ.get(
+    'MCP_INTERNAL_AUTH_AUDIENCE',
+    'mcp-ricerca',
+)
+MCP_INTERNAL_AUTH_TTL_SECONDS = int(
+    os.environ.get('MCP_INTERNAL_AUTH_TTL_SECONDS', '300')
+)
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
