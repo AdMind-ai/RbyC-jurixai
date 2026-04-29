@@ -85,6 +85,7 @@ class MCPClientContext:
     client_id: Optional[int]
     customer_code: str
     bucket_name: str
+    access_token: Optional[str] = None
     source: str = "fallback"
 
 
@@ -99,6 +100,7 @@ def _default_client_context() -> MCPClientContext:
         client_id=None,
         customer_code=MCP_CUSTOMER_CODE,
         bucket_name=BUCKET_NAME,
+        access_token=None,
         source="fallback",
     )
 
@@ -133,6 +135,7 @@ def _decode_mcp_access_token(token: str) -> MCPClientContext:
         client_id=normalized_client_id,
         customer_code=customer_code,
         bucket_name=bucket_name,
+        access_token=token,
         source="token",
     )
 
@@ -312,15 +315,20 @@ def _list_documents_from_index(
         DOCUMENT_INDEX_TIMEOUT_SECONDS,
     )
     try:
+        client_context = _get_active_client_context()
+        headers = {
+            "Accept": "application/json",
+            "Accept-Encoding": "identity",
+            "Connection": "close",
+            "User-Agent": "rbyc-mcp-document-index/1.0",
+            "X-Internal-API-Key": DOCUMENT_INDEX_API_KEY,
+        }
+        if client_context.access_token:
+            headers["Authorization"] = f"Bearer {client_context.access_token}"
+
         response = requests.get(
             url,
-            headers={
-                "Accept": "application/json",
-                "Accept-Encoding": "identity",
-                "Connection": "close",
-                "User-Agent": "rbyc-mcp-document-index/1.0",
-                "X-Internal-API-Key": DOCUMENT_INDEX_API_KEY,
-            },
+            headers=headers,
             timeout=DOCUMENT_INDEX_TIMEOUT_SECONDS,
         )
         duration_ms = round((perf_counter() - request_started_at) * 1000, 2)

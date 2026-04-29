@@ -194,3 +194,52 @@ class RicercaDocumentaleViewMCPAuthTests(TestCase):
                 )
             },
         )
+
+
+class InternalDocumentIndexAuthTests(TestCase):
+    def setUp(self):
+        self.integration_client = IntegrationClient.objects.create(
+            client_name="Cliente Teste",
+            customer_code="cliente_teste",
+            bucket_name="bucket-cliente-teste",
+            active=True,
+        )
+
+    @override_settings(
+        DOCUMENT_INDEX_API_KEY="internal-index-key",
+        MCP_INTERNAL_AUTH_SECRET="test-mcp-secret",
+        MCP_INTERNAL_AUTH_ISSUER="backend-integrations",
+        MCP_INTERNAL_AUTH_AUDIENCE="mcp-ricerca",
+        MCP_INTERNAL_AUTH_TTL_SECONDS=300,
+    )
+    def test_internal_document_index_requires_bearer_token(self):
+        client = APIClient()
+        response = client.get(
+            "/api/integrations/internal/document-index/",
+            HTTP_X_INTERNAL_API_KEY="internal-index-key",
+        )
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.data["detail"], "Missing MCP bearer token.")
+
+    @override_settings(
+        DOCUMENT_INDEX_API_KEY="internal-index-key",
+        MCP_INTERNAL_AUTH_SECRET="test-mcp-secret",
+        MCP_INTERNAL_AUTH_ISSUER="backend-integrations",
+        MCP_INTERNAL_AUTH_AUDIENCE="mcp-ricerca",
+        MCP_INTERNAL_AUTH_TTL_SECONDS=300,
+    )
+    def test_internal_document_index_rejects_customer_code_mismatch(self):
+        client = APIClient()
+        token = build_mcp_access_token(self.integration_client)
+        response = client.get(
+            "/api/integrations/internal/document-index/?customer_code=outro_cliente",
+            HTTP_X_INTERNAL_API_KEY="internal-index-key",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(
+            response.data["detail"],
+            "customer_code mismatch for MCP bearer token.",
+        )
