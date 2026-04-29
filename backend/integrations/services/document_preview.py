@@ -184,22 +184,32 @@ def extract_document_preview(document: DocumentIndex, s3_client=None) -> str:
 
     s3_client = s3_client or _get_s3_client()
     suffix = extension or ".tmp"
-    with tempfile.NamedTemporaryFile(delete=True, suffix=suffix) as tmp:
-        s3_client.download_fileobj(document.bucket_name, document.object_key, tmp)
-        tmp.flush()
+    temp_fd, temp_path = tempfile.mkstemp(suffix=suffix)
+    os.close(temp_fd)
+    try:
+        with open(temp_path, "w+b") as tmp:
+            s3_client.download_fileobj(document.bucket_name, document.object_key, tmp)
+            tmp.flush()
+            tmp.seek(0)
+            if extension in {".txt", ".md", ".csv"}:
+                preview = tmp.read(DEFAULT_PREVIEW_CHARS * 2).decode(
+                    "utf-8",
+                    errors="replace",
+                )
+            else:
+                preview = ""
 
         if extension == ".pdf":
-            preview = _extract_pdf_preview(tmp.name)
+            preview = _extract_pdf_preview(temp_path)
         elif extension == ".docx":
-            preview = _extract_docx_preview(tmp.name)
+            preview = _extract_docx_preview(temp_path)
         elif extension == ".pptx":
-            preview = _extract_pptx_preview(tmp.name)
-        else:
-            tmp.seek(0)
-            preview = tmp.read(DEFAULT_PREVIEW_CHARS * 2).decode(
-                "utf-8",
-                errors="replace",
-            )
+            preview = _extract_pptx_preview(temp_path)
+    finally:
+        try:
+            os.remove(temp_path)
+        except FileNotFoundError:
+            pass
 
     return _normalize_preview(preview)
 

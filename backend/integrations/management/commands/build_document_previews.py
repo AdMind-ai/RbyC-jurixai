@@ -19,7 +19,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--limit",
             type=int,
-            default=100,
+            default=1000,
             help="Maximum number of documents to process.",
         )
         parser.add_argument(
