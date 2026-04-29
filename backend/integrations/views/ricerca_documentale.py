@@ -117,8 +117,19 @@ def _collect_document_keys_from_payload(payload: Any) -> list[str]:
             if content_value is not None:
                 visit(content_value)
 
+            skipped_child_ids = {
+                id(value)
+                for value in (
+                    keys_value,
+                    key_value,
+                    path_value,
+                    output_value,
+                    content_value,
+                )
+                if value is not None
+            }
             for child in node.values():
-                if child in {keys_value, key_value, path_value, output_value, content_value}:
+                if id(child) in skipped_child_ids:
                     continue
                 visit(child)
             return
