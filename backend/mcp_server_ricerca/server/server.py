@@ -5,12 +5,17 @@ import os
 import tempfile
 import unicodedata
 import urllib.parse
+from contextvars import ContextVar
+from dataclasses import dataclass
 from time import perf_counter
 from typing import Optional
 
 import boto3
+import jwt
 import requests
 from fastmcp import FastMCP
+from fastmcp import Context
+from fastmcp.server.dependencies import get_http_request
 from botocore.exceptions import ClientError
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -37,6 +42,18 @@ BUCKET_NAME = os.getenv("S3_BUCKET", "rbyc")
 DOCUMENT_INDEX_API_URL = os.getenv("DOCUMENT_INDEX_API_URL", "").strip()
 DOCUMENT_INDEX_API_KEY = os.getenv("DOCUMENT_INDEX_API_KEY", "").strip()
 MCP_CUSTOMER_CODE = os.getenv("MCP_CUSTOMER_CODE", "default").strip()
+MCP_INTERNAL_AUTH_SECRET = (
+    os.getenv("MCP_INTERNAL_AUTH_SECRET", "").strip()
+    or DOCUMENT_INDEX_API_KEY
+)
+MCP_INTERNAL_AUTH_ISSUER = os.getenv(
+    "MCP_INTERNAL_AUTH_ISSUER",
+    "backend-integrations",
+).strip()
+MCP_INTERNAL_AUTH_AUDIENCE = os.getenv(
+    "MCP_INTERNAL_AUTH_AUDIENCE",
+    "mcp-ricerca",
+).strip()
 DOCUMENT_INDEX_TIMEOUT_SECONDS = float(
     os.getenv("DOCUMENT_INDEX_TIMEOUT_SECONDS", "10")
 )
@@ -57,6 +74,103 @@ Ferramentas disponiveis:
 """
 
 mcp = FastMCP(name=BUCKET_NAME, instructions=INSTRUCTIONS)
+
+
+class MCPAuthError(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class MCPClientContext:
+    client_id: Optional[int]
+    customer_code: str
+    bucket_name: str
+    source: str = "fallback"
+
+
+_active_client_context: ContextVar[Optional[MCPClientContext]] = ContextVar(
+    "mcp_active_client_context",
+    default=None,
+)
+
+
+def _default_client_context() -> MCPClientContext:
+    return MCPClientContext(
+        client_id=None,
+        customer_code=MCP_CUSTOMER_CODE,
+        bucket_name=BUCKET_NAME,
+        source="fallback",
+    )
+
+
+def _decode_mcp_access_token(token: str) -> MCPClientContext:
+    if not MCP_INTERNAL_AUTH_SECRET:
+        raise MCPAuthError("MCP internal auth secret is not configured.")
+
+    try:
+        payload = jwt.decode(
+            token,
+            MCP_INTERNAL_AUTH_SECRET,
+            algorithms=["HS256"],
+            audience=MCP_INTERNAL_AUTH_AUDIENCE,
+            issuer=MCP_INTERNAL_AUTH_ISSUER,
+        )
+    except jwt.PyJWTError as exc:
+        raise MCPAuthError("Invalid MCP authentication token.") from exc
+
+    customer_code = str(payload.get("customer_code") or "").strip()
+    bucket_name = str(payload.get("bucket_name") or "").strip()
+    client_id = payload.get("client_id")
+    if not customer_code or not bucket_name:
+        raise MCPAuthError("MCP authentication token is missing required claims.")
+
+    try:
+        normalized_client_id = int(client_id) if client_id is not None else None
+    except (TypeError, ValueError) as exc:
+        raise MCPAuthError("MCP authentication token has an invalid client_id.") from exc
+
+    return MCPClientContext(
+        client_id=normalized_client_id,
+        customer_code=customer_code,
+        bucket_name=bucket_name,
+        source="token",
+    )
+
+
+def _extract_mcp_access_token() -> Optional[str]:
+    try:
+        request = get_http_request()
+    except RuntimeError:
+        return None
+
+    authorization = request.headers.get("authorization", "").strip()
+    if authorization.lower().startswith("bearer "):
+        token = authorization[7:].strip()
+        if token:
+            return token
+
+    query_token = request.query_params.get("mcp_token", "").strip()
+    return query_token or None
+
+
+def _resolve_client_context() -> MCPClientContext:
+    token = _extract_mcp_access_token()
+    if not token:
+        return _default_client_context()
+    return _decode_mcp_access_token(token)
+
+
+def _activate_client_context(ctx: Context) -> object:
+    client_context = _resolve_client_context()
+    ctx.set_state("client_context", client_context)
+    return _active_client_context.set(client_context)
+
+
+def _get_active_client_context() -> MCPClientContext:
+    client_context = _active_client_context.get()
+    if client_context is not None:
+        return client_context
+    return _default_client_context()
 
 
 def _matches_document_filters(
@@ -115,6 +229,45 @@ def _serialize_document_metadata(obj: dict) -> dict:
     }
 
 
+def _list_documents_from_s3(
+    *,
+    query: str = "",
+    year: str = "",
+    extension: str = "",
+    filename_contains: str = "",
+    path_contains: str = "",
+    limit: int = 200,
+    sort_by: str = "last_modified",
+    sort_order: str = "desc",
+) -> list[dict]:
+    client_context = _get_active_client_context()
+    response = s3.list_objects_v2(Bucket=client_context.bucket_name)
+    contents = response.get("Contents", [])
+    filtered_documents = [
+        obj
+        for obj in contents
+        if _matches_document_filters(
+            obj["Key"],
+            query=query,
+            year=year,
+            extension=extension,
+            filename_contains=filename_contains,
+            path_contains=path_contains,
+        )
+    ]
+    if sort_by == "size":
+        sort_key = lambda obj: obj.get("Size") or 0
+    elif sort_by == "filename":
+        sort_key = lambda obj: obj.get("Key", "").lower()
+    else:
+        sort_key = lambda obj: obj.get("LastModified") or 0
+    filtered_documents.sort(
+        key=sort_key,
+        reverse=(sort_order == "desc"),
+    )
+    return [_serialize_document_metadata(obj) for obj in filtered_documents[:limit]]
+
+
 def _list_documents_from_index(
     query: str = "",
     year: str = "",
@@ -131,9 +284,10 @@ def _list_documents_from_index(
 ) -> Optional[list]:
     if not DOCUMENT_INDEX_API_URL or not DOCUMENT_INDEX_API_KEY:
         return None
+    client_context = _get_active_client_context()
 
     params = {
-        "customer_code": MCP_CUSTOMER_CODE,
+        "customer_code": client_context.customer_code,
         "query": query,
         "year": year,
         "document_type": document_type,
@@ -154,7 +308,7 @@ def _list_documents_from_index(
         "[mcp_ricerca] document_index_request host=%s path=%s customer_code=%s timeout_seconds=%s",
         parsed_url.netloc or "<empty>",
         parsed_url.path or "<empty>",
-        MCP_CUSTOMER_CODE or "<empty>",
+        client_context.customer_code or "<empty>",
         DOCUMENT_INDEX_TIMEOUT_SECONDS,
     )
     try:
@@ -294,6 +448,22 @@ def _dedupe_documents(documents: list[dict]) -> list[dict]:
     return deduped
 
 
+def _score_s3_search_document(document: dict, query: str) -> int:
+    terms = _query_terms(query)
+    if not terms:
+        return 0
+
+    filename = _normalize_search_value(document.get("filename") or "")
+    key = _normalize_search_value(document.get("key") or document.get("path") or "")
+    score = 0
+    for term in terms:
+        if term in filename:
+            score += 6
+        if term in key:
+            score += 3
+    return score
+
+
 def _read_cost_tier(
     *,
     mode: str,
@@ -329,6 +499,7 @@ async def search_documents(
     extension: str = "",
     limit: int = 5,
     preview_chars: int = 1200,
+    ctx: Context = None,
 ) -> list:
     """
     Busca documentos relevantes usando o indice e retorna metadados com preview.
@@ -336,86 +507,125 @@ async def search_documents(
     Use esta ferramenta antes de get_document para perguntas amplas, exploratorias
     ou tematicas. Ela reduz leituras completas e evita OCR desnecessario.
     """
+    reset_token = _activate_client_context(ctx)
     started_at = perf_counter()
-    limit = max(1, min(limit, 20))
-    preview_chars = max(300, min(preview_chars, 3000))
-    candidate_limit = max(20, min(limit * 8, 100))
+    try:
+        client_context = _get_active_client_context()
+        limit = max(1, min(limit, 20))
+        preview_chars = max(300, min(preview_chars, 3000))
+        candidate_limit = max(20, min(limit * 8, 100))
 
-    candidate_documents = []
-    for search_query in _document_search_queries(query):
-        documents = _list_documents_from_index(
-            query=search_query,
-            year=year,
-            document_type=document_type,
-            document_family=document_family,
-            control_function_tags=control_function_tags,
-            topic_tags=topic_tags,
-            extension=extension,
-            limit=candidate_limit,
-            sort_by="last_modified",
-            sort_order="desc",
-        )
-        if documents is None:
-            duration_ms = round((perf_counter() - started_at) * 1000, 2)
-            logger.warning(
-                "[mcp_ricerca] search_documents unavailable duration_ms=%s query=%s customer_code=%s",
-                duration_ms,
-                query or "<empty>",
-                MCP_CUSTOMER_CODE or "<empty>",
+        candidate_documents = []
+        index_unavailable = False
+        for search_query in _document_search_queries(query):
+            documents = _list_documents_from_index(
+                query=search_query,
+                year=year,
+                document_type=document_type,
+                document_family=document_family,
+                control_function_tags=control_function_tags,
+                topic_tags=topic_tags,
+                extension=extension,
+                limit=candidate_limit,
+                sort_by="last_modified",
+                sort_order="desc",
             )
-            return []
-        candidate_documents.extend(documents)
-        if len(_dedupe_documents(candidate_documents)) >= candidate_limit:
-            break
+            if documents is None:
+                index_unavailable = True
+                candidate_documents = []
+                break
+            candidate_documents.extend(documents)
+            if len(_dedupe_documents(candidate_documents)) >= candidate_limit:
+                break
 
-    unique_documents = [
-        document
-        for document in _dedupe_documents(candidate_documents)
-        if _is_searchable_document(document)
-    ]
-    ranked_documents = sorted(
-        unique_documents,
-        key=lambda document: _score_search_document(document, query),
-        reverse=True,
-    )
+        used_source = "index"
+        unique_documents = []
+        ranked_documents = []
+        if candidate_documents:
+            unique_documents = [
+                document
+                for document in _dedupe_documents(candidate_documents)
+                if _is_searchable_document(document)
+            ]
+            ranked_documents = sorted(
+                unique_documents,
+                key=lambda document: _score_search_document(document, query),
+                reverse=True,
+            )
+        else:
+            used_source = "s3_fallback"
+            s3_documents = []
+            for search_query in _document_search_queries(query):
+                documents = _list_documents_from_s3(
+                    query=search_query,
+                    year=year,
+                    extension=extension,
+                    limit=candidate_limit,
+                    sort_by="last_modified",
+                    sort_order="desc",
+                )
+                s3_documents.extend(documents)
+                if len(_dedupe_documents(s3_documents)) >= candidate_limit:
+                    break
 
-    results = []
-    for document in ranked_documents[:limit]:
-        results.append(
-            {
-                "key": document.get("key") or document.get("path") or "",
-                "filename": document.get("filename") or "",
-                "extension": document.get("extension") or "",
-                "year": document.get("year") or "",
-                "document_type": document.get("document_type") or "",
-                "document_family": document.get("document_family") or "",
-                "control_function_tags": (
-                    document.get("control_function_tags") or ""
-                ),
-                "topic_tags": document.get("topic_tags") or "",
-                "last_modified": document.get("last_modified"),
-                "size_bytes": document.get("size_bytes") or 0,
-                "preview": _compact_preview(document, preview_chars),
-                "relevance_score": _score_search_document(document, query),
-            }
+            unique_documents = [
+                document
+                for document in _dedupe_documents(s3_documents)
+                if _is_searchable_document(document)
+            ]
+            ranked_documents = sorted(
+                unique_documents,
+                key=lambda document: _score_s3_search_document(document, query),
+                reverse=True,
+            )
+
+        results = []
+        for document in ranked_documents[:limit]:
+            results.append(
+                {
+                    "key": document.get("key") or document.get("path") or "",
+                    "filename": document.get("filename") or "",
+                    "extension": document.get("extension") or "",
+                    "year": document.get("year") or "",
+                    "document_type": document.get("document_type") or "",
+                    "document_family": document.get("document_family") or "",
+                    "control_function_tags": (
+                        document.get("control_function_tags") or ""
+                    ),
+                    "topic_tags": document.get("topic_tags") or "",
+                    "last_modified": document.get("last_modified"),
+                    "size_bytes": document.get("size_bytes") or 0,
+                    "preview": _compact_preview(document, preview_chars),
+                    "relevance_score": (
+                        _score_search_document(document, query)
+                        if used_source == "index"
+                        else _score_s3_search_document(document, query)
+                    ),
+                }
+            )
+
+        duration_ms = round((perf_counter() - started_at) * 1000, 2)
+        logger.info(
+            "[mcp_ricerca] search_documents completed duration_ms=%s returned_documents=%s candidates=%s source=%s index_unavailable=%s query=%s year=%s document_type=%s document_family=%s control_function_tags=%s topic_tags=%s extension=%s customer_code=%s bucket_name=%s context_source=%s",
+            duration_ms,
+            len(results),
+            len(unique_documents),
+            used_source,
+            index_unavailable,
+            query or "<empty>",
+            year or "<empty>",
+            document_type or "<empty>",
+            document_family or "<empty>",
+            control_function_tags or "<empty>",
+            topic_tags or "<empty>",
+            extension or "<empty>",
+            client_context.customer_code or "<empty>",
+            client_context.bucket_name or "<empty>",
+            client_context.source,
         )
-
-    duration_ms = round((perf_counter() - started_at) * 1000, 2)
-    logger.info(
-        "[mcp_ricerca] search_documents completed duration_ms=%s returned_documents=%s candidates=%s query=%s year=%s document_type=%s document_family=%s control_function_tags=%s topic_tags=%s extension=%s customer_code=%s",
-        duration_ms,
-        len(results),
-        len(unique_documents),
-        query or "<empty>",
-        year or "<empty>",
-        document_type or "<empty>",
-        document_family or "<empty>",
-        control_function_tags or "<empty>",
-        topic_tags or "<empty>",
-        extension or "<empty>",
-        MCP_CUSTOMER_CODE or "<empty>",
-    )
-    return results
+        return results
+    finally:
+        _active_client_context.reset(reset_token)
 
 
 def _resolve_document_from_index(filename: str) -> Optional[dict]:
@@ -514,6 +724,7 @@ def _get_document_preview_from_document(document: Optional[dict]) -> Optional[st
 
 @mcp.tool()
 async def list_documents(
+    ctx: Context,
     query: str = "",
     year: str = "",
     document_family: str = "",
@@ -527,93 +738,83 @@ async def list_documents(
     sort_order: str = "desc",
 ) -> list:
     """Lista arquivos do bucket com filtros, ordenacao e metadados para descoberta rapida."""
+    reset_token = _activate_client_context(ctx)
     started_at = perf_counter()
-    limit = max(1, min(limit, 300))
-    sort_by = (sort_by or "last_modified").strip().lower()
-    sort_order = (sort_order or "desc").strip().lower()
-    if sort_by not in {"last_modified", "size", "filename"}:
-        sort_by = "last_modified"
-    if sort_order not in {"asc", "desc"}:
-        sort_order = "desc"
+    try:
+        client_context = _get_active_client_context()
+        limit = max(1, min(limit, 300))
+        sort_by = (sort_by or "last_modified").strip().lower()
+        sort_order = (sort_order or "desc").strip().lower()
+        if sort_by not in {"last_modified", "size", "filename"}:
+            sort_by = "last_modified"
+        if sort_order not in {"asc", "desc"}:
+            sort_order = "desc"
 
-    indexed_documents = _list_documents_from_index(
-        query=query,
-        year=year,
-        document_family=document_family,
-        control_function_tags=control_function_tags,
-        topic_tags=topic_tags,
-        extension=extension,
-        filename_contains=filename_contains,
-        path_contains=path_contains,
-        limit=limit,
-        sort_by=sort_by,
-        sort_order=sort_order,
-    )
-    if indexed_documents is not None:
-        duration_ms = round((perf_counter() - started_at) * 1000, 2)
-        logger.info(
-            "[mcp_ricerca] list_documents completed source=index duration_ms=%s returned_documents=%s limit=%s sort_by=%s sort_order=%s query=%s year=%s document_family=%s control_function_tags=%s topic_tags=%s extension=%s filename_contains=%s path_contains=%s customer_code=%s",
-            duration_ms,
-            len(indexed_documents),
-            limit,
-            sort_by,
-            sort_order,
-            query or "<empty>",
-            year or "<empty>",
-            document_family or "<empty>",
-            control_function_tags or "<empty>",
-            topic_tags or "<empty>",
-            extension or "<empty>",
-            filename_contains or "<empty>",
-            path_contains or "<empty>",
-            MCP_CUSTOMER_CODE or "<empty>",
+        indexed_documents = _list_documents_from_index(
+            query=query,
+            year=year,
+            document_family=document_family,
+            control_function_tags=control_function_tags,
+            topic_tags=topic_tags,
+            extension=extension,
+            filename_contains=filename_contains,
+            path_contains=path_contains,
+            limit=limit,
+            sort_by=sort_by,
+            sort_order=sort_order,
         )
-        return indexed_documents
+        if indexed_documents is not None:
+            duration_ms = round((perf_counter() - started_at) * 1000, 2)
+            logger.info(
+                "[mcp_ricerca] list_documents completed source=index duration_ms=%s returned_documents=%s limit=%s sort_by=%s sort_order=%s query=%s year=%s document_family=%s control_function_tags=%s topic_tags=%s extension=%s filename_contains=%s path_contains=%s customer_code=%s bucket_name=%s context_source=%s",
+                duration_ms,
+                len(indexed_documents),
+                limit,
+                sort_by,
+                sort_order,
+                query or "<empty>",
+                year or "<empty>",
+                document_family or "<empty>",
+                control_function_tags or "<empty>",
+                topic_tags or "<empty>",
+                extension or "<empty>",
+                filename_contains or "<empty>",
+                path_contains or "<empty>",
+                client_context.customer_code or "<empty>",
+                client_context.bucket_name or "<empty>",
+                client_context.source,
+            )
+            return indexed_documents
 
-    response = s3.list_objects_v2(Bucket=BUCKET_NAME)
-    contents = response.get("Contents", [])
-    filtered_documents = [
-        obj
-        for obj in contents
-        if _matches_document_filters(
-            obj["Key"],
+        documents = _list_documents_from_s3(
             query=query,
             year=year,
             extension=extension,
             filename_contains=filename_contains,
             path_contains=path_contains,
+            limit=limit,
+            sort_by=sort_by,
+            sort_order=sort_order,
         )
-    ]
-    if sort_by == "size":
-        sort_key = lambda obj: obj.get("Size") or 0
-    elif sort_by == "filename":
-        sort_key = lambda obj: obj.get("Key", "").lower()
-    else:
-        sort_key = lambda obj: obj.get("LastModified") or 0
-    filtered_documents.sort(
-        key=sort_key,
-        reverse=(sort_order == "desc"),
-    )
-    documents = [
-        _serialize_document_metadata(obj) for obj in filtered_documents[:limit]
-    ]
-    duration_ms = round((perf_counter() - started_at) * 1000, 2)
-    logger.info(
-        "[mcp_ricerca] list_documents completed source=s3 duration_ms=%s total_documents=%s filtered_documents=%s returned_documents=%s limit=%s sort_by=%s sort_order=%s query=%s year=%s extension=%s filename_contains=%s path_contains=%s",
-        duration_ms,
-        len(contents),
-        len(filtered_documents),
-        len(documents),
-        limit,
-        sort_by,
-        sort_order,
-        query or "<empty>",
-        year or "<empty>",
-        extension or "<empty>",
-        filename_contains or "<empty>",
-        path_contains or "<empty>",
-    )
-    return documents
+        duration_ms = round((perf_counter() - started_at) * 1000, 2)
+        logger.info(
+            "[mcp_ricerca] list_documents completed source=s3 duration_ms=%s returned_documents=%s limit=%s sort_by=%s sort_order=%s query=%s year=%s extension=%s filename_contains=%s path_contains=%s bucket_name=%s context_source=%s",
+            duration_ms,
+            len(documents),
+            limit,
+            sort_by,
+            sort_order,
+            query or "<empty>",
+            year or "<empty>",
+            extension or "<empty>",
+            filename_contains or "<empty>",
+            path_contains or "<empty>",
+            client_context.bucket_name or "<empty>",
+            client_context.source,
+        )
+        return documents
+    finally:
+        _active_client_context.reset(reset_token)
 
 
 try:
@@ -802,6 +1003,7 @@ def _truncate_text(
 
 @mcp.tool()
 async def get_document(
+    ctx: Context,
     filename: str,
     mode: str = "excerpt",
     max_chars: int = 12000,
@@ -816,139 +1018,153 @@ async def get_document(
 
     Use OCR apenas se o documento for claramente necessario e nao houver fonte alternativa mais leve.
     """
+    reset_token = _activate_client_context(ctx)
     started_at = perf_counter()
-    requested_filename = filename
-    resolved_document = _resolve_document_from_index(filename)
-    resolved_filename = (
-        resolved_document.get("key")
-        if resolved_document and resolved_document.get("key")
-        else filename
-    )
-    ext = os.path.splitext(resolved_filename)[1].lower()
-    mode = (mode or "excerpt").strip().lower()
-    if mode not in {"excerpt", "full", "ocr"}:
-        mode = "excerpt"
-    max_chars = max(1000, min(max_chars, 50000))
+    try:
+        client_context = _get_active_client_context()
+        requested_filename = filename
+        resolved_document = _resolve_document_from_index(filename)
+        resolved_filename = (
+            resolved_document.get("key")
+            if resolved_document and resolved_document.get("key")
+            else filename
+        )
+        ext = os.path.splitext(resolved_filename)[1].lower()
+        mode = (mode or "excerpt").strip().lower()
+        if mode not in {"excerpt", "full", "ocr"}:
+            mode = "excerpt"
+        max_chars = max(1000, min(max_chars, 50000))
 
-    if mode == "excerpt":
-        preview = _get_document_preview_from_document(resolved_document)
-        if not preview:
-            preview = _get_document_preview_from_index(resolved_filename)
-        if preview:
-            returned_content = _truncate_text(
-                preview,
-                max_chars=max_chars,
-                metadata_prefix=(
-                    f"filename={resolved_filename}\n"
-                    f"mode=preview\n"
-                    f"source=document_index"
-                ),
-            )
-            duration_ms = round((perf_counter() - started_at) * 1000, 2)
-            logger.info(
-                "[mcp_ricerca] get_document completed source=preview filename=%s requested_filename=%s ext=%s mode=%s duration_ms=%s returned_chars=%s cost_tier=%s",
-                resolved_filename,
-                requested_filename,
-                ext or "<none>",
-                mode,
-                duration_ms,
-                len(returned_content),
-                _read_cost_tier(
-                    mode=mode,
-                    ext=ext,
-                    file_size_bytes=0,
-                    source="preview",
-                ),
-            )
-            return returned_content
-
-    with tempfile.NamedTemporaryFile(delete=True, suffix=ext) as tmp:
-        try:
-            s3.download_fileobj(BUCKET_NAME, resolved_filename, tmp)
-        except ClientError as exc:
-            error_code = exc.response.get("Error", {}).get("Code")
-            duration_ms = round((perf_counter() - started_at) * 1000, 2)
-            logger.warning(
-                "[mcp_ricerca] get_document_not_found filename=%s duration_ms=%s error_code=%s",
-                resolved_filename,
-                duration_ms,
-                error_code or "<unknown>",
-            )
-            return (
-                f"[ERRO] Documento nao encontrado ou indisponivel: {requested_filename}. "
-                "Tente listar novamente os documentos antes de abrir este arquivo."
-            )
-
-        tmp.flush()
-        file_size_bytes = tmp.tell()
-
-        try:
-            if ext in [".txt", ".md", ".csv"]:
-                tmp.seek(0)
-                content = tmp.read().decode("utf-8", errors="replace")
-            elif ext == ".pdf":
-                if mode == "excerpt":
-                    # Keep excerpt mode conservative on long PDFs when no index preview exists.
-                    content = extract_text_from_pdf_excerpt(
-                        tmp.name,
-                        max_chars=min(max(max_chars * 2, 4000), 20000),
-                    )
-                else:
-                    content = extract_text_from_pdf(
-                        tmp.name,
-                        use_ocr=(mode == "ocr"),
-                    )
-            elif ext == ".docx":
-                content = extract_text_from_docx(tmp.name)
-            elif ext == ".doc":
-                content = extract_text_from_doc(tmp.name)
-            elif ext == ".xlsx":
-                content = extract_text_from_xlsx(tmp.name)
-            else:
-                tmp.seek(0)
-                content = base64.b64encode(tmp.read()).decode("utf-8")
-
-            returned_content = content
-            if mode != "full" and ext not in {".txt", ".md", ".csv"}:
-                metadata_prefix = (
-                    f"filename={resolved_filename}\n"
-                    f"mode={mode}\n"
-                    f"file_extension={ext or '<none>'}\n"
-                    f"file_size_bytes={file_size_bytes}"
-                )
+        if mode == "excerpt":
+            preview = _get_document_preview_from_document(resolved_document)
+            if not preview:
+                preview = _get_document_preview_from_index(resolved_filename)
+            if preview:
                 returned_content = _truncate_text(
-                    content,
+                    preview,
                     max_chars=max_chars,
-                    metadata_prefix=metadata_prefix,
+                    metadata_prefix=(
+                        f"filename={resolved_filename}\n"
+                        f"mode=preview\n"
+                        f"source=document_index"
+                    ),
+                )
+                duration_ms = round((perf_counter() - started_at) * 1000, 2)
+                logger.info(
+                    "[mcp_ricerca] get_document completed source=preview filename=%s requested_filename=%s ext=%s mode=%s duration_ms=%s returned_chars=%s cost_tier=%s customer_code=%s bucket_name=%s context_source=%s",
+                    resolved_filename,
+                    requested_filename,
+                    ext or "<none>",
+                    mode,
+                    duration_ms,
+                    len(returned_content),
+                    _read_cost_tier(
+                        mode=mode,
+                        ext=ext,
+                        file_size_bytes=0,
+                        source="preview",
+                    ),
+                    client_context.customer_code or "<empty>",
+                    client_context.bucket_name or "<empty>",
+                    client_context.source,
+                )
+                return returned_content
+
+        with tempfile.NamedTemporaryFile(delete=True, suffix=ext) as tmp:
+            try:
+                s3.download_fileobj(client_context.bucket_name, resolved_filename, tmp)
+            except ClientError as exc:
+                error_code = exc.response.get("Error", {}).get("Code")
+                duration_ms = round((perf_counter() - started_at) * 1000, 2)
+                logger.warning(
+                    "[mcp_ricerca] get_document_not_found filename=%s duration_ms=%s error_code=%s customer_code=%s bucket_name=%s context_source=%s",
+                    resolved_filename,
+                    duration_ms,
+                    error_code or "<unknown>",
+                    client_context.customer_code or "<empty>",
+                    client_context.bucket_name or "<empty>",
+                    client_context.source,
+                )
+                return (
+                    f"[ERRO] Documento nao encontrado ou indisponivel: {requested_filename}. "
+                    "Tente listar novamente os documentos antes de abrir este arquivo."
                 )
 
-            duration_ms = round((perf_counter() - started_at) * 1000, 2)
-            logger.info(
-                "[mcp_ricerca] get_document completed filename=%s requested_filename=%s ext=%s mode=%s duration_ms=%s file_size_bytes=%s extracted_chars=%s returned_chars=%s cost_tier=%s",
-                resolved_filename,
-                requested_filename,
-                ext or "<none>",
-                mode,
-                duration_ms,
-                file_size_bytes,
-                len(content),
-                len(returned_content),
-                _read_cost_tier(
-                    mode=mode,
-                    ext=ext,
-                    file_size_bytes=file_size_bytes,
-                    source="download",
-                ),
-            )
-            return returned_content
-        except Exception as e:
-            logger.error(
-                "[ERROR] Falha ao processar arquivo %s: %s",
-                resolved_filename,
-                e,
-                exc_info=True,
-            )
-            return f"[ERRO] Nao foi possivel processar o arquivo: {e}"
+            tmp.flush()
+            file_size_bytes = tmp.tell()
+
+            try:
+                if ext in [".txt", ".md", ".csv"]:
+                    tmp.seek(0)
+                    content = tmp.read().decode("utf-8", errors="replace")
+                elif ext == ".pdf":
+                    if mode == "excerpt":
+                        # Keep excerpt mode conservative on long PDFs when no index preview exists.
+                        content = extract_text_from_pdf_excerpt(
+                            tmp.name,
+                            max_chars=min(max(max_chars * 2, 4000), 20000),
+                        )
+                    else:
+                        content = extract_text_from_pdf(
+                            tmp.name,
+                            use_ocr=(mode == "ocr"),
+                        )
+                elif ext == ".docx":
+                    content = extract_text_from_docx(tmp.name)
+                elif ext == ".doc":
+                    content = extract_text_from_doc(tmp.name)
+                elif ext == ".xlsx":
+                    content = extract_text_from_xlsx(tmp.name)
+                else:
+                    tmp.seek(0)
+                    content = base64.b64encode(tmp.read()).decode("utf-8")
+
+                returned_content = content
+                if mode != "full" and ext not in {".txt", ".md", ".csv"}:
+                    metadata_prefix = (
+                        f"filename={resolved_filename}\n"
+                        f"mode={mode}\n"
+                        f"file_extension={ext or '<none>'}\n"
+                        f"file_size_bytes={file_size_bytes}"
+                    )
+                    returned_content = _truncate_text(
+                        content,
+                        max_chars=max_chars,
+                        metadata_prefix=metadata_prefix,
+                    )
+
+                duration_ms = round((perf_counter() - started_at) * 1000, 2)
+                logger.info(
+                    "[mcp_ricerca] get_document completed filename=%s requested_filename=%s ext=%s mode=%s duration_ms=%s file_size_bytes=%s extracted_chars=%s returned_chars=%s cost_tier=%s customer_code=%s bucket_name=%s context_source=%s",
+                    resolved_filename,
+                    requested_filename,
+                    ext or "<none>",
+                    mode,
+                    duration_ms,
+                    file_size_bytes,
+                    len(content),
+                    len(returned_content),
+                    _read_cost_tier(
+                        mode=mode,
+                        ext=ext,
+                        file_size_bytes=file_size_bytes,
+                        source="download",
+                    ),
+                    client_context.customer_code or "<empty>",
+                    client_context.bucket_name or "<empty>",
+                    client_context.source,
+                )
+                return returned_content
+            except Exception as e:
+                logger.error(
+                    "[ERROR] Falha ao processar arquivo %s: %s",
+                    resolved_filename,
+                    e,
+                    exc_info=True,
+                )
+                return f"[ERRO] Nao foi possivel processar o arquivo: {e}"
+    finally:
+        _active_client_context.reset(reset_token)
 
 
 if __name__ == "__main__":
