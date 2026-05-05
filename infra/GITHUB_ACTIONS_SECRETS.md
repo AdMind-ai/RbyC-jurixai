@@ -12,10 +12,6 @@ Create these repository secrets before enabling the workflows:
 
 - `LIGHTSAIL_APP_PATH`: Absolute path of the cloned repository on the server
 
-## Frontend
-
-- `VITE_GEMINI_API_KEY`: Frontend build-time secret used by Vite
-
 ## Notes
 
 - The frontend workflow publishes files to `/var/www/rbyc-frontend`
