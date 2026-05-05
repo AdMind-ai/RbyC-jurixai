@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from django.test import SimpleTestCase, TestCase, override_settings
 
-from billing.models import ProviderCostProvider, ProviderCostSource, ProviderMonthlyCost, ProviderUsageCost
+from billing.models import ProviderCostProvider, ProviderCostSource, ProviderUsageCost
 from billing.services.provider_costs import ProviderCostService
 from billing.services.provider_usage_costs import ProviderUsageCostService
 
@@ -48,23 +48,13 @@ class ProviderCostServiceTests(TestCase):
     def setUp(self):
         self.period_month = date(2026, 4, 1)
 
-    def test_refresh_monthly_costs_does_not_create_gemini_cost(self):
-        ProviderCostService.upsert_provider_cost(
-            provider="gemini",
-            period_month=self.period_month,
-            amount=Decimal("12.5000"),
-            currency="EUR",
-            source=ProviderCostSource.MANUAL,
-            metadata={"note": "admin launch"},
-        )
-
+    def test_refresh_monthly_costs_returns_openai_and_perplexity_only(self):
         with override_settings(OPENAI_ADMIN_KEY=None):
             costs = ProviderCostService.refresh_monthly_costs(self.period_month)
 
-        self.assertNotIn("gemini", [cost.provider for cost in costs])
         self.assertEqual(
-            ProviderMonthlyCost.objects.get(provider="gemini").provider_amount,
-            Decimal("12.5000"),
+            [cost.provider for cost in costs],
+            [ProviderCostProvider.OPENAI, ProviderCostProvider.PERPLEXITY],
         )
 
     def test_actual_api_overrides_not_configured(self):
@@ -100,13 +90,13 @@ class ProviderCostServiceTests(TestCase):
         self.assertEqual(openai_cost.currency, "EUR")
         self.assertEqual(openai_cost.metadata.get("provider_currency"), "USD")
 
-    def test_total_ignores_legacy_gemini_costs(self):
+    def test_total_uses_billable_providers_only(self):
         ProviderCostService.upsert_provider_cost(
-            provider="gemini",
+            provider=ProviderCostProvider.OPENAI,
             period_month=self.period_month,
             amount=Decimal("10.0000"),
             currency="EUR",
-            source=ProviderCostSource.MANUAL,
+            source=ProviderCostSource.ESTIMATED,
         )
         ProviderCostService.upsert_provider_cost(
             provider=ProviderCostProvider.PERPLEXITY,
@@ -119,9 +109,12 @@ class ProviderCostServiceTests(TestCase):
         total = ProviderCostService.get_total_for_month(self.period_month, refresh=False)
 
         self.assertEqual(total.currency, "EUR")
-        self.assertEqual(len(total.costs), 1)
-        self.assertEqual(total.costs[0].provider, ProviderCostProvider.PERPLEXITY)
-        self.assertEqual(total.amount, Decimal("7.32"))
+        self.assertEqual(len(total.costs), 2)
+        self.assertEqual(
+            [cost.provider for cost in total.costs],
+            [ProviderCostProvider.OPENAI, ProviderCostProvider.PERPLEXITY],
+        )
+        self.assertEqual(total.amount, Decimal("21.96"))
 
     def test_recorded_perplexity_request_cost_is_stored_separately_from_usage(self):
         usage_payload = {
