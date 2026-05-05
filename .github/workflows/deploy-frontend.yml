@@ -34,7 +34,6 @@ jobs:
       - name: Build frontend
         env:
           VITE_API_BASE_URL_PROD: /api
-          VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
         run: npm run build
 
       - name: Copy frontend build to server

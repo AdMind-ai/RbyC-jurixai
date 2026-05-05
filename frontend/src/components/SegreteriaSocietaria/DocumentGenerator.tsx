@@ -4,7 +4,7 @@ import { Company } from '../../types/types';
 import { Sparkles, FileText, RefreshCw, AlertCircle, Upload, X, File as FileIcon, FileDown } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { fetchWithAuth } from '../../api/fetchWithAuth';
-import { geminiService } from '../../services/geminiService';
+import { documentGenerationService } from '../../services/documentGenerationService';
 import { Viewer, Worker } from '@react-pdf-viewer/core';
 import '@react-pdf-viewer/core/lib/styles/index.css';
 import { defaultLayoutPlugin } from '@react-pdf-viewer/default-layout';
@@ -110,7 +110,7 @@ const DocumentGenerator: React.FC = () => {
 
     const company = selectedCompanyId ? companies.find(c => c.id === selectedCompanyId) || null : null;
     
-    const result = await geminiService.generateDocument(docType, company, details, attachedFiles);
+    const result = await documentGenerationService.generateDocument(docType, company, details, attachedFiles);
     // Clear previous pdf preview while generating
     if (pdfUrl) {
       URL.revokeObjectURL(pdfUrl);
@@ -230,7 +230,7 @@ const DocumentGenerator: React.FC = () => {
                 type="file"
                 ref={fileInputRef}
                 className="hidden"
-                accept=".pdf,.txt,.doc,.docx,.md"
+                accept=".pdf,.txt"
                 onChange={handleFileChange}
               />
               <button

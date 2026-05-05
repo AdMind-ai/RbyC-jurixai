@@ -1,5 +1,6 @@
 # core/views/openai/__init__.py
 from .chat import *
+from .document_generator_view import OpenAIDocumentGeneratorView
 
 __all__ = [
     'OpenAIConversationViewSet',
@@ -10,4 +11,5 @@ __all__ = [
     'ThreadsView',
     'SaveConversationView',
     'ConversationForChatView',
+    'OpenAIDocumentGeneratorView',
 ]

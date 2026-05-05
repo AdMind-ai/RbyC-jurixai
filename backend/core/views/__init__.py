@@ -8,7 +8,8 @@ from .openai import (OpenAIConversationViewSet,
                      AssistantDocumentSearchStreamView,
                      ThreadsView,
                      SaveConversationView,
-                     ConversationForChatView)
+                     ConversationForChatView,
+                     OpenAIDocumentGeneratorView)
 
 from .company_document_layout_view import CompanyDocumentLayoutView, CompanyDocumentLayoutDetailView
 from .draft_document.generate_document_view import DraftDocumentView, DraftDocumentFileView
@@ -38,6 +39,7 @@ __all__ = [
     'ThreadsView',
     'SaveConversationView',
     'ConversationForChatView',
+    'OpenAIDocumentGeneratorView',
     'CheckComplianceView',
     'CheckComplianceAnalyzeView',
     'DeadlineListCreateView',

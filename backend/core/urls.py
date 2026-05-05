@@ -32,6 +32,7 @@ urlpatterns = [
     # Draft document generation (OpenAI)
     path('openai/draft/generate/', DraftDocumentView.as_view(), name='draft-document'),
     path('openai/draft/export/', DraftDocumentFileView.as_view(), name='draft-document-file'),
+    path('openai/segreteria/document-generator/', OpenAIDocumentGeneratorView.as_view(), name='openai-segreteria-document-generator'),
     
     # Chat with assistant
     path('openai/chat/assistant/send-message',
