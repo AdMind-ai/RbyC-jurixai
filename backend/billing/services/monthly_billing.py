@@ -205,15 +205,6 @@ class MonthlyBillingService:
             "source": "rbyc_monthly_usage",
         }
 
-        invoice_item = stripe.InvoiceItem.create(
-            customer=account.stripe_customer_id,
-            amount=amount_cents,
-            currency=invoice.currency.lower(),
-            description=description,
-            metadata=metadata,
-            idempotency_key=f"{idempotency_prefix}-invoice-item-{period_key}",
-        )
-
         stripe_invoice = stripe.Invoice.create(
             customer=account.stripe_customer_id,
             collection_method="charge_automatically",
@@ -222,6 +213,16 @@ class MonthlyBillingService:
             description=description,
             metadata=metadata,
             idempotency_key=f"{idempotency_prefix}-invoice-{period_key}",
+        )
+
+        invoice_item = stripe.InvoiceItem.create(
+            customer=account.stripe_customer_id,
+            invoice=stripe_invoice.id,
+            amount=amount_cents,
+            currency=invoice.currency.lower(),
+            description=description,
+            metadata=metadata,
+            idempotency_key=f"{idempotency_prefix}-invoice-item-{period_key}",
         )
 
         finalized_invoice = stripe.Invoice.finalize_invoice(
