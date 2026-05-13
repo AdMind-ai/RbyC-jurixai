@@ -18,6 +18,10 @@ from core.services.document_retrieval.intent_classifier import (
 from core.services.document_retrieval.prompt_context import (
     build_document_search_input,
 )
+from core.services.document_retrieval.presearch import (
+    build_presearch_candidates,
+    build_related_approval_candidates,
+)
 from core.services.document_retrieval.retrieval_strategies import (
     get_retrieval_strategy,
 )
@@ -202,12 +206,29 @@ class RicercaDocumentaleView(APIView):
         retrieval_strategy = get_retrieval_strategy(
             intent_classification.intent_type
         )
+        integration_client = getattr(request.auth, "client", None)
+        presearch_candidates = build_presearch_candidates(
+            user_input=prompt,
+            intent_classification=intent_classification,
+            retrieval_strategy=retrieval_strategy,
+            customer_code=(
+                getattr(integration_client, "customer_code", None) or ""
+            ),
+        )
+        related_approval_candidates = build_related_approval_candidates(
+            user_input=prompt,
+            primary_candidate=presearch_candidates[0] if presearch_candidates else None,
+            customer_code=(
+                getattr(integration_client, "customer_code", None) or ""
+            ),
+        )
         model_input = build_document_search_input(
             prompt,
             intent_classification,
             retrieval_strategy,
+            presearch_candidates=presearch_candidates,
+            related_approval_candidates=related_approval_candidates,
         )
-        integration_client = getattr(request.auth, "client", None)
         bucket_name = (
             getattr(integration_client, "bucket_name", None)
             or getattr(settings, "AWS_STORAGE_BUCKET_NAME", None)
@@ -244,6 +265,49 @@ class RicercaDocumentaleView(APIView):
             len(prompt or ""),
             len(model_input or ""),
         )
+        logger.info(
+            "[ricerca_documentale][%s] presearch_completed candidates_count=%s customer_code=%s",
+            request_id,
+            len(presearch_candidates),
+            getattr(integration_client, "customer_code", None) or "<empty>",
+        )
+        logger.info(
+            "[ricerca_documentale][%s] related_approval_candidates_completed candidates_count=%s",
+            request_id,
+            len(related_approval_candidates),
+        )
+        if presearch_candidates:
+            primary_candidate = presearch_candidates[0]
+            logger.info(
+                "[ricerca_documentale][%s] presearch_primary_candidate filename=%s document_date=%s key=%s",
+                request_id,
+                getattr(primary_candidate, "filename", "") or "<empty>",
+                getattr(primary_candidate, "document_date", "") or "<empty>",
+                getattr(primary_candidate, "key", "") or "<empty>",
+            )
+            logger.info(
+                "[ricerca_documentale][%s] presearch_candidates_ordered filenames=%s",
+                request_id,
+                " | ".join(
+                    (
+                        f"{getattr(candidate, 'filename', '') or '<empty>'}"
+                        f"@{getattr(candidate, 'document_date', '') or '<empty>'}"
+                    )
+                    for candidate in presearch_candidates[:5]
+                ),
+            )
+        if related_approval_candidates:
+            logger.info(
+                "[ricerca_documentale][%s] related_approval_candidates filenames=%s",
+                request_id,
+                " | ".join(
+                    (
+                        f"{getattr(candidate, 'filename', '') or '<empty>'}"
+                        f"@{getattr(candidate, 'document_date', '') or '<empty>'}"
+                    )
+                    for candidate in related_approval_candidates[:2]
+                ),
+            )
 
         thread_started_at = perf_counter()
         with transaction.atomic():

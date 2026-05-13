@@ -25,6 +25,9 @@ class RetrievalStrategy:
     preferred_document_families: tuple[str, ...] = ()
     preferred_topic_tags: tuple[str, ...] = ()
     preferred_control_functions: tuple[str, ...] = ()
+    preferred_filename_contains: tuple[str, ...] = ()
+    preferred_sort_by: str = ""
+    preferred_sort_order: str = ""
     notes: str = ""
     stopping_rule: str = ""
 
@@ -136,7 +139,15 @@ RETRIEVAL_STRATEGIES = {
         query_anchor_terms=("struttura organizzativa",),
         preferred_document_families=("relazione_struttura_organizzativa",),
         preferred_topic_tags=("struttura_organizzativa",),
-        notes="Selecionar documentos equivalentes de anos distintos para comparacao.",
+        preferred_filename_contains=("rso",),
+        preferred_sort_by="document_date",
+        preferred_sort_order="desc",
+        notes=(
+            "Selecionar documentos equivalentes de anos distintos para comparacao. "
+            "Per domande sulla versione piu recente, usa prima filtri strutturati "
+            "su RSO/struttura organizzativa e ordina per document_date desc, "
+            "poi verifica l'approvazione leggendo solo i documenti finalist."
+        ),
         stopping_rule=(
             "Se hai gia identificato i documenti equivalenti del 2024 e 2025, "
             "non riaprire la fase di scoperta con nuove ricerche generiche: "

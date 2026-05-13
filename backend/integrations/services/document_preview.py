@@ -58,7 +58,9 @@ def build_missing_document_previews(
     if exclude_ids:
         documents = documents.exclude(id__in=exclude_ids)
 
-    documents = documents.order_by("-last_modified", "id")[: max(1, limit)]
+    documents = documents.order_by("-document_date", "-s3_last_modified", "id")[
+        : max(1, limit)
+    ]
     s3_client = _get_s3_client()
     result = DocumentPreviewResult()
     result.batch_count = 1

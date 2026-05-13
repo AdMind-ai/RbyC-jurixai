@@ -1,5 +1,7 @@
 import hashlib
 import re
+from datetime import datetime
+import unicodedata
 
 from django.db import models
 from django.utils import timezone
@@ -80,7 +82,9 @@ class DocumentIndex(models.Model):
     filename = models.CharField(max_length=512)
     extension = models.CharField(max_length=32, blank=True)
     size_bytes = models.BigIntegerField(default=0)
+    s3_last_modified = models.DateTimeField(blank=True, null=True)
     last_modified = models.DateTimeField(blank=True, null=True)
+    document_date = models.DateField(blank=True, null=True)
     etag = models.CharField(max_length=128, blank=True)
     year = models.CharField(max_length=4, blank=True)
     document_type = models.CharField(max_length=64, default="altro")
@@ -113,6 +117,8 @@ class DocumentIndex(models.Model):
             models.Index(fields=["client", "active", "control_function_tags"]),
             models.Index(fields=["client", "active", "topic_tags"]),
             models.Index(fields=["client", "active", "year"]),
+            models.Index(fields=["client", "active", "document_date"]),
+            models.Index(fields=["client", "active", "s3_last_modified"]),
             models.Index(fields=["client", "active", "last_modified"]),
             models.Index(fields=["bucket_name"]),
         ]
@@ -141,6 +147,26 @@ class DocumentIndex(models.Model):
         return ""
 
     @staticmethod
+    def infer_document_date(object_key: str):
+        value = object_key or ""
+        date_patterns = (
+            (lambda groups: f"{groups[0]}{groups[1]}{groups[2]}", "%d%m%Y", r"(?<!\d)(\d{2})(\d{2})(20\d{2})(?!\d)"),
+            (lambda groups: f"{groups[0]}-{groups[1]}-{groups[2]}", "%d-%m-%Y", r"(?<!\d)(\d{2})[-_./](\d{2})[-_./](20\d{2})(?!\d)"),
+            (lambda groups: f"{groups[0]}{groups[1]}{groups[2]}", "%Y%m%d", r"(?<!\d)(20\d{2})(\d{2})(\d{2})(?!\d)"),
+        )
+
+        for builder, date_format, pattern in date_patterns:
+            match = re.search(pattern, value, flags=re.IGNORECASE)
+            if not match:
+                continue
+            try:
+                return datetime.strptime(builder(match.groups()), date_format).date()
+            except ValueError:
+                continue
+
+        return None
+
+    @staticmethod
     def infer_document_type(object_key: str) -> str:
         value = (object_key or "").lower()
         type_patterns = [
@@ -149,7 +175,7 @@ class DocumentIndex(models.Model):
             ("estratto", ["estratto"]),
             ("nomina", ["nomina", "nomin", "direttore generale", "amministratore delegato"]),
             ("regolamento", ["regolamento", "regolamenti"]),
-            ("relazione", ["relazione", "relazioni"]),
+            ("relazione", ["relazione", "relazioni", "rso"]),
             ("bilancio", ["bilancio", "bilanci"]),
             ("relazione_finanziaria", ["relazione finanziaria", "financial report", "annual report"]),
             ("policy", ["policy", "politica", "policies"]),
@@ -213,8 +239,8 @@ class DocumentIndex(models.Model):
             return "relazione_finanziaria"
 
         if (
-            "relazione" in value
-            and "struttura organizzativa" in value
+            ("relazione" in value and "struttura organizzativa" in value)
+            or re.search(r"(^|[\W_])rso([\W_]|$)", value, flags=re.IGNORECASE)
         ):
             return "relazione_struttura_organizzativa"
 
@@ -413,7 +439,10 @@ class DocumentIndex(models.Model):
             ),
             (
                 "struttura_organizzativa",
-                ["struttura organizzativa"],
+                [
+                    "struttura organizzativa",
+                    "relazione sulla struttura organizzativa",
+                ],
             ),
             (
                 "politica_investimento",
@@ -478,5 +507,8 @@ class DocumentIndex(models.Model):
         for tag, patterns in tag_patterns:
             if any(pattern in value for pattern in patterns):
                 tags.append(tag)
+
+        if re.search(r"(^|[\W_])rso([\W_]|$)", value, flags=re.IGNORECASE):
+            tags.append("struttura_organizzativa")
 
         return ",".join(dict.fromkeys(tags))

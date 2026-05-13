@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from datetime import date
 from unittest.mock import Mock, patch
 
 import jwt
@@ -10,7 +11,18 @@ from integrations.services.mcp_auth import (
     build_mcp_access_token,
     decode_mcp_access_token,
 )
-from integrations.views.document_index import query_terms_for_search, search_variants
+from core.services.document_retrieval.intent_classifier import classify_document_search_intent
+from core.services.document_retrieval.presearch import (
+    build_presearch_candidates,
+    build_related_approval_candidates,
+)
+from core.services.document_retrieval.prompt_context import build_document_search_input
+from core.services.document_retrieval.retrieval_strategies import get_retrieval_strategy
+from integrations.views.document_index import (
+    query_terms_for_search,
+    search_variants,
+    sort_documents_by_relevance,
+)
 
 
 class MCPAuthServiceTests(TestCase):
@@ -286,6 +298,47 @@ class InternalDocumentIndexAuthTests(TestCase):
         self.assertEqual(len(response.json()), 1)
         self.assertIn("Poteri AD e DG", response.json()[0]["filename"])
 
+    @override_settings(
+        DOCUMENT_INDEX_API_KEY="internal-index-key",
+        MCP_INTERNAL_AUTH_SECRET="test-mcp-secret",
+        MCP_INTERNAL_AUTH_ISSUER="backend-integrations",
+        MCP_INTERNAL_AUTH_AUDIENCE="mcp-ricerca",
+        MCP_INTERNAL_AUTH_TTL_SECONDS=300,
+    )
+    def test_internal_document_index_query_matches_rso_abbreviation(self):
+        DocumentIndex.objects.create(
+            client=self.integration_client,
+            bucket_name="bucket-cliente-teste",
+            object_key=(
+                "customer0047/activity33098/"
+                "172-1776855582-replica-sim-rso_31032026-v.03.docx"
+            ),
+            filename="172-1776855582-replica-sim-rso_31032026-v.03.docx",
+            extension=".docx",
+            size_bytes=4321,
+            year="2026",
+            document_type="relazione",
+            document_family="relazione_struttura_organizzativa",
+            topic_tags="struttura_organizzativa",
+            text_preview="Relazione sulla Struttura Organizzativa approvata dal CdA.",
+            active=True,
+        )
+
+        client = APIClient()
+        token = build_mcp_access_token(self.integration_client)
+        response = client.get(
+            (
+                "/api/integrations/v1/internal/document-index/"
+                "?query=Quando%20%C3%A8%20stata%20approvata%20l%27ultima%20RSO"
+            ),
+            HTTP_X_INTERNAL_API_KEY="internal-index-key",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()), 1)
+        self.assertIn("replica-sim-rso", response.json()[0]["filename"].lower())
+
 
 class DocumentIndexSearchHelpersTests(TestCase):
     def test_search_variants_expand_common_abbreviations(self):
@@ -295,3 +348,253 @@ class DocumentIndexSearchHelpersTests(TestCase):
     def test_query_terms_for_search_includes_bigrams(self):
         terms = query_terms_for_search("direttore generale nomina")
         self.assertIn("direttore generale", terms)
+
+    def test_search_variants_expand_rso_abbreviation(self):
+        variants = search_variants("rso")
+        self.assertIn("struttura organizzativa", variants)
+        self.assertIn("relazione sulla struttura organizzativa", variants)
+
+    def test_document_index_infers_rso_family_and_topic_tag(self):
+        object_key = "customer0047/activity33098/replica-sim-rso_31032026-v.03.docx"
+        self.assertEqual(
+            DocumentIndex.infer_document_family(object_key),
+            "relazione_struttura_organizzativa",
+        )
+        self.assertIn(
+            "struttura_organizzativa",
+            DocumentIndex.infer_topic_tags(object_key),
+        )
+
+    def test_document_index_infers_document_date_from_filename(self):
+        self.assertEqual(
+            DocumentIndex.infer_document_date(
+                "customer0047/activity33098/replica-sim-rso_31032026-v.03.docx"
+            ),
+            date(2026, 3, 31),
+        )
+
+    def test_sort_documents_prioritizes_document_date_for_latest_rso(self):
+        older_document = DocumentIndex(
+            filename="replica-sim-rso_09062025-v.01.docx",
+            object_key="customer0047/activity33098/replica-sim-rso_09062025-v.01.docx",
+            document_type="relazione",
+            document_family="relazione_struttura_organizzativa",
+            topic_tags="struttura_organizzativa",
+            document_date=date(2025, 6, 9),
+            text_preview=(
+                "RSO approvata dal CdA con approvazione formale della struttura "
+                "organizzativa e delibera del consiglio."
+            ),
+        )
+        newer_document = DocumentIndex(
+            filename="replica-sim-rso_31032026-v.03.docx",
+            object_key="customer0047/activity33098/replica-sim-rso_31032026-v.03.docx",
+            document_type="relazione",
+            document_family="relazione_struttura_organizzativa",
+            topic_tags="struttura_organizzativa",
+            document_date=date(2026, 3, 31),
+            text_preview="RSO aggiornata.",
+        )
+
+        sorted_documents = sort_documents_by_relevance(
+            [older_document, newer_document],
+            query_terms_for_search("Quando è stata approvata l'ultima RSO"),
+        )
+
+        self.assertEqual(
+            sorted_documents[0].filename,
+            "replica-sim-rso_31032026-v.03.docx",
+        )
+
+    def test_presearch_candidates_prioritize_structured_rso_documents(self):
+        client = IntegrationClient.objects.create(
+            client_name="Cliente Presearch",
+            customer_code="cliente_presearch",
+            bucket_name="bucket-presearch",
+            active=True,
+        )
+        DocumentIndex.objects.create(
+            client=client,
+            bucket_name="bucket-presearch",
+            object_key="CDA/2025/rso-09062025.docx",
+            filename="rso-09062025.docx",
+            extension=".docx",
+            size_bytes=100,
+            document_type="relazione",
+            document_family="relazione_struttura_organizzativa",
+            topic_tags="struttura_organizzativa",
+            document_date=date(2025, 6, 9),
+            active=True,
+        )
+        DocumentIndex.objects.create(
+            client=client,
+            bucket_name="bucket-presearch",
+            object_key="CDA/2026/rso-31032026.docx",
+            filename="rso-31032026.docx",
+            extension=".docx",
+            size_bytes=100,
+            document_type="relazione",
+            document_family="relazione_struttura_organizzativa",
+            topic_tags="struttura_organizzativa",
+            document_date=date(2026, 3, 31),
+            active=True,
+        )
+
+        intent = classify_document_search_intent(
+            "Quando è stata approvata l'ultima RSO?"
+        )
+        strategy = get_retrieval_strategy(intent.intent_type)
+        candidates = build_presearch_candidates(
+            user_input="Quando è stata approvata l'ultima RSO?",
+            intent_classification=intent,
+            retrieval_strategy=strategy,
+            customer_code="cliente_presearch",
+        )
+
+        self.assertTrue(candidates)
+        self.assertEqual(candidates[0].filename, "rso-31032026.docx")
+
+    def test_prompt_context_marks_primary_presearch_candidate(self):
+        client = IntegrationClient.objects.create(
+            client_name="Cliente Prompt",
+            customer_code="cliente_prompt",
+            bucket_name="bucket-prompt",
+            active=True,
+        )
+        DocumentIndex.objects.create(
+            client=client,
+            bucket_name="bucket-prompt",
+            object_key="CDA/2025/rso-09062025.docx",
+            filename="rso-09062025.docx",
+            extension=".docx",
+            size_bytes=100,
+            document_type="relazione",
+            document_family="relazione_struttura_organizzativa",
+            topic_tags="struttura_organizzativa",
+            document_date=date(2025, 6, 9),
+            active=True,
+        )
+        DocumentIndex.objects.create(
+            client=client,
+            bucket_name="bucket-prompt",
+            object_key="CDA/2026/rso-31032026.docx",
+            filename="rso-31032026.docx",
+            extension=".docx",
+            size_bytes=100,
+            document_type="relazione",
+            document_family="relazione_struttura_organizzativa",
+            topic_tags="struttura_organizzativa",
+            document_date=date(2026, 3, 31),
+            active=True,
+        )
+
+        user_input = "Quando è stata approvata l'ultima RSO?"
+        intent = classify_document_search_intent(user_input)
+        strategy = get_retrieval_strategy(intent.intent_type)
+        candidates = build_presearch_candidates(
+            user_input=user_input,
+            intent_classification=intent,
+            retrieval_strategy=strategy,
+            customer_code="cliente_prompt",
+        )
+
+        model_input = build_document_search_input(
+            user_input,
+            intent,
+            strategy,
+            presearch_candidates=candidates,
+        )
+
+        self.assertIn(
+            "presearch_primary_selection_rule=most_recent_document_date",
+            model_input,
+        )
+        self.assertIn(
+            "presearch_primary_candidate=filename:rso-31032026.docx;",
+            model_input,
+        )
+        self.assertIn(
+            "presearch_primary_excerpt=",
+            model_input,
+        )
+        self.assertIn(
+            "presearch_primary_sibling_signature=rso_31032026",
+            model_input,
+        )
+        self.assertIn(
+            "get_document(mode='full')",
+            model_input,
+        )
+        self.assertIn(
+            "ultima approvazione esplicita",
+            model_input,
+        )
+
+    def test_related_approval_candidates_are_added_to_prompt_context(self):
+        client = IntegrationClient.objects.create(
+            client_name="Cliente Approval",
+            customer_code="cliente_approval",
+            bucket_name="bucket-approval",
+            active=True,
+        )
+        DocumentIndex.objects.create(
+            client=client,
+            bucket_name="bucket-approval",
+            object_key="CDA/2026/rso-31032026.docx",
+            filename="rso-31032026.docx",
+            extension=".docx",
+            size_bytes=100,
+            document_type="relazione",
+            document_family="relazione_struttura_organizzativa",
+            topic_tags="struttura_organizzativa",
+            text_preview="Relazione sulla Struttura Organizzativa - Anno 2025",
+            document_date=date(2026, 3, 31),
+            active=True,
+        )
+        DocumentIndex.objects.create(
+            client=client,
+            bucket_name="bucket-approval",
+            object_key="CDA/2025/verbale-cda-09062025.docx",
+            filename="verbale-cda-09062025.docx",
+            extension=".docx",
+            size_bytes=100,
+            document_type="verbale",
+            document_family="verbale_cda",
+            topic_tags="struttura_organizzativa",
+            text_preview="Approvazione delle modifiche alla Relazione sulla Struttura Organizzativa.",
+            document_date=date(2025, 6, 9),
+            active=True,
+        )
+
+        user_input = "Quando è stata approvata l'ultima RSO?"
+        intent = classify_document_search_intent(user_input)
+        strategy = get_retrieval_strategy(intent.intent_type)
+        candidates = build_presearch_candidates(
+            user_input=user_input,
+            intent_classification=intent,
+            retrieval_strategy=strategy,
+            customer_code="cliente_approval",
+        )
+        related_approval_candidates = build_related_approval_candidates(
+            user_input=user_input,
+            primary_candidate=candidates[0],
+            customer_code="cliente_approval",
+        )
+
+        model_input = build_document_search_input(
+            user_input,
+            intent,
+            strategy,
+            presearch_candidates=candidates,
+            related_approval_candidates=related_approval_candidates,
+        )
+
+        self.assertTrue(related_approval_candidates)
+        self.assertIn(
+            "latest_explicit_approval_candidate_set_status=available",
+            model_input,
+        )
+        self.assertIn(
+            "latest_explicit_approval_candidate_1=filename:verbale-cda-09062025.docx;",
+            model_input,
+        )
