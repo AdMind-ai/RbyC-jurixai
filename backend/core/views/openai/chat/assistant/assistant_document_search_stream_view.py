@@ -19,6 +19,9 @@ from core.services.document_retrieval.intent_classifier import (
 from core.services.document_retrieval.prompt_context import (
     build_document_search_input,
 )
+from core.services.document_retrieval.presearch import (
+    build_presearch_candidates,
+)
 from core.services.document_retrieval.retrieval_strategies import (
     get_retrieval_strategy,
 )
@@ -68,10 +71,17 @@ class AssistantDocumentSearchStreamView(APIView):
         retrieval_strategy = get_retrieval_strategy(
             intent_classification.intent_type
         )
+        presearch_candidates = build_presearch_candidates(
+            user_input=prompt,
+            intent_classification=intent_classification,
+            retrieval_strategy=retrieval_strategy,
+            customer_code="",
+        )
         model_input = build_document_search_input(
             prompt,
             intent_classification,
             retrieval_strategy,
+            presearch_candidates=presearch_candidates,
         )
 
         with transaction.atomic():
@@ -152,10 +162,11 @@ class AssistantDocumentSearchStreamView(APIView):
 
             try:
                 logger.info(
-                    "[assistant_document_search_stream] request_started thread_id=%s intent_type=%s model_input_length=%s",
+                    "[assistant_document_search_stream] request_started thread_id=%s intent_type=%s model_input_length=%s presearch_candidates=%s",
                     assistant_thread.thread_id or "<empty>",
                     intent_classification.intent_type,
                     len(model_input or ""),
+                    len(presearch_candidates),
                 )
 
                 yield from emit_execution_event(
