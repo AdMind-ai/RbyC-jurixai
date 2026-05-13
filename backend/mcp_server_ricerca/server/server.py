@@ -2,11 +2,13 @@
 import base64
 import logging
 import os
+import re
 import tempfile
 import unicodedata
 import urllib.parse
 from contextvars import ContextVar
 from dataclasses import dataclass
+from datetime import datetime
 from time import perf_counter
 from typing import Optional
 
@@ -20,6 +22,25 @@ from botocore.exceptions import ClientError
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
+
+QUERY_SYNONYMS = {
+    "rso": [
+        "relazione sulla struttura organizzativa",
+        "struttura organizzativa",
+    ],
+    "relazione sulla struttura organizzativa": ["rso", "struttura organizzativa"],
+    "struttura organizzativa": ["rso", "relazione sulla struttura organizzativa"],
+}
+
+RECENCY_QUERY_MARKERS = (
+    "ultima",
+    "ultimo",
+    "ultim",
+    "piu recente",
+    "recent",
+    "approvat",
+    "approvazione",
+)
 
 try:
     import textract
@@ -217,6 +238,26 @@ def _matches_document_filters(
     return True
 
 
+def _infer_document_date_from_key(object_key: str) -> Optional[str]:
+    value = object_key or ""
+    date_patterns = (
+        (lambda groups: f"{groups[0]}{groups[1]}{groups[2]}", "%d%m%Y", r"(?<!\d)(\d{2})(\d{2})(20\d{2})(?!\d)"),
+        (lambda groups: f"{groups[0]}-{groups[1]}-{groups[2]}", "%d-%m-%Y", r"(?<!\d)(\d{2})[-_./](\d{2})[-_./](20\d{2})(?!\d)"),
+        (lambda groups: f"{groups[0]}{groups[1]}{groups[2]}", "%Y%m%d", r"(?<!\d)(20\d{2})(\d{2})(\d{2})(?!\d)"),
+    )
+
+    for builder, date_format, pattern in date_patterns:
+        match = re.search(pattern, value, flags=re.IGNORECASE)
+        if not match:
+            continue
+        try:
+            return datetime.strptime(builder(match.groups()), date_format).date().isoformat()
+        except ValueError:
+            continue
+
+    return None
+
+
 def _serialize_document_metadata(obj: dict) -> dict:
     key = obj["Key"]
     filename = key.split("/")[-1]
@@ -227,7 +268,9 @@ def _serialize_document_metadata(obj: dict) -> dict:
         "filename": filename,
         "extension": extension,
         "size_bytes": obj.get("Size", 0),
+        "s3_last_modified": last_modified.isoformat() if last_modified else None,
         "last_modified": last_modified.isoformat() if last_modified else None,
+        "document_date": _infer_document_date_from_key(key),
         "path": key,
     }
 
@@ -247,7 +290,7 @@ def _list_documents_from_s3(
     response = s3.list_objects_v2(Bucket=client_context.bucket_name)
     contents = response.get("Contents", [])
     filtered_documents = [
-        obj
+        _serialize_document_metadata(obj)
         for obj in contents
         if _matches_document_filters(
             obj["Key"],
@@ -259,16 +302,20 @@ def _list_documents_from_s3(
         )
     ]
     if sort_by == "size":
-        sort_key = lambda obj: obj.get("Size") or 0
+        sort_key = lambda obj: obj.get("size_bytes") or 0
     elif sort_by == "filename":
-        sort_key = lambda obj: obj.get("Key", "").lower()
+        sort_key = lambda obj: obj.get("filename", "").lower()
+    elif sort_by == "document_date":
+        sort_key = lambda obj: obj.get("document_date") or ""
+    elif sort_by == "s3_last_modified":
+        sort_key = lambda obj: obj.get("s3_last_modified") or ""
     else:
-        sort_key = lambda obj: obj.get("LastModified") or 0
+        sort_key = lambda obj: obj.get("s3_last_modified") or obj.get("last_modified") or ""
     filtered_documents.sort(
         key=sort_key,
         reverse=(sort_order == "desc"),
     )
-    return [_serialize_document_metadata(obj) for obj in filtered_documents[:limit]]
+    return filtered_documents[:limit]
 
 
 def _list_documents_from_index(
@@ -375,6 +422,39 @@ def _query_terms(query: str) -> list[str]:
     return [term for term in normalized.split() if len(term) > 2][:8]
 
 
+def _expanded_query_terms(query: str) -> list[str]:
+    normalized = _normalize_search_value(query)
+    expanded_terms = []
+
+    for term in _query_terms(query):
+        if term not in expanded_terms:
+            expanded_terms.append(term)
+
+    for source, synonyms in QUERY_SYNONYMS.items():
+        if source in normalized:
+            if source not in expanded_terms:
+                expanded_terms.append(source)
+            for synonym in synonyms:
+                normalized_synonym = _normalize_search_value(synonym)
+                if normalized_synonym and normalized_synonym not in expanded_terms:
+                    expanded_terms.append(normalized_synonym)
+
+    return expanded_terms[:12]
+
+
+def _query_requires_recency(query: str) -> bool:
+    normalized = _normalize_search_value(query)
+    return any(marker in normalized for marker in RECENCY_QUERY_MARKERS)
+
+
+def _query_requires_approval_evidence(query: str) -> bool:
+    normalized = _normalize_search_value(query)
+    return any(
+        marker in normalized
+        for marker in ("approvat", "approvazione", "deliberat", "delibera")
+    )
+
+
 def _is_searchable_document(document: dict) -> bool:
     filename = (document.get("filename") or "").strip()
     key = (document.get("key") or document.get("path") or "").strip()
@@ -384,7 +464,7 @@ def _is_searchable_document(document: dict) -> bool:
 
 
 def _score_search_document(document: dict, query: str) -> int:
-    terms = _query_terms(query)
+    terms = _expanded_query_terms(query)
     if not terms:
         return 0
 
@@ -437,6 +517,17 @@ def _document_search_queries(query: str) -> list[str]:
         if candidate and candidate not in queries:
             queries.append(candidate)
 
+    for source, synonyms in QUERY_SYNONYMS.items():
+        if source in normalized:
+            if source not in queries:
+                queries.append(source)
+            for synonym in synonyms:
+                normalized_synonym = _normalize_search_value(synonym)
+                if synonym and synonym not in queries:
+                    queries.append(synonym)
+                if normalized_synonym and normalized_synonym not in queries:
+                    queries.append(normalized_synonym)
+
     terms = _query_terms(cleaned)
     if terms:
         # Keep the fallback space narrow: prefer the strongest lexical anchor only.
@@ -459,7 +550,7 @@ def _dedupe_documents(documents: list[dict]) -> list[dict]:
 
 
 def _score_s3_search_document(document: dict, query: str) -> int:
-    terms = _query_terms(query)
+    terms = _expanded_query_terms(query)
     if not terms:
         return 0
 
@@ -472,6 +563,61 @@ def _score_s3_search_document(document: dict, query: str) -> int:
         if term in key:
             score += 3
     return score
+
+
+def _document_relevance_score(document: dict, query: str, *, source: str) -> int:
+    if source == "s3":
+        return _score_s3_search_document(document, query)
+    if source == "hybrid":
+        return max(
+            _score_search_document(document, query),
+            _score_s3_search_document(document, query),
+        )
+    return _score_search_document(document, query)
+
+
+def _document_recency_value(document: dict) -> tuple[str, str]:
+    return (
+        str(document.get("document_date") or ""),
+        str(
+            document.get("s3_last_modified")
+            or document.get("last_modified")
+            or ""
+        ),
+    )
+
+
+def _sort_documents_by_score_and_recency(documents: list[dict], query: str, *, source: str) -> list[dict]:
+    if not documents:
+        return []
+
+    recency_sensitive_query = _query_requires_recency(query)
+
+    def sort_key(document: dict) -> tuple[object, object, str, str]:
+        score = _document_relevance_score(document, query, source=source)
+        document_date, s3_last_modified = _document_recency_value(document)
+        return (
+            document_date if recency_sensitive_query else score,
+            score if recency_sensitive_query else document_date,
+            s3_last_modified,
+        )
+
+    return sorted(documents, key=sort_key, reverse=True)
+
+
+def _document_ranking_debug(document: dict, query: str, *, source: str) -> dict:
+    return {
+        "filename": document.get("filename") or "",
+        "key": document.get("key") or document.get("path") or "",
+        "relevance_score": _document_relevance_score(document, query, source=source),
+        "document_date": document.get("document_date") or "",
+        "s3_last_modified": (
+            document.get("s3_last_modified")
+            or document.get("last_modified")
+            or ""
+        ),
+        "source": source,
+    }
 
 
 def _read_cost_tier(
@@ -525,6 +671,8 @@ async def search_documents(
         preview_chars = max(300, min(preview_chars, 3000))
         candidate_limit = max(20, min(limit * 8, 100))
         enough_candidate_count = max(3, min(limit, 5))
+        recency_sensitive_query = _query_requires_recency(query)
+        approval_sensitive_query = _query_requires_approval_evidence(query)
         strong_structured_filters = any(
             (
                 (year or "").strip(),
@@ -555,7 +703,6 @@ async def search_documents(
             )
             if documents is None:
                 index_unavailable = True
-                candidate_documents = []
                 break
             candidate_documents.extend(documents)
             unique_count = len(_dedupe_documents(candidate_documents))
@@ -575,10 +722,35 @@ async def search_documents(
                 for document in _dedupe_documents(candidate_documents)
                 if _is_searchable_document(document)
             ]
-            ranked_documents = sorted(
+            if recency_sensitive_query:
+                s3_documents = []
+                for search_query in _document_search_queries(query):
+                    documents = _list_documents_from_s3(
+                        query=search_query,
+                        year=year,
+                        extension=extension,
+                        limit=candidate_limit,
+                        sort_by="last_modified",
+                        sort_order="desc",
+                    )
+                    s3_documents.extend(documents)
+                    if len(_dedupe_documents(s3_documents)) >= candidate_limit:
+                        break
+
+                if s3_documents:
+                    used_source = "hybrid"
+                    unique_documents = [
+                        document
+                        for document in _dedupe_documents(
+                            unique_documents + s3_documents
+                        )
+                        if _is_searchable_document(document)
+                    ]
+
+            ranked_documents = _sort_documents_by_score_and_recency(
                 unique_documents,
-                key=lambda document: _score_search_document(document, query),
-                reverse=True,
+                query,
+                source=used_source,
             )
         else:
             used_source = "s3_fallback"
@@ -601,10 +773,10 @@ async def search_documents(
                 for document in _dedupe_documents(s3_documents)
                 if _is_searchable_document(document)
             ]
-            ranked_documents = sorted(
+            ranked_documents = _sort_documents_by_score_and_recency(
                 unique_documents,
-                key=lambda document: _score_s3_search_document(document, query),
-                reverse=True,
+                query,
+                source="s3",
             )
 
         results = []
@@ -621,16 +793,49 @@ async def search_documents(
                         document.get("control_function_tags") or ""
                     ),
                     "topic_tags": document.get("topic_tags") or "",
+                    "document_date": document.get("document_date"),
+                    "s3_last_modified": (
+                        document.get("s3_last_modified")
+                        or document.get("last_modified")
+                    ),
                     "last_modified": document.get("last_modified"),
                     "size_bytes": document.get("size_bytes") or 0,
                     "preview": _compact_preview(document, preview_chars),
-                    "relevance_score": (
-                        _score_search_document(document, query)
-                        if used_source == "index"
-                        else _score_s3_search_document(document, query)
+                    "relevance_score": _document_relevance_score(
+                        document,
+                        query,
+                        source=used_source,
                     ),
                 }
             )
+
+        top_result = results[0] if results else None
+        if top_result:
+            ranking_debug = _document_ranking_debug(
+                top_result,
+                query,
+                source=used_source,
+            )
+            logger.info(
+                "[mcp_ricerca] ranking_top_result query=%s filename=%s key=%s relevance_score=%s document_date=%s s3_last_modified=%s source=%s",
+                query or "<empty>",
+                ranking_debug["filename"] or "<empty>",
+                ranking_debug["key"] or "<empty>",
+                ranking_debug["relevance_score"],
+                ranking_debug["document_date"] or "<empty>",
+                ranking_debug["s3_last_modified"] or "<empty>",
+                ranking_debug["source"],
+            )
+            if approval_sensitive_query:
+                logger.info(
+                    "[mcp_ricerca] approval_evidence_requires_document_content query=%s filename=%s document_date=%s s3_last_modified=%s",
+                    query or "<empty>",
+                    top_result.get("filename") or "<empty>",
+                    top_result.get("document_date") or "<empty>",
+                    top_result.get("s3_last_modified")
+                    or top_result.get("last_modified")
+                    or "<empty>",
+                )
 
         duration_ms = round((perf_counter() - started_at) * 1000, 2)
         logger.info(
@@ -773,7 +978,7 @@ async def list_documents(
         limit = max(1, min(limit, 300))
         sort_by = (sort_by or "last_modified").strip().lower()
         sort_order = (sort_order or "desc").strip().lower()
-        if sort_by not in {"last_modified", "size", "filename"}:
+        if sort_by not in {"last_modified", "s3_last_modified", "document_date", "size", "filename"}:
             sort_by = "last_modified"
         if sort_order not in {"asc", "desc"}:
             sort_order = "desc"
