@@ -6,6 +6,10 @@ from core.services.document_retrieval.intent_classifier import (
 from core.services.document_retrieval.prompt_context import (
     build_document_search_input,
 )
+from core.services.document_retrieval.presearch import (
+    build_presearch_candidates,
+    build_related_approval_candidates,
+)
 from core.services.document_retrieval.retrieval_strategies import (
     get_retrieval_strategy,
 )
@@ -27,6 +31,8 @@ from core.utils.s3_utils import get_presigned_urls
 from core.models.openai_chat_models import ChatConversation, ChatMessage
 from core.models.assistant_thread_model import AssistantThread
 from django.db import transaction
+from integrations.models import IntegrationClient
+from integrations.services.mcp_auth import build_mcp_access_token
 
 client = OpenAI(api_key=settings.OPENAI_KEY)
 logger = logging.getLogger(__name__)
@@ -54,10 +60,32 @@ class AssistantStreamingView(APIView):
         retrieval_strategy = get_retrieval_strategy(
             intent_classification.intent_type
         )
+        presearch_candidates = build_presearch_candidates(
+            user_input=prompt,
+            intent_classification=intent_classification,
+            retrieval_strategy=retrieval_strategy,
+            customer_code="default",
+        )
+        related_approval_candidates = build_related_approval_candidates(
+            user_input=prompt,
+            primary_candidate=presearch_candidates[0] if presearch_candidates else None,
+            customer_code="default",
+        )
         model_input = build_document_search_input(
             prompt,
             intent_classification,
             retrieval_strategy,
+            presearch_candidates=presearch_candidates,
+            related_approval_candidates=related_approval_candidates,
+        )
+        integration_client = IntegrationClient.objects.filter(
+            customer_code="default",
+            active=True,
+        ).first()
+        mcp_token = (
+            build_mcp_access_token(integration_client)
+            if integration_client is not None
+            else None
         )
 
         logger.info(
@@ -71,9 +99,11 @@ class AssistantStreamingView(APIView):
             retrieval_strategy.group_by or "<none>",
         )
         logger.info(
-            "[assistant_streaming] model_input_prepared original_prompt_length=%s model_input_length=%s",
+            "[assistant_streaming] model_input_prepared original_prompt_length=%s model_input_length=%s presearch_candidates=%s related_approval_candidates=%s",
             len(prompt or ""),
             len(model_input or ""),
+            len(presearch_candidates),
+            len(related_approval_candidates),
         )
 
         # ------------------------------------------
@@ -112,22 +142,28 @@ class AssistantStreamingView(APIView):
         #       STREAM DE RESPOSTA DA OPENAI
         # --------------------------------------------------------
         try:
+            mcp_tool = {
+                "type": "mcp",
+                "server_label": 'rbyc',
+                "server_description": "Ferramenta para buscar documentos indexados, listar metadados e consultar trechos quando necessario",
+                "server_url": settings.MCP_SERVER_URL,
+                "allowed_tools": [
+                    "search_documents",
+                    "list_documents",
+                    "get_document",
+                ],
+                "require_approval": "never",
+            }
+            if mcp_token:
+                mcp_tool["headers"] = {
+                    "Authorization": f"Bearer {mcp_token}",
+                }
+
             response = client.responses.create(
                 prompt={"id": settings.OPENAI_PROMPT_ID_RICERCA_DOCUMENTALE},
                 input=model_input,
                 conversation=assistant_thread.thread_id,
-                tools=[{
-                    "type": "mcp",
-                    "server_label": 'rbyc',
-                    "server_description": "Ferramenta para buscar documentos indexados, listar metadados e consultar trechos quando necessario",
-                    "server_url": settings.MCP_SERVER_URL,
-                    "allowed_tools": [
-                        "search_documents",
-                        "list_documents",
-                        "get_document",
-                    ],
-                    "require_approval": "never",
-                }],
+                tools=[mcp_tool],
                 store=True,
                 timeout=900,
             )
