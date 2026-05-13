@@ -84,6 +84,8 @@ class DocumentIndexAdmin(admin.ModelAdmin):
         "extension",
         "active",
         "extraction_status",
+        "document_date",
+        "s3_last_modified",
         "last_modified",
         "indexed_at",
     )
@@ -97,6 +99,8 @@ class DocumentIndexAdmin(admin.ModelAdmin):
         "year",
         "extension",
         "extraction_status",
+        "document_date",
+        "s3_last_modified",
         "last_modified",
         "indexed_at",
     )
@@ -112,5 +116,5 @@ class DocumentIndexAdmin(admin.ModelAdmin):
         "updated_at",
         "indexed_at",
     )
-    date_hierarchy = "last_modified"
-    ordering = ("-last_modified", "-indexed_at")
+    date_hierarchy = "s3_last_modified"
+    ordering = ("-document_date", "-s3_last_modified", "-indexed_at")

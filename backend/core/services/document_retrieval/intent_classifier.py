@@ -91,11 +91,15 @@ INTENT_RULES = (
     IntentRule(
         intent_type=INTENT_ORGANIZATIONAL_STRUCTURE_YEAR_COMPARISON,
         optional_signals=(
+            "rso",
             "struttura organizzativa",
+            "relazione sulla struttura organizzativa",
             "rispetto al",
             "modificat",
             "2025",
             "2024",
+            "ultima",
+            "approvat",
         ),
     ),
     IntentRule(

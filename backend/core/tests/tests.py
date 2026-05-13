@@ -8,6 +8,10 @@ from unittest.mock import Mock, patch
 from rest_framework.test import APIClient
 
 from core.models.usage import UsageRecord, UsageTool
+from core.services.document_retrieval.intent_classifier import (
+	INTENT_ORGANIZATIONAL_STRUCTURE_YEAR_COMPARISON,
+	classify_document_search_intent,
+)
 from core.services.usage_service import UsageReportFilters, UsageReportService
 from core.services.usage_tracking import UsageTrackingService
 
@@ -144,3 +148,16 @@ class UsageReportServiceMonthTests(TestCase):
 				{"value": "2026-03", "label": "Marzo 2026"},
 			],
 		)
+
+
+class DocumentSearchIntentClassifierTests(TestCase):
+	def test_classify_rso_query_as_organizational_structure_intent(self):
+		classification = classify_document_search_intent(
+			"Quando e stata approvata l'ultima RSO?"
+		)
+
+		self.assertEqual(
+			classification.intent_type,
+			INTENT_ORGANIZATIONAL_STRUCTURE_YEAR_COMPARISON,
+		)
+		self.assertIn("rso", classification.matched_signals)
