@@ -1,5 +1,4 @@
 import logging
-import unicodedata
 from time import perf_counter
 
 from django.conf import settings
@@ -12,26 +11,17 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from integrations.models import DocumentIndex
+from integrations.services.document_index_search import (
+    SEARCH_SYNONYMS,
+    normalize_search_value,
+    query_terms_for_search,
+    search_variants,
+)
 from integrations.services.mcp_auth import decode_mcp_access_token
 
 
 logger = logging.getLogger(__name__)
 
-
-SEARCH_SYNONYMS = {
-    "ad": ["amministratore delegato"],
-    "amministratore delegato": ["ad"],
-    "dg": ["direttore generale"],
-    "direttore generale": ["dg"],
-    "cda": ["consiglio di amministrazione"],
-    "consiglio di amministrazione": ["cda"],
-    "nomina": ["nominato", "nominata", "nomine", "nominare"],
-    "deleghe": ["delega", "delegato", "delegati", "attribuzione di poteri"],
-    "delega": ["deleghe", "delegato", "attribuzione di poteri"],
-    "poteri": ["potere", "attribuiti", "attribuzioni"],
-    "potere": ["poteri", "attribuiti", "attribuzioni"],
-    "bilancio": ["bilanci", "dati di bilancio", "relazione finanziaria"],
-}
 
 FIELD_SCORE_WEIGHTS = {
     "filename": 12,
@@ -103,80 +93,6 @@ def parse_csv_query_values(value: str) -> list[str]:
         for item in (value or "").split(",")
         if item and item.strip()
     ]
-
-
-def normalize_search_value(value: str) -> str:
-    normalized = unicodedata.normalize("NFKD", value or "")
-    normalized = "".join(
-        char for char in normalized if not unicodedata.combining(char)
-    )
-    return " ".join(normalized.casefold().split())
-
-
-def search_variants(value: str) -> list[str]:
-    cleaned = " ".join((value or "").strip().split())
-    normalized = normalize_search_value(cleaned)
-    variants = []
-
-    def add_variant(item: str) -> None:
-        candidate = " ".join((item or "").strip().split())
-        normalized_candidate = normalize_search_value(candidate)
-        for variant in [candidate, normalized_candidate]:
-            if variant and variant not in variants:
-                variants.append(variant)
-            if variant:
-                underscored = variant.replace(" ", "_")
-                if underscored and underscored not in variants:
-                    variants.append(underscored)
-                spaced = variant.replace("_", " ")
-                if spaced and spaced not in variants:
-                    variants.append(spaced)
-
-    add_variant(cleaned)
-    add_variant(normalized)
-
-    for key in [cleaned, normalized]:
-        for synonym in SEARCH_SYNONYMS.get(key, []):
-            add_variant(synonym)
-
-    for source, synonym_list in SEARCH_SYNONYMS.items():
-        if source and source in normalized:
-            for synonym in synonym_list:
-                add_variant(synonym)
-
-    return variants
-
-
-def query_terms_for_search(query: str) -> list[str]:
-    cleaned = " ".join((query or "").strip().split())
-    if not cleaned:
-        return []
-
-    normalized = normalize_search_value(cleaned)
-    terms = []
-    raw_tokens = [token for token in cleaned.split() if token]
-    normalized_tokens = [token for token in normalized.split() if token]
-
-    for item in [cleaned, normalized]:
-        if item and item not in terms:
-            terms.append(item)
-
-    for token_list in [raw_tokens, normalized_tokens]:
-        for token in token_list[:6]:
-            if token and token not in terms:
-                terms.append(token)
-        for index in range(len(token_list) - 1):
-            bigram = f"{token_list[index]} {token_list[index + 1]}"
-            if bigram and bigram not in terms:
-                terms.append(bigram)
-
-    for known_phrase in SEARCH_SYNONYMS:
-        if " " in known_phrase and known_phrase in normalized and known_phrase not in terms:
-            terms.append(known_phrase)
-
-    return terms[:10]
-
-
 def build_query_profile(query_terms: list[str]) -> dict[str, bool]:
     normalized_terms = {
         normalize_search_value(term)
@@ -213,6 +129,36 @@ def build_query_profile(query_terms: list[str]) -> dict[str, bool]:
         "needs_relazione_finanziaria": "relazione finanziaria" in normalized_terms,
         "needs_multi_year_summary": (
             "ultimi tre esercizi" in normalized_terms or "esercizi" in normalized_terms
+        ),
+        "needs_latest_document": any(
+            any(marker in normalized_term for normalized_term in normalized_terms)
+            for marker in ("ultima", "ultimo", "ultim", "piu recente", "recent")
+        ),
+        "needs_approval_evidence": any(
+            any(marker in normalized_term for normalized_term in normalized_terms)
+            for marker in ("approvat", "approvazione", "deliberat", "delibera")
+        ),
+    }
+
+
+def build_document_ranking_debug(
+    document: DocumentIndex,
+    query_terms: list[str],
+) -> dict[str, str | int]:
+    query_profile = build_query_profile(query_terms)
+    return {
+        "filename": document.filename or "",
+        "key": document.object_key or "",
+        "relevance_score": score_document_match(document, query_terms, query_profile),
+        "document_date": document.document_date.isoformat() if document.document_date else "",
+        "s3_last_modified": (
+            document.s3_last_modified.isoformat()
+            if document.s3_last_modified
+            else (
+                document.last_modified.isoformat()
+                if document.last_modified
+                else ""
+            )
         ),
     }
 
@@ -405,12 +351,30 @@ def sort_documents_by_relevance(
         return documents
 
     query_profile = build_query_profile(query_terms)
+    recency_sensitive = query_profile.get("needs_latest_document", False)
 
     return sorted(
         documents,
         key=lambda document: (
-            score_document_match(document, query_terms, query_profile),
-            document.last_modified.isoformat() if document.last_modified else "",
+            (
+                document.document_date.isoformat() if document.document_date else ""
+                if recency_sensitive
+                else score_document_match(document, query_terms, query_profile)
+            ),
+            (
+                score_document_match(document, query_terms, query_profile)
+                if recency_sensitive
+                else document.document_date.isoformat() if document.document_date else ""
+            ),
+            (
+                document.s3_last_modified.isoformat()
+                if document.s3_last_modified
+                else (
+                    document.last_modified.isoformat()
+                    if document.last_modified
+                    else ""
+                )
+            ),
             document.indexed_at.isoformat() if document.indexed_at else "",
         ),
         reverse=True,
@@ -444,7 +408,9 @@ class InternalDocumentIndexView(APIView):
         filename = serializers.CharField()
         extension = serializers.CharField(allow_blank=True)
         size_bytes = serializers.IntegerField()
+        s3_last_modified = serializers.DateTimeField(allow_null=True)
         last_modified = serializers.DateTimeField(allow_null=True)
+        document_date = serializers.DateField(allow_null=True)
         path = serializers.CharField()
         year = serializers.CharField(allow_blank=True)
         document_type = serializers.CharField()
@@ -506,7 +472,9 @@ class InternalDocumentIndexView(APIView):
             "filename",
             "extension",
             "size_bytes",
+            "s3_last_modified",
             "last_modified",
+            "document_date",
             "year",
             "document_type",
             "document_family",
@@ -591,11 +559,13 @@ class InternalDocumentIndexView(APIView):
                 documents = documents.filter(broad_filter)
 
         order_fields = {
-            "last_modified": "last_modified",
+            "last_modified": "s3_last_modified",
+            "s3_last_modified": "s3_last_modified",
+            "document_date": "document_date",
             "size": "size_bytes",
             "filename": "filename",
         }
-        order_field = order_fields.get(sort_by, "last_modified")
+        order_field = order_fields.get(sort_by, "s3_last_modified")
         if sort_order != "asc":
             order_field = f"-{order_field}"
 
@@ -607,7 +577,9 @@ class InternalDocumentIndexView(APIView):
                 "filename": document.filename,
                 "extension": document.extension,
                 "size_bytes": document.size_bytes,
-                "last_modified": document.last_modified,
+                "s3_last_modified": document.s3_last_modified or document.last_modified,
+                "last_modified": document.s3_last_modified or document.last_modified,
+                "document_date": document.document_date,
                 "path": document.object_key,
                 "year": document.year,
                 "document_type": document.document_type,
@@ -618,6 +590,39 @@ class InternalDocumentIndexView(APIView):
             }
             for document in documents
         ]
+
+        if documents:
+            ranking_debug = build_document_ranking_debug(documents[0], query_terms)
+            query_profile = build_query_profile(query_terms)
+            logger.info(
+                "[document_index] ranking_top_result query=%s filename=%s key=%s relevance_score=%s document_date=%s s3_last_modified=%s",
+                query or "<empty>",
+                ranking_debug["filename"] or "<empty>",
+                ranking_debug["key"] or "<empty>",
+                ranking_debug["relevance_score"],
+                ranking_debug["document_date"] or "<empty>",
+                ranking_debug["s3_last_modified"] or "<empty>",
+            )
+            if query_profile.get("needs_approval_evidence"):
+                logger.info(
+                    "[document_index] approval_evidence_requires_document_content query=%s filename=%s document_date=%s s3_last_modified=%s",
+                    query or "<empty>",
+                    documents[0].filename or "<empty>",
+                    (
+                        documents[0].document_date.isoformat()
+                        if documents[0].document_date
+                        else "<empty>"
+                    ),
+                    (
+                        documents[0].s3_last_modified.isoformat()
+                        if documents[0].s3_last_modified
+                        else (
+                            documents[0].last_modified.isoformat()
+                            if documents[0].last_modified
+                            else "<empty>"
+                        )
+                    ),
+                )
 
         duration_ms = round((perf_counter() - started_at) * 1000, 2)
         logger.info(
