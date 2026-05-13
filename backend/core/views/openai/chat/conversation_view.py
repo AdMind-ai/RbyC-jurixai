@@ -90,7 +90,7 @@ from django.conf import settings
 client = OpenAI(api_key=settings.OPENAI_KEY)
 
 class ConversationForChatView(APIView):
-    
+    authentication_classes = []
     permission_classes = [permissions.AllowAny]
     """ View que cria uma conversa para o chat """
     
