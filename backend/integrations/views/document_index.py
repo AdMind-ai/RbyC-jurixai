@@ -1,12 +1,8 @@
 import logging
 from time import perf_counter
 
-from django.conf import settings
-from django.db import DatabaseError, connection
-from django.db.models import Q
+from django.db import DatabaseError
 from django.http import JsonResponse
-from django.utils import timezone
-from django.contrib.postgres.search import SearchQuery, SearchRank, SearchVector
 from drf_spectacular.utils import extend_schema
 from rest_framework import serializers, status
 from rest_framework.exceptions import AuthenticationFailed
@@ -14,592 +10,40 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from integrations.models import DocumentIndex
+from integrations.services.document_index_auth import (
+    resolve_internal_document_index_customer_code,
+    validate_internal_document_index_request,
+)
+from integrations.services.document_index_content import apply_document_index_content_update
 from integrations.services.document_index_search import (
-    SEARCH_SYNONYMS,
-    normalize_search_value,
     query_terms_for_search,
     search_variants,
 )
-from integrations.services.document_search_index import refresh_document_search_text
-from integrations.services.mcp_auth import decode_mcp_access_token
+from integrations.services.document_index_http import (
+    build_index_request_debug_context,
+    parse_document_index_request_params,
+    serialize_document_index_documents,
+)
+from integrations.services.document_index_logging import (
+    log_document_index_request_completed,
+    log_document_index_search_result,
+)
+from integrations.services.document_index_ranking import (
+    score_document_match,
+    score_fts_alignment,
+    sort_documents_by_relevance,
+)
+from integrations.services.document_index_querying import (
+    build_document_search_filter,
+    build_document_search_filter_for_mode,
+    build_document_search_query_text,
+    can_use_postgres_fts,
+    compute_postgres_fts_candidate_limit,
+    search_documents_in_index,
+)
 
 
 logger = logging.getLogger(__name__)
-
-
-FIELD_SCORE_WEIGHTS = {
-    "filename": 12,
-    "object_key": 11,
-    "document_family": 9,
-    "document_type": 8,
-    "topic_tags": 8,
-    "control_function_tags": 7,
-    "year": 6,
-    "search_text": 5,
-    "text_preview": 4,
-    "extracted_text": 5,
-}
-
-GOVERNANCE_QUERY_SIGNALS = {
-    "amministratore delegato",
-    "ad",
-    "direttore generale",
-    "dg",
-    "nomina",
-    "poteri",
-    "potere",
-    "deleghe",
-    "delega",
-}
-
-FINANCIAL_QUERY_SIGNALS = {
-    "bilancio",
-    "bilanci",
-    "dati di bilancio",
-    "relazione finanziaria",
-    "ultimi tre esercizi",
-    "esercizi",
-    "stato patrimoniale",
-    "conto economico",
-    "ricavi",
-    "patrimonio netto",
-    "utile",
-    "perdita",
-}
-
-DOCUMENT_ARTIFACT_PATTERNS = {
-    "verbale": (
-        "verbale",
-        "verbale_cda",
-        "estratto_cda",
-        "consiglio di amministrazione",
-        "cda",
-    ),
-    "convocazione": (
-        "convocazione",
-        "ordine del giorno",
-        "odg",
-    ),
-    "delibera": (
-        "delibera",
-        "deliber",
-        "approvazione",
-        "approvat",
-    ),
-    "relazione": (
-        "relazione",
-        "rso",
-        "report",
-    ),
-    "policy": (
-        "policy",
-        "procedura",
-        "regolamento",
-    ),
-}
-
-
-def build_index_request_debug_context(
-    *,
-    customer_code: str,
-    query: str = "",
-    year: str = "",
-    document_type: str = "",
-    document_family: str = "",
-    control_function_tags: str = "",
-    topic_tags: str = "",
-    extension: str = "",
-    filename_contains: str = "",
-    path_contains: str = "",
-    sort_by: str = "",
-    sort_order: str = "",
-    limit: int | None = None,
-) -> dict[str, str | int]:
-    return {
-        "customer_code": customer_code or "<empty>",
-        "query": query or "<empty>",
-        "year": year or "<empty>",
-        "document_type": document_type or "<empty>",
-        "document_family": document_family or "<empty>",
-        "control_function_tags": control_function_tags or "<empty>",
-        "topic_tags": topic_tags or "<empty>",
-        "extension": extension or "<empty>",
-        "filename_contains": filename_contains or "<empty>",
-        "path_contains": path_contains or "<empty>",
-        "sort_by": sort_by or "<empty>",
-        "sort_order": sort_order or "<empty>",
-        "limit": limit or 0,
-    }
-
-
-def resolve_internal_document_index_customer_code(request) -> str:
-    authorization = (request.headers.get("Authorization") or "").strip()
-    if not authorization.lower().startswith("bearer "):
-        raise AuthenticationFailed("Missing MCP bearer token.")
-
-    token = authorization[7:].strip()
-    if not token:
-        raise AuthenticationFailed("Missing MCP bearer token.")
-
-    try:
-        payload = decode_mcp_access_token(token)
-    except Exception as exc:
-        raise AuthenticationFailed("Invalid MCP bearer token.") from exc
-
-    customer_code = str(payload.get("customer_code") or "").strip()
-    if not customer_code:
-        raise AuthenticationFailed("MCP bearer token missing customer_code.")
-
-    query_customer_code = (request.query_params.get("customer_code") or "").strip()
-    if query_customer_code and query_customer_code != customer_code:
-        raise AuthenticationFailed("customer_code mismatch for MCP bearer token.")
-
-    return customer_code
-
-
-def validate_internal_document_index_request(request) -> str:
-    expected_key = getattr(settings, "DOCUMENT_INDEX_API_KEY", None)
-    provided_key = request.headers.get("X-Internal-API-Key")
-    if not expected_key or provided_key != expected_key:
-        raise AuthenticationFailed("Unauthorized internal document index request.")
-
-    return resolve_internal_document_index_customer_code(request)
-
-
-def parse_csv_query_values(value: str) -> list[str]:
-    return [
-        item.strip()
-        for item in (value or "").split(",")
-        if item and item.strip()
-    ]
-def build_query_profile(query_terms: list[str]) -> dict[str, bool]:
-    normalized_terms = {
-        normalize_search_value(term)
-        for term in query_terms
-        if normalize_search_value(term)
-    }
-    governance = any(
-        signal in normalized_terms
-        for signal in GOVERNANCE_QUERY_SIGNALS
-    )
-    financial = any(
-        signal in normalized_terms
-        for signal in FINANCIAL_QUERY_SIGNALS
-    )
-    return {
-        "governance": governance,
-        "financial": financial,
-        "needs_ad": (
-            "amministratore delegato" in normalized_terms or "ad" in normalized_terms
-        ),
-        "needs_dg": (
-            "direttore generale" in normalized_terms or "dg" in normalized_terms
-        ),
-        "needs_poteri": (
-            "poteri" in normalized_terms or "potere" in normalized_terms
-        ),
-        "needs_deleghe": (
-            "deleghe" in normalized_terms or "delega" in normalized_terms
-        ),
-        "needs_nomina": "nomina" in normalized_terms,
-        "needs_bilancio": (
-            "bilancio" in normalized_terms or "bilanci" in normalized_terms
-        ),
-        "needs_relazione_finanziaria": "relazione finanziaria" in normalized_terms,
-        "needs_multi_year_summary": (
-            "ultimi tre esercizi" in normalized_terms or "esercizi" in normalized_terms
-        ),
-        "needs_latest_document": any(
-            any(marker in normalized_term for normalized_term in normalized_terms)
-            for marker in ("ultima", "ultimo", "ultim", "piu recente", "recent")
-        ),
-        "needs_approval_evidence": any(
-            any(marker in normalized_term for normalized_term in normalized_terms)
-            for marker in ("approvat", "approvazione", "deliberat", "delibera")
-        ),
-        "needs_verbale": any(
-            any(marker in normalized_term for normalized_term in normalized_terms)
-            for marker in ("verbale", "estratto", "consiglio di amministrazione", "cda")
-        ),
-        "needs_convocazione": any(
-            any(marker in normalized_term for normalized_term in normalized_terms)
-            for marker in ("convocazione", "ordine del giorno", "odg")
-        ),
-        "needs_relazione": any(
-            any(marker in normalized_term for normalized_term in normalized_terms)
-            for marker in ("relazione", "rso")
-        ),
-        "needs_policy": any(
-            any(marker in normalized_term for normalized_term in normalized_terms)
-            for marker in ("policy", "procedura", "regolamento")
-        ),
-    }
-
-
-def build_document_ranking_debug(
-    document: DocumentIndex,
-    query_terms: list[str],
-) -> dict[str, str | int]:
-    query_profile = build_query_profile(query_terms)
-    return {
-        "filename": document.filename or "",
-        "key": document.object_key or "",
-        "relevance_score": score_document_match(document, query_terms, query_profile),
-        "document_date": document.document_date.isoformat() if document.document_date else "",
-        "s3_last_modified": (
-            document.s3_last_modified.isoformat()
-            if document.s3_last_modified
-            else (
-                document.last_modified.isoformat()
-                if document.last_modified
-                else ""
-            )
-        ),
-    }
-
-
-def score_governance_alignment(normalized_fields: dict[str, str], profile: dict[str, bool]) -> int:
-    if not profile.get("governance"):
-        return 0
-
-    combined_text = " ".join(normalized_fields.values())
-    topic_tags = normalized_fields.get("topic_tags", "")
-    document_family = normalized_fields.get("document_family", "")
-    filename = normalized_fields.get("filename", "")
-    object_key = normalized_fields.get("object_key", "")
-
-    score = 0
-    if document_family == "nomina":
-        score += 18
-    elif "nomina" in document_family:
-        score += 10
-
-    if profile.get("needs_nomina") and "nomina" in topic_tags:
-        score += 12
-
-    if profile.get("needs_ad"):
-        if "amministratore_delegato" in topic_tags:
-            score += 28
-        if "amministratore delegato" in combined_text or " ad " in f" {combined_text} ":
-            score += 20
-        elif "direttore_generale" not in topic_tags:
-            score -= 16
-
-    if profile.get("needs_dg"):
-        if "direttore_generale" in topic_tags:
-            score += 28
-        if "direttore generale" in combined_text or " dg " in f" {combined_text} ":
-            score += 20
-        elif "amministratore_delegato" not in topic_tags:
-            score -= 16
-
-    if profile.get("needs_poteri"):
-        if "poteri" in topic_tags or "poteri" in combined_text or "attribuit" in combined_text:
-            score += 18
-        else:
-            score -= 8
-
-    if profile.get("needs_deleghe"):
-        if "deleghe" in topic_tags or "delega" in combined_text or "deleghe" in combined_text:
-            score += 18
-        else:
-            score -= 8
-
-    generic_nomina_only = (
-        "nomina" in topic_tags
-        and "amministratore_delegato" not in topic_tags
-        and "direttore_generale" not in topic_tags
-        and "poteri" not in topic_tags
-        and "deleghe" not in topic_tags
-    )
-    if generic_nomina_only:
-        score -= 20
-
-    governance_noise_markers = [
-        "outsourcing",
-        "compliancefunzione di controllo",
-        "funzione di controllo",
-        "condizioni generali",
-    ]
-    if any(marker in filename or marker in object_key for marker in governance_noise_markers):
-        score -= 25
-
-    return score
-
-
-def score_financial_alignment(normalized_fields: dict[str, str], profile: dict[str, bool]) -> int:
-    if not profile.get("financial"):
-        return 0
-
-    combined_text = " ".join(normalized_fields.values())
-    topic_tags = normalized_fields.get("topic_tags", "")
-    document_family = normalized_fields.get("document_family", "")
-    document_type = normalized_fields.get("document_type", "")
-    filename = normalized_fields.get("filename", "")
-    object_key = normalized_fields.get("object_key", "")
-    year = normalized_fields.get("year", "")
-
-    score = 0
-    if document_family == "bilancio":
-        score += 26
-    elif document_family == "relazione_finanziaria":
-        score += 22
-    elif "bilancio" in document_family or "relazione_finanziaria" in document_family:
-        score += 14
-
-    if document_type == "bilancio":
-        score += 18
-    elif document_type == "relazione_finanziaria":
-        score += 16
-
-    if "bilancio" in topic_tags:
-        score += 16
-    if "dati_finanziari" in topic_tags:
-        score += 14
-
-    if "bilancio" in combined_text:
-        score += 12
-    if "relazione finanziaria" in combined_text:
-        score += 10
-
-    if profile.get("needs_multi_year_summary") and year:
-        try:
-            numeric_year = int(year)
-        except ValueError:
-            numeric_year = 0
-        if numeric_year >= 2022:
-            score += 12
-        elif numeric_year >= 2020:
-            score += 8
-
-    if profile.get("needs_bilancio") and "bilancio" not in combined_text and "bilancio" not in topic_tags:
-        score -= 10
-
-    financial_noise_markers = [
-        "verbale",
-        "convocazione",
-        "funzione di controllo",
-        "contestazioni",
-        "consob",
-    ]
-    if any(marker in filename or marker in object_key for marker in financial_noise_markers):
-        score -= 18
-
-    return score
-
-
-def document_field_value(document, field_name: str) -> str:
-    return document.__dict__.get(field_name) or ""
-
-
-def document_fts_rank_value(document) -> float:
-    try:
-        return float(getattr(document, "fts_rank", 0) or 0)
-    except (TypeError, ValueError):
-        return 0.0
-
-
-def score_fts_alignment(document) -> int:
-    fts_rank = document_fts_rank_value(document)
-    if fts_rank <= 0:
-        return 0
-    return min(int(round(fts_rank * 25)), 25)
-
-
-def score_document_artifact_alignment(
-    normalized_fields: dict[str, str],
-    profile: dict[str, bool],
-) -> int:
-    filename = normalized_fields.get("filename", "")
-    object_key = normalized_fields.get("object_key", "")
-    document_family = normalized_fields.get("document_family", "")
-    document_type = normalized_fields.get("document_type", "")
-    combined_text = " ".join(
-        value
-        for value in (
-            filename,
-            object_key,
-            document_family,
-            document_type,
-            normalized_fields.get("topic_tags", ""),
-        )
-        if value
-    )
-
-    score = 0
-    if profile.get("needs_verbale"):
-        if any(token in combined_text for token in DOCUMENT_ARTIFACT_PATTERNS["verbale"]):
-            score += 26
-        elif any(token in combined_text for token in DOCUMENT_ARTIFACT_PATTERNS["relazione"]):
-            score -= 12
-        elif any(token in combined_text for token in DOCUMENT_ARTIFACT_PATTERNS["policy"]):
-            score -= 16
-
-    if profile.get("needs_convocazione"):
-        if any(token in combined_text for token in DOCUMENT_ARTIFACT_PATTERNS["convocazione"]):
-            score += 24
-        elif any(token in combined_text for token in DOCUMENT_ARTIFACT_PATTERNS["relazione"]):
-            score -= 10
-
-    if profile.get("needs_policy"):
-        if any(token in combined_text for token in DOCUMENT_ARTIFACT_PATTERNS["policy"]):
-            score += 20
-        elif any(token in combined_text for token in DOCUMENT_ARTIFACT_PATTERNS["verbale"]):
-            score -= 10
-
-    if profile.get("needs_relazione"):
-        if any(token in combined_text for token in DOCUMENT_ARTIFACT_PATTERNS["relazione"]):
-            score += 10
-
-    if profile.get("needs_approval_evidence"):
-        if any(token in combined_text for token in DOCUMENT_ARTIFACT_PATTERNS["verbale"]):
-            score += 12
-        if any(token in combined_text for token in DOCUMENT_ARTIFACT_PATTERNS["convocazione"]):
-            score += 8
-
-    return score
-
-
-def score_document_match(
-    document,
-    query_terms: list[str],
-    query_profile: dict[str, bool] | None = None,
-) -> int:
-    if not query_terms:
-        return 0
-
-    normalized_fields = {
-        "filename": normalize_search_value(document_field_value(document, "filename")),
-        "object_key": normalize_search_value(document_field_value(document, "object_key")),
-        "document_type": normalize_search_value(document_field_value(document, "document_type")),
-        "document_family": normalize_search_value(document_field_value(document, "document_family")),
-        "topic_tags": normalize_search_value(document_field_value(document, "topic_tags")),
-        "control_function_tags": normalize_search_value(document_field_value(document, "control_function_tags")),
-        "year": normalize_search_value(document_field_value(document, "year")),
-        "search_text": normalize_search_value(document_field_value(document, "search_text")),
-        "text_preview": normalize_search_value(document_field_value(document, "text_preview")),
-        "extracted_text": normalize_search_value(document_field_value(document, "extracted_text")),
-    }
-
-    score = 0
-    matched_terms = 0
-    for raw_term in query_terms:
-        term_variants = [normalize_search_value(item) for item in search_variants(raw_term)]
-        term_variants = [item for item in term_variants if item]
-        term_matched = False
-        for field_name, field_value in normalized_fields.items():
-            if not field_value:
-                continue
-            field_weight = FIELD_SCORE_WEIGHTS[field_name]
-            for variant in term_variants:
-                if variant == field_value:
-                    score += field_weight + 6
-                    term_matched = True
-                    break
-                if variant in field_value:
-                    score += field_weight
-                    term_matched = True
-                    break
-            if term_matched:
-                break
-        if term_matched:
-            matched_terms += 1
-
-    score += matched_terms * 5
-    effective_profile = query_profile or build_query_profile(query_terms)
-    score += score_fts_alignment(document)
-    score += score_document_artifact_alignment(normalized_fields, effective_profile)
-    score += score_governance_alignment(normalized_fields, effective_profile)
-    score += score_financial_alignment(normalized_fields, effective_profile)
-    return score
-
-
-def sort_documents_by_relevance(
-    documents: list[DocumentIndex],
-    query_terms: list[str],
-) -> list[DocumentIndex]:
-    if not query_terms:
-        return documents
-
-    query_profile = build_query_profile(query_terms)
-    recency_sensitive = query_profile.get("needs_latest_document", False)
-
-    def recency_value(document: DocumentIndex) -> str:
-        return document.document_date.isoformat() if document.document_date else ""
-
-    def relevance_value(document: DocumentIndex) -> int:
-        return score_document_match(document, query_terms, query_profile)
-
-    def last_modified_value(document: DocumentIndex) -> str:
-        if document.s3_last_modified:
-            return document.s3_last_modified.isoformat()
-        if document.last_modified:
-            return document.last_modified.isoformat()
-        return ""
-
-    return sorted(
-        documents,
-        key=lambda document: (
-            recency_value(document) if recency_sensitive else relevance_value(document),
-            relevance_value(document) if recency_sensitive else recency_value(document),
-            last_modified_value(document),
-            document.indexed_at.isoformat() if document.indexed_at else "",
-        ),
-        reverse=True,
-    )
-
-
-def build_document_search_filter(term: str, include_preview: bool = False) -> Q:
-    return build_document_search_filter_for_mode(
-        term,
-        include_preview=include_preview,
-        include_extended_text=True,
-    )
-
-
-def build_document_search_filter_for_mode(
-    term: str,
-    *,
-    include_preview: bool = False,
-    include_extended_text: bool = True,
-) -> Q:
-    search_filter = Q()
-    for variant in search_variants(term):
-        variant_filter = (
-            Q(filename__icontains=variant)
-            | Q(object_key__icontains=variant)
-            | Q(document_type__icontains=variant)
-            | Q(document_family__icontains=variant)
-            | Q(topic_tags__icontains=variant)
-            | Q(control_function_tags__icontains=variant)
-            | Q(year__icontains=variant)
-        )
-        if include_extended_text:
-            variant_filter |= (
-                Q(search_text__icontains=variant)
-                | Q(extracted_text__icontains=variant)
-            )
-        search_filter |= variant_filter
-        if include_preview:
-            search_filter |= Q(text_preview__icontains=variant)
-    return search_filter
-
-
-def can_use_postgres_fts() -> bool:
-    return connection.vendor == "postgresql"
-
-
-def build_document_search_query_text(raw_query: str, query_terms: list[str]) -> str:
-    cleaned_query = " ".join((raw_query or "").split())
-    if cleaned_query:
-        return cleaned_query
-    return " ".join(query_terms)
-
-
-def compute_postgres_fts_candidate_limit(limit: int) -> int:
-    normalized_limit = max(1, limit)
-    candidate_limit = max(normalized_limit * 2, 30)
-    return min(candidate_limit, 80)
 
 
 @extend_schema(exclude=True)
@@ -623,224 +67,6 @@ class InternalDocumentIndexView(APIView):
         topic_tags = serializers.CharField(allow_blank=True)
         text_preview = serializers.CharField(allow_blank=True)
 
-    def _build_queryset(self, customer_code: str, *, include_extended_text: bool):
-        only_fields = [
-            "object_key",
-            "filename",
-            "extension",
-            "size_bytes",
-            "s3_last_modified",
-            "last_modified",
-            "document_date",
-            "year",
-            "document_type",
-            "document_family",
-            "control_function_tags",
-            "topic_tags",
-            "text_preview",
-            "indexed_at",
-            "client__customer_code",
-            "client__active",
-        ]
-        if include_extended_text:
-            only_fields.extend(["search_text", "extracted_text"])
-
-        return DocumentIndex.objects.select_related("client").filter(
-            client__customer_code=customer_code,
-            client__active=True,
-            active=True,
-        ).only(*only_fields)
-
-    def _search_documents(
-        self,
-        *,
-        raw_query: str,
-        customer_code: str,
-        year: str,
-        document_type: str,
-        document_family: str,
-        control_function_tags: str,
-        topic_tags: str,
-        extension: str,
-        filename_contains: str,
-        path_contains: str,
-        sort_by: str,
-        sort_order: str,
-        limit: int,
-        query_terms: list[str],
-        include_extended_text: bool,
-    ) -> list[DocumentIndex]:
-        documents = self._build_queryset(
-            customer_code,
-            include_extended_text=include_extended_text,
-        )
-
-        if year:
-            documents = documents.filter(year=year)
-
-        if document_type:
-            document_type_filter = Q()
-            for raw_value in parse_csv_query_values(document_type) or [document_type]:
-                for variant in search_variants(raw_value):
-                    document_type_filter |= Q(document_type__icontains=variant)
-            documents = documents.filter(document_type_filter)
-
-        if document_family:
-            document_family_filter = Q()
-            for raw_value in parse_csv_query_values(document_family) or [document_family]:
-                for variant in search_variants(raw_value):
-                    document_family_filter |= Q(document_family__icontains=variant)
-            documents = documents.filter(document_family_filter)
-
-        if control_function_tags:
-            control_function_filter = Q()
-            for raw_value in parse_csv_query_values(control_function_tags) or [control_function_tags]:
-                for variant in search_variants(raw_value):
-                    control_function_filter |= Q(control_function_tags__icontains=variant)
-            documents = documents.filter(control_function_filter)
-
-        if topic_tags:
-            topic_filter = Q()
-            for raw_value in parse_csv_query_values(topic_tags) or [topic_tags]:
-                for variant in search_variants(raw_value):
-                    topic_filter |= Q(topic_tags__icontains=variant)
-            documents = documents.filter(topic_filter)
-
-        if extension:
-            normalized_extension = (
-                extension if extension.startswith(".") else f".{extension}"
-            )
-            documents = documents.filter(extension=normalized_extension)
-
-        if filename_contains:
-            filename_filter = Q()
-            for variant in search_variants(filename_contains):
-                filename_filter |= Q(filename__icontains=variant)
-            documents = documents.filter(filename_filter)
-
-        if path_contains:
-            path_filter = Q()
-            for variant in search_variants(path_contains):
-                path_filter |= Q(object_key__icontains=variant)
-            documents = documents.filter(path_filter)
-
-        if query_terms:
-            if include_extended_text:
-                fts_documents = self._search_documents_with_postgres_fts(
-                    documents=documents,
-                    raw_query=raw_query,
-                    query_terms=query_terms,
-                    sort_by=sort_by,
-                    sort_order=sort_order,
-                    limit=limit,
-                )
-                if fts_documents:
-                    return fts_documents
-
-            strict_documents = documents
-            for term in query_terms:
-                strict_documents = strict_documents.filter(
-                    build_document_search_filter_for_mode(
-                        term,
-                        include_extended_text=include_extended_text,
-                    )
-                )
-
-            if strict_documents.exists() or len(query_terms) == 1:
-                documents = strict_documents
-            else:
-                broad_filter = Q()
-                for term in query_terms:
-                    broad_filter |= build_document_search_filter_for_mode(
-                        term,
-                        include_preview=True,
-                        include_extended_text=include_extended_text,
-                    )
-                documents = documents.filter(broad_filter)
-
-        order_fields = {
-            "last_modified": "s3_last_modified",
-            "s3_last_modified": "s3_last_modified",
-            "document_date": "document_date",
-            "size": "size_bytes",
-            "filename": "filename",
-        }
-        order_field = order_fields.get(sort_by, "s3_last_modified")
-        if sort_order != "asc":
-            order_field = f"-{order_field}"
-
-        return list(documents.order_by(order_field, "-indexed_at")[:limit])
-
-    def _search_documents_with_postgres_fts(
-        self,
-        *,
-        documents,
-        raw_query: str,
-        query_terms: list[str],
-        sort_by: str,
-        sort_order: str,
-        limit: int,
-    ) -> list[DocumentIndex] | None:
-        if not can_use_postgres_fts():
-            return None
-
-        search_query_text = build_document_search_query_text(raw_query, query_terms)
-        if not search_query_text:
-            return None
-
-        candidate_limit = compute_postgres_fts_candidate_limit(limit)
-        fallback_order_fields = {
-            "last_modified": "s3_last_modified",
-            "s3_last_modified": "s3_last_modified",
-            "document_date": "document_date",
-            "size": "size_bytes",
-            "filename": "filename",
-        }
-        fallback_order_field = fallback_order_fields.get(sort_by, "s3_last_modified")
-        if sort_order != "asc":
-            fallback_order_field = f"-{fallback_order_field}"
-
-        try:
-            search_vector = (
-                SearchVector("filename", weight="A", config="simple")
-                + SearchVector("object_key", weight="A", config="simple")
-                + SearchVector("document_family", weight="B", config="simple")
-                + SearchVector("document_type", weight="B", config="simple")
-                + SearchVector("topic_tags", weight="B", config="simple")
-                + SearchVector("control_function_tags", weight="C", config="simple")
-                + SearchVector("search_text", weight="C", config="simple")
-                + SearchVector("text_preview", weight="D", config="simple")
-            )
-            search_query = SearchQuery(
-                search_query_text,
-                config="simple",
-                search_type="websearch",
-            )
-            ranked_documents = list(
-                documents.annotate(
-                    fts_rank=SearchRank(search_vector, search_query),
-                )
-                .filter(fts_rank__gt=0)
-                .order_by("-fts_rank", fallback_order_field, "-indexed_at")[:candidate_limit]
-            )
-        except DatabaseError as exc:
-            logger.warning(
-                "[document_index] postgres_fts_unavailable error=%s query=%s",
-                exc,
-                search_query_text or "<empty>",
-            )
-            return None
-
-        if ranked_documents:
-            logger.info(
-                "[document_index] postgres_fts_completed query=%s returned_documents=%s candidate_limit=%s top_rank=%s",
-                search_query_text or "<empty>",
-                len(ranked_documents),
-                candidate_limit,
-                getattr(ranked_documents[0], "fts_rank", 0),
-            )
-        return ranked_documents
-
     def get(self, request):
         started_at = perf_counter()
         try:
@@ -851,64 +77,39 @@ class InternalDocumentIndexView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
-        query = (request.query_params.get("query") or "").strip()
-        year = (request.query_params.get("year") or "").strip()
-        document_type = (
-            request.query_params.get("document_type") or ""
-        ).strip()
-        document_family = (
-            request.query_params.get("document_family") or ""
-        ).strip()
-        control_function_tags = (
-            request.query_params.get("control_function_tags") or ""
-        ).strip()
-        topic_tags = (request.query_params.get("topic_tags") or "").strip()
-        extension = (request.query_params.get("extension") or "").strip().lower()
-        filename_contains = (
-            request.query_params.get("filename_contains") or ""
-        ).strip()
-        path_contains = (request.query_params.get("path_contains") or "").strip()
-        sort_by = (request.query_params.get("sort_by") or "last_modified").strip()
-        sort_order = (request.query_params.get("sort_order") or "desc").strip()
-
-        try:
-            limit = int(request.query_params.get("limit") or 200)
-        except (TypeError, ValueError):
-            limit = 200
-        limit = max(1, min(limit, 300))
-
-        query_terms = query_terms_for_search(query)
+        params = parse_document_index_request_params(request)
+        query_terms = query_terms_for_search(params.query)
         request_debug = build_index_request_debug_context(
             customer_code=customer_code,
-            query=query,
-            year=year,
-            document_type=document_type,
-            document_family=document_family,
-            control_function_tags=control_function_tags,
-            topic_tags=topic_tags,
-            extension=extension,
-            filename_contains=filename_contains,
-            path_contains=path_contains,
-            sort_by=sort_by,
-            sort_order=sort_order,
-            limit=limit,
+            query=params.query,
+            year=params.year,
+            document_type=params.document_type,
+            document_family=params.document_family,
+            control_function_tags=params.control_function_tags,
+            topic_tags=params.topic_tags,
+            extension=params.extension,
+            filename_contains=params.filename_contains,
+            path_contains=params.path_contains,
+            sort_by=params.sort_by,
+            sort_order=params.sort_order,
+            limit=params.limit,
         )
         try:
             try:
-                documents = self._search_documents(
-                    raw_query=query,
+                documents = search_documents_in_index(
+                    raw_query=params.query,
                     customer_code=customer_code,
-                    year=year,
-                    document_type=document_type,
-                    document_family=document_family,
-                    control_function_tags=control_function_tags,
-                    topic_tags=topic_tags,
-                    extension=extension,
-                    filename_contains=filename_contains,
-                    path_contains=path_contains,
-                    sort_by=sort_by,
-                    sort_order=sort_order,
-                    limit=limit,
+                    year=params.year,
+                    document_type=params.document_type,
+                    document_family=params.document_family,
+                    control_function_tags=params.control_function_tags,
+                    topic_tags=params.topic_tags,
+                    extension=params.extension,
+                    filename_contains=params.filename_contains,
+                    path_contains=params.path_contains,
+                    sort_by=params.sort_by,
+                    sort_order=params.sort_order,
+                    limit=params.limit,
                     query_terms=query_terms,
                     include_extended_text=True,
                 )
@@ -919,20 +120,20 @@ class InternalDocumentIndexView(APIView):
                     exc,
                     request_debug,
                 )
-                documents = self._search_documents(
-                    raw_query=query,
+                documents = search_documents_in_index(
+                    raw_query=params.query,
                     customer_code=customer_code,
-                    year=year,
-                    document_type=document_type,
-                    document_family=document_family,
-                    control_function_tags=control_function_tags,
-                    topic_tags=topic_tags,
-                    extension=extension,
-                    filename_contains=filename_contains,
-                    path_contains=path_contains,
-                    sort_by=sort_by,
-                    sort_order=sort_order,
-                    limit=limit,
+                    year=params.year,
+                    document_type=params.document_type,
+                    document_family=params.document_family,
+                    control_function_tags=params.control_function_tags,
+                    topic_tags=params.topic_tags,
+                    extension=params.extension,
+                    filename_contains=params.filename_contains,
+                    path_contains=params.path_contains,
+                    sort_by=params.sort_by,
+                    sort_order=params.sort_order,
+                    limit=params.limit,
                     query_terms=query_terms,
                     include_extended_text=False,
                 )
@@ -946,77 +147,33 @@ class InternalDocumentIndexView(APIView):
             raise
 
         documents = sort_documents_by_relevance(documents, query_terms)
-        payload = [
-            {
-                "key": document.object_key,
-                "filename": document.filename,
-                "extension": document.extension,
-                "size_bytes": document.size_bytes,
-                "s3_last_modified": document.s3_last_modified or document.last_modified,
-                "last_modified": document.s3_last_modified or document.last_modified,
-                "document_date": document.document_date,
-                "path": document.object_key,
-                "year": document.year,
-                "document_type": document.document_type,
-                "document_family": document.document_family,
-                "control_function_tags": document.control_function_tags,
-                "topic_tags": document.topic_tags,
-                "text_preview": document.text_preview,
-            }
-            for document in documents
-        ]
+        payload = serialize_document_index_documents(documents)
 
-        if documents:
-            ranking_debug = build_document_ranking_debug(documents[0], query_terms)
-            query_profile = build_query_profile(query_terms)
-            logger.info(
-                "[document_index] ranking_top_result query=%s filename=%s key=%s relevance_score=%s document_date=%s s3_last_modified=%s",
-                query or "<empty>",
-                ranking_debug["filename"] or "<empty>",
-                ranking_debug["key"] or "<empty>",
-                ranking_debug["relevance_score"],
-                ranking_debug["document_date"] or "<empty>",
-                ranking_debug["s3_last_modified"] or "<empty>",
-            )
-            if query_profile.get("needs_approval_evidence"):
-                logger.info(
-                    "[document_index] approval_evidence_requires_document_content query=%s filename=%s document_date=%s s3_last_modified=%s",
-                    query or "<empty>",
-                    documents[0].filename or "<empty>",
-                    (
-                        documents[0].document_date.isoformat()
-                        if documents[0].document_date
-                        else "<empty>"
-                    ),
-                    (
-                        documents[0].s3_last_modified.isoformat()
-                        if documents[0].s3_last_modified
-                        else (
-                            documents[0].last_modified.isoformat()
-                            if documents[0].last_modified
-                            else "<empty>"
-                        )
-                    ),
-                )
+        log_document_index_search_result(
+            logger,
+            query=params.query,
+            query_terms=query_terms,
+            documents=documents,
+        )
 
         duration_ms = round((perf_counter() - started_at) * 1000, 2)
-        logger.info(
-            "[document_index] request_completed duration_ms=%s customer_code=%s returned_documents=%s limit=%s query=%s year=%s document_type=%s document_family=%s control_function_tags=%s topic_tags=%s extension=%s filename_contains=%s path_contains=%s sort_by=%s sort_order=%s",
-            duration_ms,
-            customer_code,
-            len(payload),
-            limit,
-            query or "<empty>",
-            year or "<empty>",
-            document_type or "<empty>",
-            document_family or "<empty>",
-            control_function_tags or "<empty>",
-            topic_tags or "<empty>",
-            extension or "<empty>",
-            filename_contains or "<empty>",
-            path_contains or "<empty>",
-            sort_by,
-            sort_order,
+        log_document_index_request_completed(
+            logger,
+            duration_ms=duration_ms,
+            customer_code=customer_code,
+            returned_documents=len(payload),
+            limit=params.limit,
+            query=params.query,
+            year=params.year,
+            document_type=params.document_type,
+            document_family=params.document_family,
+            control_function_tags=params.control_function_tags,
+            topic_tags=params.topic_tags,
+            extension=params.extension,
+            filename_contains=params.filename_contains,
+            path_contains=params.path_contains,
+            sort_by=params.sort_by,
+            sort_order=params.sort_order,
         )
         return JsonResponse(payload, safe=False)
 
@@ -1067,44 +224,11 @@ class InternalDocumentIndexContentView(APIView):
             )
 
         try:
-            normalized_preview = text_preview[:6000]
-            normalized_extracted_text = extracted_text[:30000]
-            source_text = normalized_extracted_text or normalized_preview
-
-            update_fields = ["updated_at"]
-            if normalized_preview and document.text_preview != normalized_preview:
-                document.text_preview = normalized_preview
-                update_fields.append("text_preview")
-            if normalized_extracted_text and document.extracted_text != normalized_extracted_text:
-                document.extracted_text = normalized_extracted_text
-                update_fields.append("extracted_text")
-
-            control_function_tags = DocumentIndex.infer_control_function_tags(
-                document.object_key,
-                source_text,
+            update_result = apply_document_index_content_update(
+                document,
+                text_preview=text_preview,
+                extracted_text=extracted_text,
             )
-            topic_tags = DocumentIndex.infer_topic_tags(
-                document.object_key,
-                source_text,
-            )
-            if document.control_function_tags != control_function_tags:
-                document.control_function_tags = control_function_tags
-                update_fields.append("control_function_tags")
-            if document.topic_tags != topic_tags:
-                document.topic_tags = topic_tags
-                update_fields.append("topic_tags")
-            if refresh_document_search_text(document):
-                update_fields.append("search_text")
-            if document.extraction_status != DocumentIndex.STATUS_READY:
-                document.extraction_status = DocumentIndex.STATUS_READY
-                update_fields.append("extraction_status")
-            if document.extraction_error:
-                document.extraction_error = ""
-                update_fields.append("extraction_error")
-
-            document.indexed_at = timezone.now()
-            update_fields.append("indexed_at")
-            document.save(update_fields=update_fields)
         except Exception:
             duration_ms = round((perf_counter() - started_at) * 1000, 2)
             logger.exception(
@@ -1123,7 +247,7 @@ class InternalDocumentIndexContentView(APIView):
             duration_ms,
             customer_code,
             object_key,
-            len(normalized_preview),
-            len(normalized_extracted_text),
+            len(update_result["normalized_preview"]),
+            len(update_result["normalized_extracted_text"]),
         )
         return Response({"status": "ok"})
