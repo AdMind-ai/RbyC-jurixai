@@ -67,6 +67,37 @@ FINANCIAL_QUERY_SIGNALS = {
     "perdita",
 }
 
+DOCUMENT_ARTIFACT_PATTERNS = {
+    "verbale": (
+        "verbale",
+        "verbale_cda",
+        "estratto_cda",
+        "consiglio di amministrazione",
+        "cda",
+    ),
+    "convocazione": (
+        "convocazione",
+        "ordine del giorno",
+        "odg",
+    ),
+    "delibera": (
+        "delibera",
+        "deliber",
+        "approvazione",
+        "approvat",
+    ),
+    "relazione": (
+        "relazione",
+        "rso",
+        "report",
+    ),
+    "policy": (
+        "policy",
+        "procedura",
+        "regolamento",
+    ),
+}
+
 
 def build_index_request_debug_context(
     *,
@@ -185,6 +216,22 @@ def build_query_profile(query_terms: list[str]) -> dict[str, bool]:
         "needs_approval_evidence": any(
             any(marker in normalized_term for normalized_term in normalized_terms)
             for marker in ("approvat", "approvazione", "deliberat", "delibera")
+        ),
+        "needs_verbale": any(
+            any(marker in normalized_term for normalized_term in normalized_terms)
+            for marker in ("verbale", "estratto", "consiglio di amministrazione", "cda")
+        ),
+        "needs_convocazione": any(
+            any(marker in normalized_term for normalized_term in normalized_terms)
+            for marker in ("convocazione", "ordine del giorno", "odg")
+        ),
+        "needs_relazione": any(
+            any(marker in normalized_term for normalized_term in normalized_terms)
+            for marker in ("relazione", "rso")
+        ),
+        "needs_policy": any(
+            any(marker in normalized_term for normalized_term in normalized_terms)
+            for marker in ("policy", "procedura", "regolamento")
         ),
     }
 
@@ -359,6 +406,60 @@ def score_fts_alignment(document) -> int:
     return min(int(round(fts_rank * 25)), 25)
 
 
+def score_document_artifact_alignment(
+    normalized_fields: dict[str, str],
+    profile: dict[str, bool],
+) -> int:
+    filename = normalized_fields.get("filename", "")
+    object_key = normalized_fields.get("object_key", "")
+    document_family = normalized_fields.get("document_family", "")
+    document_type = normalized_fields.get("document_type", "")
+    combined_text = " ".join(
+        value
+        for value in (
+            filename,
+            object_key,
+            document_family,
+            document_type,
+            normalized_fields.get("topic_tags", ""),
+        )
+        if value
+    )
+
+    score = 0
+    if profile.get("needs_verbale"):
+        if any(token in combined_text for token in DOCUMENT_ARTIFACT_PATTERNS["verbale"]):
+            score += 26
+        elif any(token in combined_text for token in DOCUMENT_ARTIFACT_PATTERNS["relazione"]):
+            score -= 12
+        elif any(token in combined_text for token in DOCUMENT_ARTIFACT_PATTERNS["policy"]):
+            score -= 16
+
+    if profile.get("needs_convocazione"):
+        if any(token in combined_text for token in DOCUMENT_ARTIFACT_PATTERNS["convocazione"]):
+            score += 24
+        elif any(token in combined_text for token in DOCUMENT_ARTIFACT_PATTERNS["relazione"]):
+            score -= 10
+
+    if profile.get("needs_policy"):
+        if any(token in combined_text for token in DOCUMENT_ARTIFACT_PATTERNS["policy"]):
+            score += 20
+        elif any(token in combined_text for token in DOCUMENT_ARTIFACT_PATTERNS["verbale"]):
+            score -= 10
+
+    if profile.get("needs_relazione"):
+        if any(token in combined_text for token in DOCUMENT_ARTIFACT_PATTERNS["relazione"]):
+            score += 10
+
+    if profile.get("needs_approval_evidence"):
+        if any(token in combined_text for token in DOCUMENT_ARTIFACT_PATTERNS["verbale"]):
+            score += 12
+        if any(token in combined_text for token in DOCUMENT_ARTIFACT_PATTERNS["convocazione"]):
+            score += 8
+
+    return score
+
+
 def score_document_match(
     document,
     query_terms: list[str],
@@ -407,6 +508,7 @@ def score_document_match(
     score += matched_terms * 5
     effective_profile = query_profile or build_query_profile(query_terms)
     score += score_fts_alignment(document)
+    score += score_document_artifact_alignment(normalized_fields, effective_profile)
     score += score_governance_alignment(normalized_fields, effective_profile)
     score += score_financial_alignment(normalized_fields, effective_profile)
     return score

@@ -23,6 +23,7 @@ from integrations.views.document_index import (
     compute_postgres_fts_candidate_limit,
     query_terms_for_search,
     search_variants,
+    score_document_match,
     score_fts_alignment,
     sort_documents_by_relevance,
 )
@@ -495,6 +496,50 @@ class DocumentIndexSearchHelpersTests(TestCase):
         high_rank_document = DocumentIndex(filename="y", object_key="y")
         high_rank_document.fts_rank = 10
         self.assertEqual(score_fts_alignment(high_rank_document), 25)
+
+    def test_score_document_match_prefers_verbale_for_governance_query(self):
+        query_terms = query_terms_for_search(
+            "verbale consiglio di amministrazione approvazione relazione struttura organizzativa"
+        )
+
+        verbale_document = DocumentIndex(
+            filename="verbale-cda-09062025.docx",
+            object_key="docs/verbale-cda-09062025.docx",
+            document_family="verbale_cda",
+            topic_tags="struttura_organizzativa",
+        )
+        relazione_document = DocumentIndex(
+            filename="rso_31032026_v03_clean.docx",
+            object_key="docs/rso_31032026_v03_clean.docx",
+            document_family="relazione_struttura_organizzativa",
+            topic_tags="struttura_organizzativa",
+        )
+
+        self.assertGreater(
+            score_document_match(verbale_document, query_terms),
+            score_document_match(relazione_document, query_terms),
+        )
+
+    def test_score_document_match_prefers_policy_for_policy_query(self):
+        query_terms = query_terms_for_search("policy gestione rischi informatici")
+
+        policy_document = DocumentIndex(
+            filename="policy-rischi-informatici.docx",
+            object_key="docs/policy-rischi-informatici.docx",
+            document_family="policy",
+            topic_tags="risk, ict, cybersecurity",
+        )
+        verbale_document = DocumentIndex(
+            filename="verbale-cda-09062025.docx",
+            object_key="docs/verbale-cda-09062025.docx",
+            document_family="verbale_cda",
+            topic_tags="risk, ict, cybersecurity",
+        )
+
+        self.assertGreater(
+            score_document_match(policy_document, query_terms),
+            score_document_match(verbale_document, query_terms),
+        )
 
     def test_search_variants_expand_common_abbreviations(self):
         variants = search_variants("amministratore delegato")
