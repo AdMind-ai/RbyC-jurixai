@@ -45,7 +45,7 @@ from core.services.document_retrieval.streaming import (
 )
 from core.services.usage_tracking import UsageTrackingService
 from core.utils.common import safe_load_json
-from core.utils.s3_utils import get_presigned_urls
+from core.utils.s3_utils import get_presigned_urls_for_document_keys
 from integrations.models import IntegrationClient
 from integrations.services.mcp_auth import build_mcp_access_token
 
@@ -338,7 +338,14 @@ class AssistantDocumentSearchStreamView(APIView):
 
                 if response_keys:
                     try:
-                        documents_urls = get_presigned_urls(response_keys)
+                        documents_urls = get_presigned_urls_for_document_keys(
+                            response_keys,
+                            customer_code="default",
+                            fallback_bucket=(
+                                getattr(integration_client, "bucket_name", None)
+                                or getattr(settings, "AWS_STORAGE_BUCKET_NAME", None)
+                            ),
+                        )
                     except Exception:
                         logger.exception(
                             "[assistant_document_search_stream] presigned_url_generation_failed keys_count=%s",

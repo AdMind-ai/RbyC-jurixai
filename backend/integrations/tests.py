@@ -158,14 +158,14 @@ class RicercaDocumentaleViewMCPAuthTests(TestCase):
         MCP_INTERNAL_AUTH_AUDIENCE="mcp-ricerca",
         AWS_STORAGE_BUCKET_NAME="bucket-cliente-teste",
     )
-    @patch("integrations.views.ricerca_documentale.get_presigned_urls")
+    @patch("integrations.views.ricerca_documentale.get_presigned_urls_for_document_keys")
     @patch("integrations.views.ricerca_documentale.client.conversations.create")
     @patch("integrations.views.ricerca_documentale.client.responses.create")
     def test_ricerca_documentale_extracts_document_keys_from_tool_output(
         self,
         mock_create_response,
         mock_create_conversation,
-        mock_get_presigned_urls,
+        mock_get_presigned_urls_for_document_keys,
     ):
         mock_create_conversation.return_value = Mock(id="conv_test")
         response_mock = Mock()
@@ -184,7 +184,7 @@ class RicercaDocumentaleViewMCPAuthTests(TestCase):
             ]
         }
         mock_create_response.return_value = response_mock
-        mock_get_presigned_urls.return_value = {
+        mock_get_presigned_urls_for_document_keys.return_value = {
             "pasta/documento-teste.pdf": "https://signed.example/pasta/documento-teste.pdf"
         }
 
@@ -195,9 +195,10 @@ class RicercaDocumentaleViewMCPAuthTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        mock_get_presigned_urls.assert_called_once_with(
+        mock_get_presigned_urls_for_document_keys.assert_called_once_with(
             ["pasta/documento-teste.pdf"],
-            bucket="bucket-cliente-teste",
+            customer_code="cliente_teste",
+            fallback_bucket="bucket-cliente-teste",
         )
         self.assertEqual(
             response.data["documents_urls"],

@@ -26,7 +26,7 @@ from typing import Any, Dict, Optional
 
 # Functions
 from core.utils.assistants import *
-from core.utils.s3_utils import get_presigned_urls
+from core.utils.s3_utils import get_presigned_urls_for_document_keys
 
 from core.models.openai_chat_models import ChatConversation, ChatMessage
 from core.models.assistant_thread_model import AssistantThread
@@ -233,7 +233,14 @@ class AssistantStreamingView(APIView):
         documents_urls = {}
         if response_keys:
             try:
-                documents_urls = get_presigned_urls(response_keys)
+                documents_urls = get_presigned_urls_for_document_keys(
+                    response_keys,
+                    customer_code="default",
+                    fallback_bucket=(
+                        getattr(integration_client, "bucket_name", None)
+                        or getattr(settings, "AWS_STORAGE_BUCKET_NAME", None)
+                    ),
+                )
             except Exception as e:
                 logger.exception("Erro ao recuperar URLs S3: %s", e)
 
