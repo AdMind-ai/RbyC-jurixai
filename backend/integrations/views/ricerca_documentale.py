@@ -26,7 +26,7 @@ from core.services.document_retrieval.retrieval_strategies import (
     get_retrieval_strategy,
 )
 from core.utils.openai_client import client
-from core.utils.s3_utils import get_presigned_urls
+from core.utils.s3_utils import get_presigned_urls_for_document_keys
 from integrations.authentication import APIKeyAuthentication
 from integrations.permissions import HasValidAPIKey
 from integrations.services.mcp_auth import build_mcp_access_token
@@ -444,7 +444,13 @@ class RicercaDocumentaleView(APIView):
         presign_started_at = perf_counter()
         if response_keys:
             try:
-                documents_urls = get_presigned_urls(response_keys, bucket=bucket_name)
+                documents_urls = get_presigned_urls_for_document_keys(
+                    response_keys,
+                    customer_code=(
+                        getattr(integration_client, "customer_code", None) or None
+                    ),
+                    fallback_bucket=bucket_name,
+                )
             except Exception:
                 logger.exception(
                     "[ricerca_documentale][%s] presigned_url_generation_failed keys_count=%s",

@@ -1,6 +1,44 @@
 from django.contrib import admin
+from django import forms
 
 from integrations.models import DocumentIndex, IntegrationApiKey, IntegrationClient
+
+
+class IntegrationApiKeyAdminForm(forms.ModelForm):
+    raw_key = forms.CharField(
+        required=False,
+        label="Raw API key",
+        help_text=(
+            "Informe a chave em texto puro. O sistema vai gerar o hash "
+            "automaticamente ao salvar."
+        ),
+        widget=forms.TextInput(attrs={"autocomplete": "off"}),
+    )
+
+    class Meta:
+        model = IntegrationApiKey
+        fields = "__all__"
+
+    def clean(self):
+        cleaned_data = super().clean()
+        raw_key = (cleaned_data.get("raw_key") or "").strip()
+
+        if not self.instance.pk and not raw_key:
+            raise forms.ValidationError(
+                "Informe uma raw API key para criar o registro."
+            )
+
+        return cleaned_data
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        raw_key = (self.cleaned_data.get("raw_key") or "").strip()
+        if raw_key:
+            instance.key_hash = IntegrationApiKey.hash_key(raw_key)
+        if commit:
+            instance.save()
+            self.save_m2m()
+        return instance
 
 
 class IntegrationApiKeyInline(admin.TabularInline):
@@ -46,6 +84,7 @@ class IntegrationClientAdmin(admin.ModelAdmin):
 
 @admin.register(IntegrationApiKey)
 class IntegrationApiKeyAdmin(admin.ModelAdmin):
+    form = IntegrationApiKeyAdminForm
     list_display = (
         "client",
         "description",
@@ -63,6 +102,16 @@ class IntegrationApiKeyAdmin(admin.ModelAdmin):
         "key_hash",
     )
     readonly_fields = ("key_hash", "created_at", "updated_at")
+    fields = (
+        "client",
+        "raw_key",
+        "key_hash",
+        "description",
+        "environment",
+        "active",
+        "created_at",
+        "updated_at",
+    )
 
     @admin.display(description="Key hash")
     def short_key_hash(self, obj):

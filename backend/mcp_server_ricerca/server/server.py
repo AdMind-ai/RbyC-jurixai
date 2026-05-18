@@ -287,8 +287,10 @@ def _list_documents_from_s3(
     sort_order: str = "desc",
 ) -> list[dict]:
     client_context = _get_active_client_context()
-    response = s3.list_objects_v2(Bucket=client_context.bucket_name)
-    contents = response.get("Contents", [])
+    paginator = s3.get_paginator("list_objects_v2")
+    contents = []
+    for page in paginator.paginate(Bucket=client_context.bucket_name):
+        contents.extend(page.get("Contents", []))
     filtered_documents = [
         _serialize_document_metadata(obj)
         for obj in contents
