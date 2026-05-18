@@ -20,8 +20,10 @@ from core.services.document_retrieval.prompt_context import build_document_searc
 from core.services.document_retrieval.retrieval_strategies import get_retrieval_strategy
 from integrations.views.document_index import (
     build_document_search_query_text,
+    compute_postgres_fts_candidate_limit,
     query_terms_for_search,
     search_variants,
+    score_fts_alignment,
     sort_documents_by_relevance,
 )
 
@@ -479,6 +481,20 @@ class DocumentIndexSearchHelpersTests(TestCase):
             build_document_search_query_text('"presidio interno" rischi informatici', ["presidio interno", "rischi informatici"]),
             '"presidio interno" rischi informatici',
         )
+
+    def test_compute_postgres_fts_candidate_limit_is_bounded(self):
+        self.assertEqual(compute_postgres_fts_candidate_limit(5), 30)
+        self.assertEqual(compute_postgres_fts_candidate_limit(40), 80)
+        self.assertEqual(compute_postgres_fts_candidate_limit(100), 80)
+
+    def test_score_fts_alignment_caps_bonus(self):
+        document = DocumentIndex(filename="x", object_key="x")
+        document.fts_rank = 0.9
+        self.assertGreater(score_fts_alignment(document), 0)
+
+        high_rank_document = DocumentIndex(filename="y", object_key="y")
+        high_rank_document.fts_rank = 10
+        self.assertEqual(score_fts_alignment(high_rank_document), 25)
 
     def test_search_variants_expand_common_abbreviations(self):
         variants = search_variants("amministratore delegato")
