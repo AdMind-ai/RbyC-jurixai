@@ -93,6 +93,7 @@ class DocumentIndex(models.Model):
     topic_tags = models.CharField(max_length=256, blank=True)
     text_preview = models.TextField(blank=True)
     extracted_text = models.TextField(blank=True)
+    search_text = models.TextField(blank=True)
     extraction_status = models.CharField(
         max_length=32,
         choices=STATUS_CHOICES,

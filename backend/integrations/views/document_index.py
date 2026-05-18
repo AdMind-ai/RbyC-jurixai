@@ -2,8 +2,11 @@ import logging
 from time import perf_counter
 
 from django.conf import settings
+from django.db import DatabaseError, connection
 from django.db.models import Q
 from django.http import JsonResponse
+from django.utils import timezone
+from django.contrib.postgres.search import SearchQuery, SearchRank, SearchVector
 from drf_spectacular.utils import extend_schema
 from rest_framework import serializers, status
 from rest_framework.exceptions import AuthenticationFailed
@@ -17,6 +20,7 @@ from integrations.services.document_index_search import (
     query_terms_for_search,
     search_variants,
 )
+from integrations.services.document_search_index import refresh_document_search_text
 from integrations.services.mcp_auth import decode_mcp_access_token
 
 
@@ -31,7 +35,9 @@ FIELD_SCORE_WEIGHTS = {
     "topic_tags": 8,
     "control_function_tags": 7,
     "year": 6,
+    "search_text": 5,
     "text_preview": 4,
+    "extracted_text": 5,
 }
 
 GOVERNANCE_QUERY_SIGNALS = {
@@ -62,6 +68,39 @@ FINANCIAL_QUERY_SIGNALS = {
 }
 
 
+def build_index_request_debug_context(
+    *,
+    customer_code: str,
+    query: str = "",
+    year: str = "",
+    document_type: str = "",
+    document_family: str = "",
+    control_function_tags: str = "",
+    topic_tags: str = "",
+    extension: str = "",
+    filename_contains: str = "",
+    path_contains: str = "",
+    sort_by: str = "",
+    sort_order: str = "",
+    limit: int | None = None,
+) -> dict[str, str | int]:
+    return {
+        "customer_code": customer_code or "<empty>",
+        "query": query or "<empty>",
+        "year": year or "<empty>",
+        "document_type": document_type or "<empty>",
+        "document_family": document_family or "<empty>",
+        "control_function_tags": control_function_tags or "<empty>",
+        "topic_tags": topic_tags or "<empty>",
+        "extension": extension or "<empty>",
+        "filename_contains": filename_contains or "<empty>",
+        "path_contains": path_contains or "<empty>",
+        "sort_by": sort_by or "<empty>",
+        "sort_order": sort_order or "<empty>",
+        "limit": limit or 0,
+    }
+
+
 def resolve_internal_document_index_customer_code(request) -> str:
     authorization = (request.headers.get("Authorization") or "").strip()
     if not authorization.lower().startswith("bearer "):
@@ -85,6 +124,15 @@ def resolve_internal_document_index_customer_code(request) -> str:
         raise AuthenticationFailed("customer_code mismatch for MCP bearer token.")
 
     return customer_code
+
+
+def validate_internal_document_index_request(request) -> str:
+    expected_key = getattr(settings, "DOCUMENT_INDEX_API_KEY", None)
+    provided_key = request.headers.get("X-Internal-API-Key")
+    if not expected_key or provided_key != expected_key:
+        raise AuthenticationFailed("Unauthorized internal document index request.")
+
+    return resolve_internal_document_index_customer_code(request)
 
 
 def parse_csv_query_values(value: str) -> list[str]:
@@ -293,6 +341,10 @@ def score_financial_alignment(normalized_fields: dict[str, str], profile: dict[s
     return score
 
 
+def document_field_value(document, field_name: str) -> str:
+    return document.__dict__.get(field_name) or ""
+
+
 def score_document_match(
     document,
     query_terms: list[str],
@@ -302,14 +354,16 @@ def score_document_match(
         return 0
 
     normalized_fields = {
-        "filename": normalize_search_value(document.filename),
-        "object_key": normalize_search_value(document.object_key),
-        "document_type": normalize_search_value(document.document_type),
-        "document_family": normalize_search_value(document.document_family),
-        "topic_tags": normalize_search_value(document.topic_tags),
-        "control_function_tags": normalize_search_value(document.control_function_tags),
-        "year": normalize_search_value(document.year),
-        "text_preview": normalize_search_value(document.text_preview),
+        "filename": normalize_search_value(document_field_value(document, "filename")),
+        "object_key": normalize_search_value(document_field_value(document, "object_key")),
+        "document_type": normalize_search_value(document_field_value(document, "document_type")),
+        "document_family": normalize_search_value(document_field_value(document, "document_family")),
+        "topic_tags": normalize_search_value(document_field_value(document, "topic_tags")),
+        "control_function_tags": normalize_search_value(document_field_value(document, "control_function_tags")),
+        "year": normalize_search_value(document_field_value(document, "year")),
+        "search_text": normalize_search_value(document_field_value(document, "search_text")),
+        "text_preview": normalize_search_value(document_field_value(document, "text_preview")),
+        "extracted_text": normalize_search_value(document_field_value(document, "extracted_text")),
     }
 
     score = 0
@@ -353,28 +407,25 @@ def sort_documents_by_relevance(
     query_profile = build_query_profile(query_terms)
     recency_sensitive = query_profile.get("needs_latest_document", False)
 
+    def recency_value(document: DocumentIndex) -> str:
+        return document.document_date.isoformat() if document.document_date else ""
+
+    def relevance_value(document: DocumentIndex) -> int:
+        return score_document_match(document, query_terms, query_profile)
+
+    def last_modified_value(document: DocumentIndex) -> str:
+        if document.s3_last_modified:
+            return document.s3_last_modified.isoformat()
+        if document.last_modified:
+            return document.last_modified.isoformat()
+        return ""
+
     return sorted(
         documents,
         key=lambda document: (
-            (
-                document.document_date.isoformat() if document.document_date else ""
-                if recency_sensitive
-                else score_document_match(document, query_terms, query_profile)
-            ),
-            (
-                score_document_match(document, query_terms, query_profile)
-                if recency_sensitive
-                else document.document_date.isoformat() if document.document_date else ""
-            ),
-            (
-                document.s3_last_modified.isoformat()
-                if document.s3_last_modified
-                else (
-                    document.last_modified.isoformat()
-                    if document.last_modified
-                    else ""
-                )
-            ),
+            recency_value(document) if recency_sensitive else relevance_value(document),
+            relevance_value(document) if recency_sensitive else recency_value(document),
+            last_modified_value(document),
             document.indexed_at.isoformat() if document.indexed_at else "",
         ),
         reverse=True,
@@ -382,9 +433,22 @@ def sort_documents_by_relevance(
 
 
 def build_document_search_filter(term: str, include_preview: bool = False) -> Q:
+    return build_document_search_filter_for_mode(
+        term,
+        include_preview=include_preview,
+        include_extended_text=True,
+    )
+
+
+def build_document_search_filter_for_mode(
+    term: str,
+    *,
+    include_preview: bool = False,
+    include_extended_text: bool = True,
+) -> Q:
     search_filter = Q()
     for variant in search_variants(term):
-        search_filter |= (
+        variant_filter = (
             Q(filename__icontains=variant)
             | Q(object_key__icontains=variant)
             | Q(document_type__icontains=variant)
@@ -393,9 +457,26 @@ def build_document_search_filter(term: str, include_preview: bool = False) -> Q:
             | Q(control_function_tags__icontains=variant)
             | Q(year__icontains=variant)
         )
+        if include_extended_text:
+            variant_filter |= (
+                Q(search_text__icontains=variant)
+                | Q(extracted_text__icontains=variant)
+            )
+        search_filter |= variant_filter
         if include_preview:
             search_filter |= Q(text_preview__icontains=variant)
     return search_filter
+
+
+def can_use_postgres_fts() -> bool:
+    return connection.vendor == "postgresql"
+
+
+def build_document_search_query_text(raw_query: str, query_terms: list[str]) -> str:
+    cleaned_query = " ".join((raw_query or "").split())
+    if cleaned_query:
+        return cleaned_query
+    return " ".join(query_terms)
 
 
 @extend_schema(exclude=True)
@@ -419,18 +500,229 @@ class InternalDocumentIndexView(APIView):
         topic_tags = serializers.CharField(allow_blank=True)
         text_preview = serializers.CharField(allow_blank=True)
 
-    def get(self, request):
-        started_at = perf_counter()
-        expected_key = getattr(settings, "DOCUMENT_INDEX_API_KEY", None)
-        provided_key = request.headers.get("X-Internal-API-Key")
-        if not expected_key or provided_key != expected_key:
-            return Response(
-                {"detail": "Unauthorized internal document index request."},
-                status=status.HTTP_401_UNAUTHORIZED,
+    def _build_queryset(self, customer_code: str, *, include_extended_text: bool):
+        only_fields = [
+            "object_key",
+            "filename",
+            "extension",
+            "size_bytes",
+            "s3_last_modified",
+            "last_modified",
+            "document_date",
+            "year",
+            "document_type",
+            "document_family",
+            "control_function_tags",
+            "topic_tags",
+            "text_preview",
+            "indexed_at",
+            "client__customer_code",
+            "client__active",
+        ]
+        if include_extended_text:
+            only_fields.extend(["search_text", "extracted_text"])
+
+        return DocumentIndex.objects.select_related("client").filter(
+            client__customer_code=customer_code,
+            client__active=True,
+            active=True,
+        ).only(*only_fields)
+
+    def _search_documents(
+        self,
+        *,
+        raw_query: str,
+        customer_code: str,
+        year: str,
+        document_type: str,
+        document_family: str,
+        control_function_tags: str,
+        topic_tags: str,
+        extension: str,
+        filename_contains: str,
+        path_contains: str,
+        sort_by: str,
+        sort_order: str,
+        limit: int,
+        query_terms: list[str],
+        include_extended_text: bool,
+    ) -> list[DocumentIndex]:
+        documents = self._build_queryset(
+            customer_code,
+            include_extended_text=include_extended_text,
+        )
+
+        if year:
+            documents = documents.filter(year=year)
+
+        if document_type:
+            document_type_filter = Q()
+            for raw_value in parse_csv_query_values(document_type) or [document_type]:
+                for variant in search_variants(raw_value):
+                    document_type_filter |= Q(document_type__icontains=variant)
+            documents = documents.filter(document_type_filter)
+
+        if document_family:
+            document_family_filter = Q()
+            for raw_value in parse_csv_query_values(document_family) or [document_family]:
+                for variant in search_variants(raw_value):
+                    document_family_filter |= Q(document_family__icontains=variant)
+            documents = documents.filter(document_family_filter)
+
+        if control_function_tags:
+            control_function_filter = Q()
+            for raw_value in parse_csv_query_values(control_function_tags) or [control_function_tags]:
+                for variant in search_variants(raw_value):
+                    control_function_filter |= Q(control_function_tags__icontains=variant)
+            documents = documents.filter(control_function_filter)
+
+        if topic_tags:
+            topic_filter = Q()
+            for raw_value in parse_csv_query_values(topic_tags) or [topic_tags]:
+                for variant in search_variants(raw_value):
+                    topic_filter |= Q(topic_tags__icontains=variant)
+            documents = documents.filter(topic_filter)
+
+        if extension:
+            normalized_extension = (
+                extension if extension.startswith(".") else f".{extension}"
             )
+            documents = documents.filter(extension=normalized_extension)
+
+        if filename_contains:
+            filename_filter = Q()
+            for variant in search_variants(filename_contains):
+                filename_filter |= Q(filename__icontains=variant)
+            documents = documents.filter(filename_filter)
+
+        if path_contains:
+            path_filter = Q()
+            for variant in search_variants(path_contains):
+                path_filter |= Q(object_key__icontains=variant)
+            documents = documents.filter(path_filter)
+
+        if query_terms:
+            if include_extended_text:
+                fts_documents = self._search_documents_with_postgres_fts(
+                    documents=documents,
+                    raw_query=raw_query,
+                    query_terms=query_terms,
+                    sort_by=sort_by,
+                    sort_order=sort_order,
+                    limit=limit,
+                )
+                if fts_documents:
+                    return fts_documents
+
+            strict_documents = documents
+            for term in query_terms:
+                strict_documents = strict_documents.filter(
+                    build_document_search_filter_for_mode(
+                        term,
+                        include_extended_text=include_extended_text,
+                    )
+                )
+
+            if strict_documents.exists() or len(query_terms) == 1:
+                documents = strict_documents
+            else:
+                broad_filter = Q()
+                for term in query_terms:
+                    broad_filter |= build_document_search_filter_for_mode(
+                        term,
+                        include_preview=True,
+                        include_extended_text=include_extended_text,
+                    )
+                documents = documents.filter(broad_filter)
+
+        order_fields = {
+            "last_modified": "s3_last_modified",
+            "s3_last_modified": "s3_last_modified",
+            "document_date": "document_date",
+            "size": "size_bytes",
+            "filename": "filename",
+        }
+        order_field = order_fields.get(sort_by, "s3_last_modified")
+        if sort_order != "asc":
+            order_field = f"-{order_field}"
+
+        return list(documents.order_by(order_field, "-indexed_at")[:limit])
+
+    def _search_documents_with_postgres_fts(
+        self,
+        *,
+        documents,
+        raw_query: str,
+        query_terms: list[str],
+        sort_by: str,
+        sort_order: str,
+        limit: int,
+    ) -> list[DocumentIndex] | None:
+        if not can_use_postgres_fts():
+            return None
+
+        search_query_text = build_document_search_query_text(raw_query, query_terms)
+        if not search_query_text:
+            return None
+
+        candidate_limit = max(limit * 4, 40)
+        candidate_limit = min(candidate_limit, 300)
+        fallback_order_fields = {
+            "last_modified": "s3_last_modified",
+            "s3_last_modified": "s3_last_modified",
+            "document_date": "document_date",
+            "size": "size_bytes",
+            "filename": "filename",
+        }
+        fallback_order_field = fallback_order_fields.get(sort_by, "s3_last_modified")
+        if sort_order != "asc":
+            fallback_order_field = f"-{fallback_order_field}"
 
         try:
-            customer_code = resolve_internal_document_index_customer_code(request)
+            search_vector = (
+                SearchVector("filename", weight="A", config="simple")
+                + SearchVector("object_key", weight="A", config="simple")
+                + SearchVector("document_family", weight="B", config="simple")
+                + SearchVector("document_type", weight="B", config="simple")
+                + SearchVector("topic_tags", weight="B", config="simple")
+                + SearchVector("control_function_tags", weight="C", config="simple")
+                + SearchVector("search_text", weight="C", config="simple")
+                + SearchVector("text_preview", weight="D", config="simple")
+            )
+            search_query = SearchQuery(
+                search_query_text,
+                config="simple",
+                search_type="websearch",
+            )
+            ranked_documents = list(
+                documents.annotate(
+                    fts_rank=SearchRank(search_vector, search_query),
+                )
+                .filter(fts_rank__gt=0)
+                .order_by("-fts_rank", fallback_order_field, "-indexed_at")[:candidate_limit]
+            )
+        except DatabaseError as exc:
+            logger.warning(
+                "[document_index] postgres_fts_unavailable error=%s query=%s",
+                exc,
+                search_query_text or "<empty>",
+            )
+            return None
+
+        if ranked_documents:
+            logger.info(
+                "[document_index] postgres_fts_completed query=%s returned_documents=%s candidate_limit=%s top_rank=%s",
+                search_query_text or "<empty>",
+                len(ranked_documents),
+                candidate_limit,
+                getattr(ranked_documents[0], "fts_rank", 0),
+            )
+        return ranked_documents
+
+    def get(self, request):
+        started_at = perf_counter()
+        try:
+            customer_code = validate_internal_document_index_request(request)
         except AuthenticationFailed as exc:
             return Response(
                 {"detail": str(exc.detail)},
@@ -463,113 +755,74 @@ class InternalDocumentIndexView(APIView):
             limit = 200
         limit = max(1, min(limit, 300))
 
-        documents = DocumentIndex.objects.select_related("client").filter(
-            client__customer_code=customer_code,
-            client__active=True,
-            active=True,
-        ).only(
-            "object_key",
-            "filename",
-            "extension",
-            "size_bytes",
-            "s3_last_modified",
-            "last_modified",
-            "document_date",
-            "year",
-            "document_type",
-            "document_family",
-            "control_function_tags",
-            "topic_tags",
-            "text_preview",
-            "indexed_at",
-            "client__customer_code",
-            "client__active",
-        )
-
-        if year:
-            documents = documents.filter(year=year)
-
-        if document_type:
-            document_type_filter = Q()
-            for raw_value in parse_csv_query_values(document_type) or [document_type]:
-                for variant in search_variants(raw_value):
-                    document_type_filter |= Q(document_type__icontains=variant)
-            documents = documents.filter(document_type_filter)
-
-        if document_family:
-            document_family_filter = Q()
-            for raw_value in parse_csv_query_values(document_family) or [document_family]:
-                for variant in search_variants(raw_value):
-                    document_family_filter |= Q(
-                        document_family__icontains=variant
-                    )
-            documents = documents.filter(document_family_filter)
-
-        if control_function_tags:
-            control_function_filter = Q()
-            for raw_value in parse_csv_query_values(control_function_tags) or [control_function_tags]:
-                for variant in search_variants(raw_value):
-                    control_function_filter |= Q(
-                        control_function_tags__icontains=variant
-                    )
-            documents = documents.filter(control_function_filter)
-
-        if topic_tags:
-            topic_filter = Q()
-            for raw_value in parse_csv_query_values(topic_tags) or [topic_tags]:
-                for variant in search_variants(raw_value):
-                    topic_filter |= Q(topic_tags__icontains=variant)
-            documents = documents.filter(topic_filter)
-
-        if extension:
-            normalized_extension = (
-                extension if extension.startswith(".") else f".{extension}"
-            )
-            documents = documents.filter(extension=normalized_extension)
-
-        if filename_contains:
-            filename_filter = Q()
-            for variant in search_variants(filename_contains):
-                filename_filter |= Q(filename__icontains=variant)
-            documents = documents.filter(filename_filter)
-
-        if path_contains:
-            path_filter = Q()
-            for variant in search_variants(path_contains):
-                path_filter |= Q(object_key__icontains=variant)
-            documents = documents.filter(path_filter)
-
         query_terms = query_terms_for_search(query)
-        if query_terms:
-            strict_documents = documents
-            for term in query_terms:
-                strict_documents = strict_documents.filter(
-                    build_document_search_filter(term)
+        request_debug = build_index_request_debug_context(
+            customer_code=customer_code,
+            query=query,
+            year=year,
+            document_type=document_type,
+            document_family=document_family,
+            control_function_tags=control_function_tags,
+            topic_tags=topic_tags,
+            extension=extension,
+            filename_contains=filename_contains,
+            path_contains=path_contains,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            limit=limit,
+        )
+        try:
+            try:
+                documents = self._search_documents(
+                    raw_query=query,
+                    customer_code=customer_code,
+                    year=year,
+                    document_type=document_type,
+                    document_family=document_family,
+                    control_function_tags=control_function_tags,
+                    topic_tags=topic_tags,
+                    extension=extension,
+                    filename_contains=filename_contains,
+                    path_contains=path_contains,
+                    sort_by=sort_by,
+                    sort_order=sort_order,
+                    limit=limit,
+                    query_terms=query_terms,
+                    include_extended_text=True,
                 )
+            except DatabaseError as exc:
+                logger.warning(
+                    "[document_index] extended_search_unavailable customer_code=%s error=%s request=%s",
+                    customer_code,
+                    exc,
+                    request_debug,
+                )
+                documents = self._search_documents(
+                    raw_query=query,
+                    customer_code=customer_code,
+                    year=year,
+                    document_type=document_type,
+                    document_family=document_family,
+                    control_function_tags=control_function_tags,
+                    topic_tags=topic_tags,
+                    extension=extension,
+                    filename_contains=filename_contains,
+                    path_contains=path_contains,
+                    sort_by=sort_by,
+                    sort_order=sort_order,
+                    limit=limit,
+                    query_terms=query_terms,
+                    include_extended_text=False,
+                )
+        except Exception:
+            duration_ms = round((perf_counter() - started_at) * 1000, 2)
+            logger.exception(
+                "[document_index] request_failed duration_ms=%s request=%s",
+                duration_ms,
+                request_debug,
+            )
+            raise
 
-            if strict_documents.exists() or len(query_terms) == 1:
-                documents = strict_documents
-            else:
-                broad_filter = Q()
-                for term in query_terms:
-                    broad_filter |= build_document_search_filter(
-                        term,
-                        include_preview=True,
-                    )
-                documents = documents.filter(broad_filter)
-
-        order_fields = {
-            "last_modified": "s3_last_modified",
-            "s3_last_modified": "s3_last_modified",
-            "document_date": "document_date",
-            "size": "size_bytes",
-            "filename": "filename",
-        }
-        order_field = order_fields.get(sort_by, "s3_last_modified")
-        if sort_order != "asc":
-            order_field = f"-{order_field}"
-
-        documents = list(documents.order_by(order_field, "-indexed_at")[:limit])
         documents = sort_documents_by_relevance(documents, query_terms)
         payload = [
             {
@@ -644,3 +897,111 @@ class InternalDocumentIndexView(APIView):
             sort_order,
         )
         return JsonResponse(payload, safe=False)
+
+
+@extend_schema(exclude=True)
+class InternalDocumentIndexContentView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    class InputSerializer(serializers.Serializer):
+        key = serializers.CharField()
+        text_preview = serializers.CharField(required=False, allow_blank=True, default="")
+        extracted_text = serializers.CharField(required=False, allow_blank=True, default="")
+
+    def post(self, request):
+        started_at = perf_counter()
+        try:
+            customer_code = validate_internal_document_index_request(request)
+        except AuthenticationFailed as exc:
+            return Response(
+                {"detail": str(exc.detail)},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        serializer = self.InputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        object_key = serializer.validated_data["key"].strip()
+        text_preview = (serializer.validated_data.get("text_preview") or "").strip()
+        extracted_text = (serializer.validated_data.get("extracted_text") or "").strip()
+
+        if not object_key:
+            return Response(
+                {"detail": "Document key is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        document = DocumentIndex.objects.select_related("client").filter(
+            client__customer_code=customer_code,
+            client__active=True,
+            active=True,
+            object_key=object_key,
+        ).first()
+        if document is None:
+            return Response(
+                {"detail": "Document not found for MCP content update."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            normalized_preview = text_preview[:6000]
+            normalized_extracted_text = extracted_text[:30000]
+            source_text = normalized_extracted_text or normalized_preview
+
+            update_fields = ["updated_at"]
+            if normalized_preview and document.text_preview != normalized_preview:
+                document.text_preview = normalized_preview
+                update_fields.append("text_preview")
+            if normalized_extracted_text and document.extracted_text != normalized_extracted_text:
+                document.extracted_text = normalized_extracted_text
+                update_fields.append("extracted_text")
+
+            control_function_tags = DocumentIndex.infer_control_function_tags(
+                document.object_key,
+                source_text,
+            )
+            topic_tags = DocumentIndex.infer_topic_tags(
+                document.object_key,
+                source_text,
+            )
+            if document.control_function_tags != control_function_tags:
+                document.control_function_tags = control_function_tags
+                update_fields.append("control_function_tags")
+            if document.topic_tags != topic_tags:
+                document.topic_tags = topic_tags
+                update_fields.append("topic_tags")
+            if refresh_document_search_text(document):
+                update_fields.append("search_text")
+            if document.extraction_status != DocumentIndex.STATUS_READY:
+                document.extraction_status = DocumentIndex.STATUS_READY
+                update_fields.append("extraction_status")
+            if document.extraction_error:
+                document.extraction_error = ""
+                update_fields.append("extraction_error")
+
+            document.indexed_at = timezone.now()
+            update_fields.append("indexed_at")
+            document.save(update_fields=update_fields)
+        except Exception:
+            duration_ms = round((perf_counter() - started_at) * 1000, 2)
+            logger.exception(
+                "[document_index] content_update_failed duration_ms=%s customer_code=%s key=%s preview_chars=%s extracted_chars=%s",
+                duration_ms,
+                customer_code,
+                object_key,
+                len(text_preview or ""),
+                len(extracted_text or ""),
+            )
+            raise
+
+        duration_ms = round((perf_counter() - started_at) * 1000, 2)
+        logger.info(
+            "[document_index] content_update_completed duration_ms=%s customer_code=%s key=%s preview_chars=%s extracted_chars=%s",
+            duration_ms,
+            customer_code,
+            object_key,
+            len(normalized_preview),
+            len(normalized_extracted_text),
+        )
+        return Response({"status": "ok"})

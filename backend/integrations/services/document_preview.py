@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from core.utils.s3_utils import _get_s3_client
 from integrations.models import DocumentIndex
+from integrations.services.document_search_index import refresh_document_search_text
 
 
 logger = logging.getLogger(__name__)
@@ -90,9 +91,11 @@ def build_missing_document_previews(
                 result.skipped_count += 1
 
             document.indexed_at = timezone.now()
+            refresh_document_search_text(document)
             document.save(
                 update_fields=[
                     "text_preview",
+                    "search_text",
                     "control_function_tags",
                     "topic_tags",
                     "extraction_status",
