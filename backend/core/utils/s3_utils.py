@@ -1,4 +1,5 @@
 import logging
+from collections import defaultdict
 from typing import List, Dict, Optional
 
 from django.conf import settings
@@ -90,5 +91,79 @@ def get_presigned_urls(
         except Exception as e:
             logger.exception("Failed to generate presigned URL for %s: %s", key, e)
             continue
+
+    return urls
+
+
+def get_presigned_urls_for_document_keys(
+    keys: List[str],
+    *,
+    customer_code: Optional[str] = None,
+    fallback_bucket: Optional[str] = None,
+    expires_in: int = 3600,
+) -> Dict[str, str]:
+    """
+    Resolve each document key to its indexed bucket and generate presigned URLs.
+
+    Falls back to a provided bucket only for keys that could not be resolved in
+    the index. This keeps links accurate when a response mixes documents that
+    belong to different buckets.
+    """
+    if not keys:
+        return {}
+
+    from integrations.models import DocumentIndex
+
+    normalized_keys = []
+    seen_keys = set()
+    for key in keys:
+        if not key:
+            continue
+        stripped_key = key.strip()
+        if not stripped_key or stripped_key in seen_keys:
+            continue
+        seen_keys.add(stripped_key)
+        normalized_keys.append(stripped_key)
+
+    if not normalized_keys:
+        return {}
+
+    queryset = DocumentIndex.objects.filter(
+        active=True,
+        object_key__in=normalized_keys,
+        client__active=True,
+    ).only("object_key", "bucket_name", "client__customer_code")
+    if customer_code:
+        queryset = queryset.filter(client__customer_code=customer_code)
+
+    key_to_bucket: Dict[str, str] = {}
+    for document in queryset:
+        document_key = (document.object_key or "").strip()
+        document_bucket = (document.bucket_name or "").strip()
+        if not document_key or not document_bucket:
+            continue
+        key_to_bucket.setdefault(document_key, document_bucket)
+
+    bucket_to_keys: Dict[str, List[str]] = defaultdict(list)
+    unresolved_keys: List[str] = []
+    for key in normalized_keys:
+        resolved_bucket = key_to_bucket.get(key)
+        if resolved_bucket:
+            bucket_to_keys[resolved_bucket].append(key)
+        else:
+            unresolved_keys.append(key)
+
+    if fallback_bucket and unresolved_keys:
+        bucket_to_keys[fallback_bucket].extend(unresolved_keys)
+
+    urls: Dict[str, str] = {}
+    for bucket_name, bucket_keys in bucket_to_keys.items():
+        urls.update(
+            get_presigned_urls(
+                bucket_keys,
+                bucket=bucket_name,
+                expires_in=expires_in,
+            )
+        )
 
     return urls
