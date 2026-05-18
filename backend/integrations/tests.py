@@ -19,6 +19,7 @@ from core.services.document_retrieval.presearch import (
 from core.services.document_retrieval.prompt_context import build_document_search_input
 from core.services.document_retrieval.retrieval_strategies import get_retrieval_strategy
 from integrations.views.document_index import (
+    build_document_search_query_text,
     query_terms_for_search,
     search_variants,
     sort_documents_by_relevance,
@@ -340,8 +341,145 @@ class InternalDocumentIndexAuthTests(TestCase):
         self.assertEqual(len(response.json()), 1)
         self.assertIn("replica-sim-rso", response.json()[0]["filename"].lower())
 
+    @override_settings(
+        DOCUMENT_INDEX_API_KEY="internal-index-key",
+        MCP_INTERNAL_AUTH_SECRET="test-mcp-secret",
+        MCP_INTERNAL_AUTH_ISSUER="backend-integrations",
+        MCP_INTERNAL_AUTH_AUDIENCE="mcp-ricerca",
+        MCP_INTERNAL_AUTH_TTL_SECONDS=300,
+    )
+    def test_internal_document_index_query_matches_search_text(self):
+        DocumentIndex.objects.create(
+            client=self.integration_client,
+            bucket_name="bucket-cliente-teste",
+            object_key="customer0047/activity33098/verbale-speciale.docx",
+            filename="verbale-speciale.docx",
+            extension=".docx",
+            size_bytes=2048,
+            document_type="verbale",
+            document_family="verbale_cda",
+            topic_tags="governance",
+            search_text=(
+                "verbale-speciale.docx customer0047/activity33098/verbale-speciale.docx "
+                "verbale_cda verbale governance DeltaBlu 7821 presidio interno"
+            ),
+            active=True,
+        )
+
+        client = APIClient()
+        token = build_mcp_access_token(self.integration_client)
+        response = client.get(
+            (
+                "/api/integrations/v1/internal/document-index/"
+                "?query=DeltaBlu 7821 presidio interno"
+            ),
+            HTTP_X_INTERNAL_API_KEY="internal-index-key",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()), 1)
+        self.assertEqual(response.json()[0]["filename"], "verbale-speciale.docx")
+
+    @override_settings(
+        DOCUMENT_INDEX_API_KEY="internal-index-key",
+        MCP_INTERNAL_AUTH_SECRET="test-mcp-secret",
+        MCP_INTERNAL_AUTH_ISSUER="backend-integrations",
+        MCP_INTERNAL_AUTH_AUDIENCE="mcp-ricerca",
+        MCP_INTERNAL_AUTH_TTL_SECONDS=300,
+    )
+    def test_internal_document_index_query_matches_extracted_text(self):
+        DocumentIndex.objects.create(
+            client=self.integration_client,
+            bucket_name="bucket-cliente-teste",
+            object_key="customer0047/activity33098/verbale-speciale.docx",
+            filename="verbale-speciale.docx",
+            extension=".docx",
+            size_bytes=2048,
+            document_type="verbale",
+            document_family="verbale_cda",
+            topic_tags="governance",
+            text_preview="Verbale del consiglio.",
+            extracted_text=(
+                "Nel corso della seduta viene discussa la soglia operativa "
+                "straordinaria DeltaBlu 7821 per il presidio interno."
+            ),
+            active=True,
+        )
+
+        client = APIClient()
+        token = build_mcp_access_token(self.integration_client)
+        response = client.get(
+            (
+                "/api/integrations/v1/internal/document-index/"
+                "?query=DeltaBlu 7821 presidio interno"
+            ),
+            HTTP_X_INTERNAL_API_KEY="internal-index-key",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()), 1)
+        self.assertEqual(response.json()[0]["filename"], "verbale-speciale.docx")
+
+    @override_settings(
+        DOCUMENT_INDEX_API_KEY="internal-index-key",
+        MCP_INTERNAL_AUTH_SECRET="test-mcp-secret",
+        MCP_INTERNAL_AUTH_ISSUER="backend-integrations",
+        MCP_INTERNAL_AUTH_AUDIENCE="mcp-ricerca",
+        MCP_INTERNAL_AUTH_TTL_SECONDS=300,
+    )
+    def test_internal_document_index_content_update_persists_extracted_text(self):
+        document = DocumentIndex.objects.create(
+            client=self.integration_client,
+            bucket_name="bucket-cliente-teste",
+            object_key="customer0047/activity33098/verbale-speciale.docx",
+            filename="verbale-speciale.docx",
+            extension=".docx",
+            size_bytes=2048,
+            document_type="verbale",
+            document_family="verbale_cda",
+            topic_tags="",
+            control_function_tags="",
+            text_preview="",
+            extracted_text="",
+            extraction_status=DocumentIndex.STATUS_PENDING,
+            active=True,
+        )
+
+        client = APIClient()
+        token = build_mcp_access_token(self.integration_client)
+        response = client.post(
+            "/api/integrations/v1/internal/document-index-content/",
+            {
+                "key": document.object_key,
+                "text_preview": "Verbale del consiglio del 9 giugno 2025",
+                "extracted_text": (
+                    "Verbale del consiglio del 9 giugno 2025. "
+                    "Approvazione delle modifiche alla Relazione sulla Struttura Organizzativa."
+                ),
+            },
+            format="json",
+            HTTP_X_INTERNAL_API_KEY="internal-index-key",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        document.refresh_from_db()
+        self.assertIn(
+            "Relazione sulla Struttura Organizzativa",
+            document.extracted_text,
+        )
+        self.assertEqual(document.extraction_status, DocumentIndex.STATUS_READY)
+
 
 class DocumentIndexSearchHelpersTests(TestCase):
+    def test_build_document_search_query_text_prefers_raw_query(self):
+        self.assertEqual(
+            build_document_search_query_text('"presidio interno" rischi informatici', ["presidio interno", "rischi informatici"]),
+            '"presidio interno" rischi informatici',
+        )
+
     def test_search_variants_expand_common_abbreviations(self):
         variants = search_variants("amministratore delegato")
         self.assertIn("ad", variants)
@@ -406,6 +544,32 @@ class DocumentIndexSearchHelpersTests(TestCase):
             sorted_documents[0].filename,
             "replica-sim-rso_31032026-v.03.docx",
         )
+
+    def test_sort_documents_handles_mixed_document_dates_for_non_recency_query(self):
+        undated_document = DocumentIndex(
+            filename="policy-rischi-informatici.docx",
+            object_key="customer0047/activity18635/policy-rischi-informatici.docx",
+            document_type="policy",
+            document_family="altro",
+            topic_tags="risk,ict",
+            text_preview="Policy in materia di gestione dei rischi informatici derivanti da terzi.",
+        )
+        dated_document = DocumentIndex(
+            filename="verbale-rischi-informatici.docx",
+            object_key="customer0047/activity18635/verbale-rischi-informatici.docx",
+            document_type="verbale",
+            document_family="verbale_cda",
+            topic_tags="risk,ict,governance",
+            document_date=date(2025, 2, 10),
+            text_preview="Presidio interno sui rischi informatici discusso dal consiglio.",
+        )
+
+        sorted_documents = sort_documents_by_relevance(
+            [undated_document, dated_document],
+            query_terms_for_search("presidio interno rischi informatici"),
+        )
+
+        self.assertEqual(sorted_documents[0].filename, "verbale-rischi-informatici.docx")
 
     def test_presearch_candidates_prioritize_structured_rso_documents(self):
         client = IntegrationClient.objects.create(

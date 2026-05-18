@@ -61,6 +61,10 @@ def extract_text_from_doc(filepath: str) -> str:
 
 BUCKET_NAME = os.getenv("S3_BUCKET", "rbyc")
 DOCUMENT_INDEX_API_URL = os.getenv("DOCUMENT_INDEX_API_URL", "").strip()
+DOCUMENT_INDEX_CONTENT_API_URL = os.getenv(
+    "DOCUMENT_INDEX_CONTENT_API_URL",
+    "",
+).strip()
 DOCUMENT_INDEX_API_KEY = os.getenv("DOCUMENT_INDEX_API_KEY", "").strip()
 MCP_CUSTOMER_CODE = os.getenv("MCP_CUSTOMER_CODE", "default").strip()
 MCP_INTERNAL_AUTH_SECRET = (
@@ -336,6 +340,7 @@ def _list_documents_from_index(
 ) -> Optional[list]:
     if not DOCUMENT_INDEX_API_URL or not DOCUMENT_INDEX_API_KEY:
         return None
+
     client_context = _get_active_client_context()
 
     params = {
@@ -364,7 +369,6 @@ def _list_documents_from_index(
         DOCUMENT_INDEX_TIMEOUT_SECONDS,
     )
     try:
-        client_context = _get_active_client_context()
         headers = {
             "Accept": "application/json",
             "Accept-Encoding": "identity",
@@ -409,6 +413,71 @@ def _list_documents_from_index(
             parsed_url.path or "<empty>",
         )
         return None
+
+
+def _document_index_content_url() -> str:
+    if DOCUMENT_INDEX_CONTENT_API_URL:
+        return DOCUMENT_INDEX_CONTENT_API_URL
+    if DOCUMENT_INDEX_API_URL.endswith("/internal/document-index/"):
+        return DOCUMENT_INDEX_API_URL.replace(
+            "/internal/document-index/",
+            "/internal/document-index-content/",
+        )
+    return ""
+
+
+def _persist_document_content_to_index(
+    *,
+    document_key: str,
+    text_preview: str,
+    extracted_text: str,
+) -> None:
+    content_url = _document_index_content_url()
+    if not content_url or not DOCUMENT_INDEX_API_KEY:
+        return
+
+    client_context = _get_active_client_context()
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "User-Agent": "rbyc-mcp-document-index/1.0",
+        "X-Internal-API-Key": DOCUMENT_INDEX_API_KEY,
+    }
+    if client_context.access_token:
+        headers["Authorization"] = f"Bearer {client_context.access_token}"
+
+    payload = {
+        "key": document_key,
+        "text_preview": (text_preview or "")[:6000],
+        "extracted_text": (extracted_text or "")[:30000],
+    }
+    try:
+        response = requests.post(
+            content_url,
+            headers=headers,
+            json=payload,
+            timeout=DOCUMENT_INDEX_TIMEOUT_SECONDS,
+        )
+        if response.status_code >= 400:
+            logger.warning(
+                "[mcp_ricerca] document_index_content_update_failed status=%s key=%s response_length=%s",
+                response.status_code,
+                document_key,
+                len(response.content),
+            )
+        else:
+            logger.info(
+                "[mcp_ricerca] document_index_content_update_completed key=%s preview_chars=%s extracted_chars=%s",
+                document_key,
+                len(payload["text_preview"]),
+                len(payload["extracted_text"]),
+            )
+    except requests.RequestException as exc:
+        logger.warning(
+            "[mcp_ricerca] document_index_content_update_failed error=%s key=%s",
+            exc,
+            document_key,
+        )
 
 
 def _normalize_search_value(value: str) -> str:
@@ -904,6 +973,53 @@ def _resolve_document_from_index(filename: str) -> Optional[dict]:
     return resolved_document
 
 
+def _resolve_document_from_s3(filename: str) -> Optional[dict]:
+    requested_filename = (filename or "").strip()
+    if not requested_filename:
+        return None
+
+    if "/" in requested_filename:
+        return {
+            "key": requested_filename,
+            "path": requested_filename,
+            "filename": requested_filename.rsplit("/", 1)[-1],
+            "text_preview": "",
+        }
+
+    documents = _list_documents_from_s3(
+        filename_contains=requested_filename,
+        limit=25,
+        sort_by="last_modified",
+        sort_order="desc",
+    )
+    if not documents:
+        return None
+
+    requested_lower = requested_filename.lower()
+    exact_matches = [
+        document
+        for document in documents
+        if (document.get("filename") or "").lower() == requested_lower
+        or (document.get("key") or "").lower().endswith(f"/{requested_lower}")
+    ]
+    if not exact_matches:
+        logger.info(
+            "[mcp_ricerca] resolve_document_key_from_s3 skipped filename=%s candidates=%s",
+            requested_filename,
+            len(documents),
+        )
+        return None
+
+    resolved_document = exact_matches[0]
+    logger.info(
+        "[mcp_ricerca] resolve_document_key_from_s3 completed filename=%s resolved_key=%s candidates=%s",
+        requested_filename,
+        resolved_document.get("key") or "<empty>",
+        len(exact_matches),
+    )
+    return resolved_document
+
+
 def _resolve_document_key_from_index(filename: str) -> Optional[str]:
     document = _resolve_document_from_index(filename)
     return document.get("key") if document else None
@@ -1259,6 +1375,8 @@ async def get_document(
         client_context = _get_active_client_context()
         requested_filename = filename
         resolved_document = _resolve_document_from_index(filename)
+        if not resolved_document:
+            resolved_document = _resolve_document_from_s3(filename)
         resolved_filename = (
             resolved_document.get("key")
             if resolved_document and resolved_document.get("key")
@@ -1366,6 +1484,14 @@ async def get_document(
                         content,
                         max_chars=max_chars,
                         metadata_prefix=metadata_prefix,
+                    )
+
+                if content and not content.startswith("[ERRO]") and not content.startswith("[ERROR]"):
+                    compact_preview = " ".join(content.split())[:6000].strip()
+                    _persist_document_content_to_index(
+                        document_key=resolved_filename,
+                        text_preview=compact_preview,
+                        extracted_text=content,
                     )
 
                 duration_ms = round((perf_counter() - started_at) * 1000, 2)
