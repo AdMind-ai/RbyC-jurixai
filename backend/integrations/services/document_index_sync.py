@@ -23,7 +23,7 @@ class DocumentIndexSyncResult:
     elapsed_seconds: float = 0.0
 
 
-def sync_all_document_indexes(deactivate_missing: bool = False):
+def sync_all_document_indexes(deactivate_missing: bool = True):
     s3_client = _get_s3_client()
     results = []
     clients = IntegrationClient.objects.filter(active=True)
@@ -41,7 +41,7 @@ def sync_all_document_indexes(deactivate_missing: bool = False):
 def sync_client_document_index(
     client: IntegrationClient,
     s3_client=None,
-    deactivate_missing: bool = False,
+    deactivate_missing: bool = True,
 ) -> DocumentIndexSyncResult:
     started_at = timezone.now()
     s3_client = s3_client or _get_s3_client()

@@ -21,7 +21,12 @@ class Command(BaseCommand):
         parser.add_argument(
             "--deactivate-missing",
             action="store_true",
-            help="Mark documents not found in S3 as inactive.",
+            help="Mark documents not found in S3 as inactive (default behavior).",
+        )
+        parser.add_argument(
+            "--keep-missing-active",
+            action="store_true",
+            help="Do not deactivate indexed documents missing from S3 during sync.",
         )
 
     def handle(self, *args, **options):
@@ -37,7 +42,7 @@ class Command(BaseCommand):
         for client in clients:
             result = sync_client_document_index(
                 client=client,
-                deactivate_missing=options["deactivate_missing"],
+                deactivate_missing=not options["keep_missing_active"],
             )
             self.stdout.write(
                 self.style.SUCCESS(
