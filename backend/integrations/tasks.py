@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task
-def sync_all_document_indexes_task(deactivate_missing=False):
+def sync_all_document_indexes_task(deactivate_missing=True):
     results = sync_all_document_indexes(deactivate_missing=deactivate_missing)
     summary = [
         {

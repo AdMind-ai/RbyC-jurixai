@@ -636,14 +636,33 @@ def _score_s3_search_document(document: dict, query: str) -> int:
     return score
 
 
+def _score_index_search_document(document: dict, query: str) -> int:
+    backend_score = 0
+    try:
+        backend_score = int(document.get("relevance_score") or 0)
+    except (TypeError, ValueError):
+        backend_score = 0
+
+    lexical_score = _score_search_document(document, query)
+    if backend_score <= 0:
+        return lexical_score
+
+    # The backend index already applies richer FTS + metadata/artifact-aware ranking.
+    # In index/hybrid mode, preserve that ordering signal and only let local lexical
+    # scoring provide a small tie-break/boost instead of re-ranking from scratch.
+    return backend_score + min(lexical_score, 12)
+
+
 def _document_relevance_score(document: dict, query: str, *, source: str) -> int:
     if source == "s3":
         return _score_s3_search_document(document, query)
     if source == "hybrid":
         return max(
-            _score_search_document(document, query),
+            _score_index_search_document(document, query),
             _score_s3_search_document(document, query),
         )
+    if source == "index":
+        return _score_index_search_document(document, query)
     return _score_search_document(document, query)
 
 
@@ -961,7 +980,7 @@ def _resolve_document_from_index(filename: str) -> Optional[dict]:
         )
         return None
 
-    resolved_document = exact_matches[0]
+    resolved_document = _select_accessible_document(exact_matches) or exact_matches[0]
     resolved_key = resolved_document.get("key")
     if resolved_key and resolved_key != requested_filename:
         logger.info(
@@ -1018,6 +1037,26 @@ def _resolve_document_from_s3(filename: str) -> Optional[dict]:
         len(exact_matches),
     )
     return resolved_document
+
+
+def _s3_object_exists(object_key: str) -> bool:
+    if not object_key:
+        return False
+
+    client_context = _get_active_client_context()
+    try:
+        s3.head_object(Bucket=client_context.bucket_name, Key=object_key)
+        return True
+    except ClientError:
+        return False
+
+
+def _select_accessible_document(documents: list[dict]) -> Optional[dict]:
+    for document in documents:
+        object_key = (document.get("key") or document.get("path") or "").strip()
+        if object_key and _s3_object_exists(object_key):
+            return document
+    return None
 
 
 def _resolve_document_key_from_index(filename: str) -> Optional[str]:

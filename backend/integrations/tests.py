@@ -732,29 +732,20 @@ class DocumentIndexSearchHelpersTests(TestCase):
         )
 
         self.assertIn(
-            "presearch_primary_selection_rule=most_recent_document_date",
+            "presearch_available=true",
             model_input,
         )
         self.assertIn(
-            "presearch_primary_candidate=filename:rso-31032026.docx;",
-            model_input,
-        )
-        self.assertIn(
-            "presearch_primary_excerpt=",
-            model_input,
-        )
-        self.assertIn(
-            "presearch_primary_sibling_signature=rso_31032026",
+            "presearch_candidate_count=2",
             model_input,
         )
         self.assertIn(
             "get_document(mode='full')",
             model_input,
         )
-        self.assertIn(
-            "ultima approvazione esplicita",
-            model_input,
-        )
+        self.assertNotIn("presearch_primary_candidate=", model_input)
+        self.assertNotIn("presearch_primary_excerpt=", model_input)
+        self.assertNotIn("presearch_primary_sibling_signature=", model_input)
 
     def test_related_approval_candidates_are_added_to_prompt_context(self):
         client = IntegrationClient.objects.create(
@@ -817,10 +808,25 @@ class DocumentIndexSearchHelpersTests(TestCase):
 
         self.assertTrue(related_approval_candidates)
         self.assertIn(
-            "latest_explicit_approval_candidate_set_status=available",
+            "related_approval_candidates_available=true",
             model_input,
         )
         self.assertIn(
-            "latest_explicit_approval_candidate_1=filename:verbale-cda-09062025.docx;",
+            "related_approval_candidate_count=1",
             model_input,
         )
+        self.assertNotIn("latest_explicit_approval_candidate_1=", model_input)
+
+    def test_prompt_context_relaxes_structured_preferences_for_approval_queries(self):
+        user_input = "Quando e stata approvata la Relazione sulla Struttura Organizzativa dal consiglio di amministrazione?"
+        intent = classify_document_search_intent(user_input)
+        strategy = get_retrieval_strategy(intent.intent_type)
+
+        model_input = build_document_search_input(
+            user_input,
+            intent,
+            strategy,
+        )
+
+        self.assertNotIn("preferred_document_families=", model_input)
+        self.assertNotIn("preferred_topic_tags=", model_input)
