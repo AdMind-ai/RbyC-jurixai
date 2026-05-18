@@ -1,0 +1,289 @@
+import logging
+
+from django.db import DatabaseError, connection
+from django.db.models import Q
+from django.contrib.postgres.search import SearchQuery, SearchRank, SearchVector
+
+from integrations.models import DocumentIndex
+from integrations.services.document_index_search import search_variants
+
+
+logger = logging.getLogger(__name__)
+
+
+def parse_csv_query_values(value: str) -> list[str]:
+    return [
+        item.strip()
+        for item in (value or "").split(",")
+        if item and item.strip()
+    ]
+
+
+def build_document_search_filter(term: str, include_preview: bool = False) -> Q:
+    return build_document_search_filter_for_mode(
+        term,
+        include_preview=include_preview,
+        include_extended_text=True,
+    )
+
+
+def build_document_search_filter_for_mode(
+    term: str,
+    *,
+    include_preview: bool = False,
+    include_extended_text: bool = True,
+) -> Q:
+    search_filter = Q()
+    for variant in search_variants(term):
+        variant_filter = (
+            Q(filename__icontains=variant)
+            | Q(object_key__icontains=variant)
+            | Q(document_type__icontains=variant)
+            | Q(document_family__icontains=variant)
+            | Q(topic_tags__icontains=variant)
+            | Q(control_function_tags__icontains=variant)
+            | Q(year__icontains=variant)
+        )
+        if include_extended_text:
+            variant_filter |= (
+                Q(search_text__icontains=variant)
+                | Q(extracted_text__icontains=variant)
+            )
+        search_filter |= variant_filter
+        if include_preview:
+            search_filter |= Q(text_preview__icontains=variant)
+    return search_filter
+
+
+def can_use_postgres_fts() -> bool:
+    return connection.vendor == "postgresql"
+
+
+def build_document_search_query_text(raw_query: str, query_terms: list[str]) -> str:
+    cleaned_query = " ".join((raw_query or "").split())
+    if cleaned_query:
+        return cleaned_query
+    return " ".join(query_terms)
+
+
+def compute_postgres_fts_candidate_limit(limit: int) -> int:
+    normalized_limit = max(1, limit)
+    candidate_limit = max(normalized_limit * 2, 30)
+    return min(candidate_limit, 80)
+
+
+def build_document_index_queryset(customer_code: str, *, include_extended_text: bool):
+    only_fields = [
+        "object_key",
+        "filename",
+        "extension",
+        "size_bytes",
+        "s3_last_modified",
+        "last_modified",
+        "document_date",
+        "year",
+        "document_type",
+        "document_family",
+        "control_function_tags",
+        "topic_tags",
+        "text_preview",
+        "indexed_at",
+        "client__customer_code",
+        "client__active",
+    ]
+    if include_extended_text:
+        only_fields.extend(["search_text", "extracted_text"])
+
+    return DocumentIndex.objects.select_related("client").filter(
+        client__customer_code=customer_code,
+        client__active=True,
+        active=True,
+    ).only(*only_fields)
+
+
+def search_documents_with_postgres_fts(
+    *,
+    documents,
+    raw_query: str,
+    query_terms: list[str],
+    sort_by: str,
+    sort_order: str,
+    limit: int,
+) -> list[DocumentIndex] | None:
+    if not can_use_postgres_fts():
+        return None
+
+    search_query_text = build_document_search_query_text(raw_query, query_terms)
+    if not search_query_text:
+        return None
+
+    candidate_limit = compute_postgres_fts_candidate_limit(limit)
+    fallback_order_fields = {
+        "last_modified": "s3_last_modified",
+        "s3_last_modified": "s3_last_modified",
+        "document_date": "document_date",
+        "size": "size_bytes",
+        "filename": "filename",
+    }
+    fallback_order_field = fallback_order_fields.get(sort_by, "s3_last_modified")
+    if sort_order != "asc":
+        fallback_order_field = f"-{fallback_order_field}"
+
+    try:
+        search_vector = (
+            SearchVector("filename", weight="A", config="simple")
+            + SearchVector("object_key", weight="A", config="simple")
+            + SearchVector("document_family", weight="B", config="simple")
+            + SearchVector("document_type", weight="B", config="simple")
+            + SearchVector("topic_tags", weight="B", config="simple")
+            + SearchVector("control_function_tags", weight="C", config="simple")
+            + SearchVector("search_text", weight="C", config="simple")
+            + SearchVector("text_preview", weight="D", config="simple")
+        )
+        search_query = SearchQuery(
+            search_query_text,
+            config="simple",
+            search_type="websearch",
+        )
+        ranked_documents = list(
+            documents.annotate(
+                fts_rank=SearchRank(search_vector, search_query),
+            )
+            .filter(fts_rank__gt=0)
+            .order_by("-fts_rank", fallback_order_field, "-indexed_at")[:candidate_limit]
+        )
+    except DatabaseError as exc:
+        logger.warning(
+            "[document_index] postgres_fts_unavailable error=%s query=%s",
+            exc,
+            search_query_text or "<empty>",
+        )
+        return None
+
+    if ranked_documents:
+        logger.info(
+            "[document_index] postgres_fts_completed query=%s returned_documents=%s candidate_limit=%s top_rank=%s",
+            search_query_text or "<empty>",
+            len(ranked_documents),
+            candidate_limit,
+            getattr(ranked_documents[0], "fts_rank", 0),
+        )
+    return ranked_documents
+
+
+def search_documents_in_index(
+    *,
+    raw_query: str,
+    customer_code: str,
+    year: str,
+    document_type: str,
+    document_family: str,
+    control_function_tags: str,
+    topic_tags: str,
+    extension: str,
+    filename_contains: str,
+    path_contains: str,
+    sort_by: str,
+    sort_order: str,
+    limit: int,
+    query_terms: list[str],
+    include_extended_text: bool,
+) -> list[DocumentIndex]:
+    documents = build_document_index_queryset(
+        customer_code,
+        include_extended_text=include_extended_text,
+    )
+
+    if year:
+        documents = documents.filter(year=year)
+
+    if document_type:
+        document_type_filter = Q()
+        for raw_value in parse_csv_query_values(document_type) or [document_type]:
+            for variant in search_variants(raw_value):
+                document_type_filter |= Q(document_type__icontains=variant)
+        documents = documents.filter(document_type_filter)
+
+    if document_family:
+        document_family_filter = Q()
+        for raw_value in parse_csv_query_values(document_family) or [document_family]:
+            for variant in search_variants(raw_value):
+                document_family_filter |= Q(document_family__icontains=variant)
+        documents = documents.filter(document_family_filter)
+
+    if control_function_tags:
+        control_function_filter = Q()
+        for raw_value in parse_csv_query_values(control_function_tags) or [control_function_tags]:
+            for variant in search_variants(raw_value):
+                control_function_filter |= Q(control_function_tags__icontains=variant)
+        documents = documents.filter(control_function_filter)
+
+    if topic_tags:
+        topic_filter = Q()
+        for raw_value in parse_csv_query_values(topic_tags) or [topic_tags]:
+            for variant in search_variants(raw_value):
+                topic_filter |= Q(topic_tags__icontains=variant)
+        documents = documents.filter(topic_filter)
+
+    if extension:
+        normalized_extension = extension if extension.startswith(".") else f".{extension}"
+        documents = documents.filter(extension=normalized_extension)
+
+    if filename_contains:
+        filename_filter = Q()
+        for variant in search_variants(filename_contains):
+            filename_filter |= Q(filename__icontains=variant)
+        documents = documents.filter(filename_filter)
+
+    if path_contains:
+        path_filter = Q()
+        for variant in search_variants(path_contains):
+            path_filter |= Q(object_key__icontains=variant)
+        documents = documents.filter(path_filter)
+
+    if query_terms:
+        if include_extended_text:
+            fts_documents = search_documents_with_postgres_fts(
+                documents=documents,
+                raw_query=raw_query,
+                query_terms=query_terms,
+                sort_by=sort_by,
+                sort_order=sort_order,
+                limit=limit,
+            )
+            if fts_documents:
+                return fts_documents
+
+        strict_documents = documents
+        for term in query_terms:
+            strict_documents = strict_documents.filter(
+                build_document_search_filter_for_mode(
+                    term,
+                    include_extended_text=include_extended_text,
+                )
+            )
+
+        if strict_documents.exists() or len(query_terms) == 1:
+            documents = strict_documents
+        else:
+            broad_filter = Q()
+            for term in query_terms:
+                broad_filter |= build_document_search_filter_for_mode(
+                    term,
+                    include_preview=True,
+                    include_extended_text=include_extended_text,
+                )
+            documents = documents.filter(broad_filter)
+
+    order_fields = {
+        "last_modified": "s3_last_modified",
+        "s3_last_modified": "s3_last_modified",
+        "document_date": "document_date",
+        "size": "size_bytes",
+        "filename": "filename",
+    }
+    order_field = order_fields.get(sort_by, "s3_last_modified")
+    if sort_order != "asc":
+        order_field = f"-{order_field}"
+
+    return list(documents.order_by(order_field, "-indexed_at")[:limit])

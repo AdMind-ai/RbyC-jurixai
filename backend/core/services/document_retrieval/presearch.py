@@ -26,6 +26,84 @@ class PresearchCandidate:
     sibling_signature: str
 
 
+@dataclass(frozen=True)
+class RetrievalGuidanceCandidates:
+    presearch_candidates: list[PresearchCandidate]
+    related_approval_candidates: list[PresearchCandidate]
+
+
+def _normalize_presearch_text(value: str) -> str:
+    return " ".join((value or "").strip().lower().split())
+
+
+def should_run_presearch(
+    *,
+    user_input: str,
+    intent_classification: IntentClassification,
+    retrieval_strategy: RetrievalStrategy,
+) -> bool:
+    has_structured_preferences = any(
+        (
+            retrieval_strategy.preferred_document_families,
+            retrieval_strategy.preferred_topic_tags,
+            retrieval_strategy.preferred_control_functions,
+            retrieval_strategy.preferred_filename_contains,
+            retrieval_strategy.preferred_sort_by,
+        )
+    )
+    if not has_structured_preferences:
+        return False
+    if retrieval_strategy.group_by != "year":
+        return False
+
+    normalized_input = _normalize_presearch_text(
+        getattr(intent_classification, "normalized_input", "") or user_input
+    )
+    approval_markers = (
+        "approvat",
+        "approvazione",
+        "delibera",
+        "verbale",
+        "consiglio di amministrazione",
+        "cda",
+    )
+    if any(marker in normalized_input for marker in approval_markers):
+        return False
+
+    return True
+
+
+def build_retrieval_guidance_candidates(
+    *,
+    user_input: str,
+    intent_classification: IntentClassification,
+    retrieval_strategy: RetrievalStrategy,
+    customer_code: str = "",
+    presearch_limit: int = 5,
+    related_approval_limit: int = 2,
+) -> RetrievalGuidanceCandidates:
+    presearch_candidates = build_presearch_candidates(
+        user_input=user_input,
+        intent_classification=intent_classification,
+        retrieval_strategy=retrieval_strategy,
+        customer_code=customer_code,
+        limit=presearch_limit,
+    )
+    related_approval_candidates: list[PresearchCandidate] = []
+    if presearch_candidates:
+        related_approval_candidates = build_related_approval_candidates(
+            user_input=user_input,
+            primary_candidate=presearch_candidates[0],
+            customer_code=customer_code,
+            limit=related_approval_limit,
+        )
+
+    return RetrievalGuidanceCandidates(
+        presearch_candidates=presearch_candidates,
+        related_approval_candidates=related_approval_candidates,
+    )
+
+
 def _document_to_presearch_candidate(document: DocumentIndex) -> PresearchCandidate:
     return PresearchCandidate(
         key=document.object_key,
@@ -75,17 +153,11 @@ def build_presearch_candidates(
 ) -> list[PresearchCandidate]:
     if not customer_code:
         return []
-
-    has_structured_preferences = any(
-        (
-            retrieval_strategy.preferred_document_families,
-            retrieval_strategy.preferred_topic_tags,
-            retrieval_strategy.preferred_control_functions,
-            retrieval_strategy.preferred_filename_contains,
-            retrieval_strategy.preferred_sort_by,
-        )
-    )
-    if not has_structured_preferences:
+    if not should_run_presearch(
+        user_input=user_input,
+        intent_classification=intent_classification,
+        retrieval_strategy=retrieval_strategy,
+    ):
         return []
 
     documents = DocumentIndex.objects.select_related("client").filter(

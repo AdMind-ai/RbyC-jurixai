@@ -13,8 +13,9 @@ from integrations.services.mcp_auth import (
 )
 from core.services.document_retrieval.intent_classifier import classify_document_search_intent
 from core.services.document_retrieval.presearch import (
+    build_retrieval_guidance_candidates,
     build_presearch_candidates,
-    build_related_approval_candidates,
+    should_run_presearch,
 )
 from core.services.document_retrieval.prompt_context import build_document_search_input
 from core.services.document_retrieval.retrieval_strategies import get_retrieval_strategy
@@ -666,19 +667,80 @@ class DocumentIndexSearchHelpersTests(TestCase):
             active=True,
         )
 
-        intent = classify_document_search_intent(
-            "Quando è stata approvata l'ultima RSO?"
-        )
+        user_input = "Confronta la RSO 2024 e 2025"
+        intent = classify_document_search_intent(user_input)
         strategy = get_retrieval_strategy(intent.intent_type)
         candidates = build_presearch_candidates(
-            user_input="Quando è stata approvata l'ultima RSO?",
+            user_input=user_input,
             intent_classification=intent,
             retrieval_strategy=strategy,
             customer_code="cliente_presearch",
         )
 
-        self.assertTrue(candidates)
+
+        self.assertEqual(len(candidates), 2)
         self.assertEqual(candidates[0].filename, "rso-31032026.docx")
+
+    def test_presearch_is_disabled_for_approval_or_verbale_queries(self):
+        user_input = "Approvazione delle modifiche alla Relazione sulla Struttura Organizzativa della Societa"
+        intent = classify_document_search_intent(user_input)
+        strategy = get_retrieval_strategy(intent.intent_type)
+
+        self.assertFalse(
+            should_run_presearch(
+                user_input=user_input,
+                intent_classification=intent,
+                retrieval_strategy=strategy,
+            )
+        )
+
+    def test_presearch_is_disabled_for_non_year_grouped_queries(self):
+        user_input = "Nomina dell'amministratore delegato e attribuzione dei poteri"
+        intent = classify_document_search_intent(user_input)
+        strategy = get_retrieval_strategy(intent.intent_type)
+
+        self.assertFalse(
+            should_run_presearch(
+                user_input=user_input,
+                intent_classification=intent,
+                retrieval_strategy=strategy,
+            )
+        )
+
+    def test_retrieval_guidance_skips_related_candidates_when_presearch_is_disabled(self):
+        client = IntegrationClient.objects.create(
+            client_name="Cliente Guidance",
+            customer_code="cliente_guidance",
+            bucket_name="bucket-guidance",
+            active=True,
+        )
+        DocumentIndex.objects.create(
+            client=client,
+            bucket_name="bucket-guidance",
+            object_key="CDA/2025/verbale-cda-09062025.docx",
+            filename="verbale-cda-09062025.docx",
+            extension=".docx",
+            size_bytes=100,
+            document_type="verbale",
+            document_family="verbale_cda",
+            topic_tags="struttura_organizzativa",
+            text_preview="Approvazione delle modifiche alla Relazione sulla Struttura Organizzativa.",
+            document_date=date(2025, 6, 9),
+            active=True,
+        )
+
+        user_input = "Approvazione delle modifiche alla Relazione sulla Struttura Organizzativa della Societa"
+        intent = classify_document_search_intent(user_input)
+        strategy = get_retrieval_strategy(intent.intent_type)
+        guidance = build_retrieval_guidance_candidates(
+            user_input=user_input,
+            intent_classification=intent,
+            retrieval_strategy=strategy,
+            customer_code="cliente_guidance",
+        )
+
+        self.assertEqual(guidance.presearch_candidates, [])
+        self.assertEqual(guidance.related_approval_candidates, [])
 
     def test_prompt_context_marks_primary_presearch_candidate(self):
         client = IntegrationClient.objects.create(
@@ -714,7 +776,7 @@ class DocumentIndexSearchHelpersTests(TestCase):
             active=True,
         )
 
-        user_input = "Quando è stata approvata l'ultima RSO?"
+        user_input = "Confronta la RSO 2024 e 2025"
         intent = classify_document_search_intent(user_input)
         strategy = get_retrieval_strategy(intent.intent_type)
         candidates = build_presearch_candidates(
@@ -747,7 +809,7 @@ class DocumentIndexSearchHelpersTests(TestCase):
         self.assertNotIn("presearch_primary_excerpt=", model_input)
         self.assertNotIn("presearch_primary_sibling_signature=", model_input)
 
-    def test_related_approval_candidates_are_added_to_prompt_context(self):
+    def test_related_approval_candidates_are_not_exposed_in_prompt_context(self):
         client = IntegrationClient.objects.create(
             client_name="Cliente Approval",
             customer_code="cliente_approval",
@@ -783,7 +845,7 @@ class DocumentIndexSearchHelpersTests(TestCase):
             active=True,
         )
 
-        user_input = "Quando è stata approvata l'ultima RSO?"
+        user_input = "Confronta la RSO 2024 e 2025"
         intent = classify_document_search_intent(user_input)
         strategy = get_retrieval_strategy(intent.intent_type)
         candidates = build_presearch_candidates(
@@ -792,11 +854,7 @@ class DocumentIndexSearchHelpersTests(TestCase):
             retrieval_strategy=strategy,
             customer_code="cliente_approval",
         )
-        related_approval_candidates = build_related_approval_candidates(
-            user_input=user_input,
-            primary_candidate=candidates[0],
-            customer_code="cliente_approval",
-        )
+        related_approval_candidates = candidates[:1]
 
         model_input = build_document_search_input(
             user_input,
@@ -806,12 +864,13 @@ class DocumentIndexSearchHelpersTests(TestCase):
             related_approval_candidates=related_approval_candidates,
         )
 
+        self.assertTrue(candidates)
         self.assertTrue(related_approval_candidates)
-        self.assertIn(
+        self.assertNotIn(
             "related_approval_candidates_available=true",
             model_input,
         )
-        self.assertIn(
+        self.assertNotIn(
             "related_approval_candidate_count=1",
             model_input,
         )
@@ -830,3 +889,10 @@ class DocumentIndexSearchHelpersTests(TestCase):
 
         self.assertNotIn("preferred_document_families=", model_input)
         self.assertNotIn("preferred_topic_tags=", model_input)
+        self.assertNotIn("group_by=", model_input)
+        self.assertNotIn("evidence_grouping=", model_input)
+        self.assertNotIn("retrieval_notes=", model_input)
+        self.assertNotIn("stopping_rule=", model_input)
+        self.assertNotIn("matched_signals=", model_input)
+        self.assertNotIn("evidence_plan=", model_input)
+        self.assertIn("evita catene di ricerche esplorative", model_input)

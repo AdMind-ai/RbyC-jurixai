@@ -19,8 +19,7 @@ from core.services.document_retrieval.prompt_context import (
     build_document_search_input,
 )
 from core.services.document_retrieval.presearch import (
-    build_presearch_candidates,
-    build_related_approval_candidates,
+    build_retrieval_guidance_candidates,
 )
 from core.services.document_retrieval.retrieval_strategies import (
     get_retrieval_strategy,
@@ -207,7 +206,7 @@ class RicercaDocumentaleView(APIView):
             intent_classification.intent_type
         )
         integration_client = getattr(request.auth, "client", None)
-        presearch_candidates = build_presearch_candidates(
+        retrieval_guidance = build_retrieval_guidance_candidates(
             user_input=prompt,
             intent_classification=intent_classification,
             retrieval_strategy=retrieval_strategy,
@@ -215,12 +214,9 @@ class RicercaDocumentaleView(APIView):
                 getattr(integration_client, "customer_code", None) or ""
             ),
         )
-        related_approval_candidates = build_related_approval_candidates(
-            user_input=prompt,
-            primary_candidate=presearch_candidates[0] if presearch_candidates else None,
-            customer_code=(
-                getattr(integration_client, "customer_code", None) or ""
-            ),
+        presearch_candidates = retrieval_guidance.presearch_candidates
+        related_approval_candidates = (
+            retrieval_guidance.related_approval_candidates
         )
         model_input = build_document_search_input(
             prompt,

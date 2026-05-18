@@ -38,8 +38,6 @@ RECENCY_QUERY_MARKERS = (
     "ultim",
     "piu recente",
     "recent",
-    "approvat",
-    "approvazione",
 )
 
 try:
@@ -526,6 +524,20 @@ def _query_requires_approval_evidence(query: str) -> bool:
     )
 
 
+def _compute_candidate_limit(
+    *,
+    limit: int,
+    strong_structured_filters: bool,
+    recency_sensitive_query: bool,
+    approval_sensitive_query: bool,
+) -> int:
+    if strong_structured_filters:
+        return max(12, min(limit * 4, 40))
+    if recency_sensitive_query or approval_sensitive_query:
+        return max(18, min(limit * 6, 60))
+    return max(20, min(limit * 8, 80))
+
+
 def _is_searchable_document(document: dict) -> bool:
     filename = (document.get("filename") or "").strip()
     key = (document.get("key") or document.get("path") or "").strip()
@@ -759,10 +771,8 @@ async def search_documents(
         client_context = _get_active_client_context()
         limit = max(1, min(limit, 20))
         preview_chars = max(300, min(preview_chars, 3000))
-        candidate_limit = max(20, min(limit * 8, 100))
-        enough_candidate_count = max(3, min(limit, 5))
-        recency_sensitive_query = _query_requires_recency(query)
         approval_sensitive_query = _query_requires_approval_evidence(query)
+        recency_sensitive_query = _query_requires_recency(query)
         strong_structured_filters = any(
             (
                 (year or "").strip(),
@@ -771,6 +781,18 @@ async def search_documents(
                 (control_function_tags or "").strip(),
                 (topic_tags or "").strip(),
             )
+        )
+        candidate_limit = _compute_candidate_limit(
+            limit=limit,
+            strong_structured_filters=strong_structured_filters,
+            recency_sensitive_query=recency_sensitive_query,
+            approval_sensitive_query=approval_sensitive_query,
+        )
+        enough_candidate_count = max(3, min(limit, 4))
+        allow_hybrid_recency = (
+            recency_sensitive_query
+            and not approval_sensitive_query
+            and not strong_structured_filters
         )
 
         candidate_documents = []
@@ -812,7 +834,7 @@ async def search_documents(
                 for document in _dedupe_documents(candidate_documents)
                 if _is_searchable_document(document)
             ]
-            if recency_sensitive_query:
+            if allow_hybrid_recency:
                 s3_documents = []
                 for search_query in _document_search_queries(query):
                     documents = _list_documents_from_s3(
@@ -835,7 +857,7 @@ async def search_documents(
                             unique_documents + s3_documents
                         )
                         if _is_searchable_document(document)
-                    ]
+                    ][:candidate_limit]
 
             ranked_documents = _sort_documents_by_score_and_recency(
                 unique_documents,

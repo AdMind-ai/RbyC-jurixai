@@ -18,6 +18,12 @@ def _should_relax_structured_preferences(
     return any(marker in normalized_input for marker in approval_markers)
 
 
+def _should_use_compact_prompt_context(
+    intent_classification: IntentClassification,
+) -> bool:
+    return _should_relax_structured_preferences(intent_classification)
+
+
 def build_document_search_input(
     user_input: str,
     intent_classification: IntentClassification,
@@ -44,6 +50,9 @@ def build_document_search_input(
     relax_structured_preferences = _should_relax_structured_preferences(
         intent_classification
     )
+    use_compact_prompt_context = _should_use_compact_prompt_context(
+        intent_classification
+    )
 
     context_lines = [
         "Contesto operativo interno per la ricerca documentale.",
@@ -57,15 +66,17 @@ def build_document_search_input(
         f"max_documents_to_open={retrieval_strategy.max_documents_to_open}",
     ]
 
-    if retrieval_strategy.group_by:
+    if retrieval_strategy.group_by and not use_compact_prompt_context:
         context_lines.append(f"group_by={retrieval_strategy.group_by}")
 
-    if retrieval_strategy.evidence_grouping:
+    if retrieval_strategy.evidence_grouping and not use_compact_prompt_context:
         context_lines.append(
             f"evidence_grouping={retrieval_strategy.evidence_grouping}"
         )
 
     if query_hints:
+        if use_compact_prompt_context:
+            query_hints = query_hints[:3]
         context_lines.append(
             "suggested_query_terms=" + ",".join(query_hints)
         )
@@ -98,20 +109,20 @@ def build_document_search_input(
             f"preferred_sort_order={retrieval_strategy.preferred_sort_order}"
         )
 
-    if retrieval_strategy.notes:
+    if retrieval_strategy.notes and not use_compact_prompt_context:
         context_lines.append(f"retrieval_notes={retrieval_strategy.notes}")
 
-    if retrieval_strategy.stopping_rule:
+    if retrieval_strategy.stopping_rule and not use_compact_prompt_context:
         context_lines.append(
             f"stopping_rule={retrieval_strategy.stopping_rule}"
         )
 
-    if intent_classification.matched_signals:
+    if intent_classification.matched_signals and not use_compact_prompt_context:
         context_lines.append(
             "matched_signals=" + ",".join(intent_classification.matched_signals)
         )
 
-    if evidence_plan:
+    if evidence_plan and not use_compact_prompt_context:
         context_lines.append(f"evidence_plan={evidence_plan}")
 
     if presearch_candidates:
@@ -120,25 +131,32 @@ def build_document_search_input(
             f"presearch_candidate_count={len(presearch_candidates)}"
         )
 
-    if related_approval_candidates:
-        context_lines.append("related_approval_candidates_available=true")
-        context_lines.append(
-            f"related_approval_candidate_count={len(related_approval_candidates)}"
-        )
-
     context_block = "\n".join(context_lines)
-    return (
-        f"{context_block}\n\n"
+    guidance_text = (
         "Usa questo contesto come orientamento leggero per la ricerca. "
         "Non riportare questi metadati nella risposta finale. "
         "Parti normalmente da search_documents prima di scegliere un documento da aprire. "
         "Usa eventuali filtri strutturati come preferenze iniziali, non come vincoli rigidi. "
-        "Se la domanda riguarda approvazioni, delibere, verbali o organi societari, "
-        "non limitarti automaticamente al documento base piu recente: verifica anche verbali, "
-        "convocazioni o altri documenti deliberativi correlati quando necessario. "
         "Usa get_document(mode='full') solo dopo avere identificato pochi candidati forti. "
-        "Per domande su ultima versione o documento piu recente, usa document_date come criterio principale di recenza "
-        "e distingui con chiarezza tra documento piu recente, approvazione esplicita e evidenza societaria correlata. "
-        "Quando e presente un evidence_plan, seguilo per comprimere l'evidenza prima della sintesi finale.\n\n"
+    )
+    if use_compact_prompt_context:
+        guidance_text += (
+            "Se la domanda riguarda approvazioni, delibere, verbali o organi societari, "
+            "evita catene di ricerche esplorative: fai prima una ricerca mirata sul documento base o sul verbale piu probabile, "
+            "poi apri solo i 1-2 candidati migliori e sintetizza. "
+            "Distingui con chiarezza tra documento piu recente, approvazione esplicita ed evidenza societaria correlata."
+        )
+    else:
+        guidance_text += (
+            "Se la domanda riguarda approvazioni, delibere, verbali o organi societari, "
+            "non limitarti automaticamente al documento base piu recente: verifica anche verbali, "
+            "convocazioni o altri documenti deliberativi correlati quando necessario. "
+            "Per domande su ultima versione o documento piu recente, usa document_date come criterio principale di recenza "
+            "e distingui con chiarezza tra documento piu recente, approvazione esplicita e evidenza societaria correlata. "
+            "Quando e presente un evidence_plan, seguilo per comprimere l'evidenza prima della sintesi finale."
+        )
+    return (
+        f"{context_block}\n\n"
+        f"{guidance_text}\n\n"
         f"Domanda utente:\n{cleaned_input}"
     )

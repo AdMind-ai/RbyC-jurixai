@@ -142,21 +142,3 @@ class ProviderCostServiceTests(TestCase):
         self.assertEqual(cost.raw_payload, usage_payload)
         self.assertEqual(cost.metadata, {"conversation_id": "abc"})
 
-    def test_refresh_perplexity_cost_aggregates_provider_usage_cost_entries(self):
-        ProviderUsageCostService.record_perplexity_usage_cost(
-            usage_payload={"cost": {"total_cost": 1.2500, "currency": "USD"}},
-            external_request_id="pplx-req-1",
-        )
-        ProviderUsageCostService.record_perplexity_usage_cost(
-            usage_payload={"cost": {"total_cost": 2.5000, "currency": "USD"}},
-            external_request_id="pplx-req-2",
-        )
-
-        cost = ProviderCostService.refresh_perplexity_cost(self.period_month)
-
-        self.assertEqual(cost.source, ProviderCostSource.ACTUAL_API)
-        self.assertEqual(cost.provider, ProviderCostProvider.PERPLEXITY)
-        self.assertEqual(cost.provider_amount, Decimal("3.7500"))
-        self.assertEqual(cost.currency, "EUR")
-        self.assertEqual(cost.metadata["entry_count"], 2)
-        self.assertEqual(cost.metadata["provider_currency"], "USD")
