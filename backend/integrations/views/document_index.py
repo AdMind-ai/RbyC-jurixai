@@ -345,6 +345,20 @@ def document_field_value(document, field_name: str) -> str:
     return document.__dict__.get(field_name) or ""
 
 
+def document_fts_rank_value(document) -> float:
+    try:
+        return float(getattr(document, "fts_rank", 0) or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def score_fts_alignment(document) -> int:
+    fts_rank = document_fts_rank_value(document)
+    if fts_rank <= 0:
+        return 0
+    return min(int(round(fts_rank * 25)), 25)
+
+
 def score_document_match(
     document,
     query_terms: list[str],
@@ -392,6 +406,7 @@ def score_document_match(
 
     score += matched_terms * 5
     effective_profile = query_profile or build_query_profile(query_terms)
+    score += score_fts_alignment(document)
     score += score_governance_alignment(normalized_fields, effective_profile)
     score += score_financial_alignment(normalized_fields, effective_profile)
     return score
@@ -477,6 +492,12 @@ def build_document_search_query_text(raw_query: str, query_terms: list[str]) -> 
     if cleaned_query:
         return cleaned_query
     return " ".join(query_terms)
+
+
+def compute_postgres_fts_candidate_limit(limit: int) -> int:
+    normalized_limit = max(1, limit)
+    candidate_limit = max(normalized_limit * 2, 30)
+    return min(candidate_limit, 80)
 
 
 @extend_schema(exclude=True)
@@ -665,8 +686,7 @@ class InternalDocumentIndexView(APIView):
         if not search_query_text:
             return None
 
-        candidate_limit = max(limit * 4, 40)
-        candidate_limit = min(candidate_limit, 300)
+        candidate_limit = compute_postgres_fts_candidate_limit(limit)
         fallback_order_fields = {
             "last_modified": "s3_last_modified",
             "s3_last_modified": "s3_last_modified",
