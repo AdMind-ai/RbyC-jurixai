@@ -59,6 +59,56 @@ class IntegrationApiKey(models.Model):
         return f"{self.client} - {self.description or self.environment or 'API key'}"
 
 
+class IntegrationUsageTool(models.TextChoices):
+    RICERCA_DOCUMENTALE = "RICERCA_DOCUMENTALE", "Ricerca documentale"
+
+
+class IntegrationUsageRecord(models.Model):
+    client = models.ForeignKey(
+        IntegrationClient,
+        on_delete=models.CASCADE,
+        related_name="usage_records",
+        null=True,
+        blank=True,
+    )
+    api_key = models.ForeignKey(
+        IntegrationApiKey,
+        on_delete=models.SET_NULL,
+        related_name="usage_records",
+        null=True,
+        blank=True,
+    )
+    tool = models.CharField(
+        max_length=64,
+        choices=IntegrationUsageTool.choices,
+        default=IntegrationUsageTool.RICERCA_DOCUMENTALE,
+    )
+    request_id = models.CharField(max_length=64, blank=True, db_index=True)
+    conversation_id = models.CharField(max_length=255, blank=True)
+    auth_mode = models.CharField(max_length=64, blank=True)
+    auth_identifier = models.CharField(max_length=255, blank=True)
+    intent_type = models.CharField(max_length=128, blank=True)
+    prompt_length = models.PositiveIntegerField(default=0)
+    model_input_length = models.PositiveIntegerField(default=0)
+    response_text_length = models.PositiveIntegerField(default=0)
+    documents_count = models.PositiveIntegerField(default=0)
+    metadata = models.JSONField(default=dict, blank=True)
+    occurred_at = models.DateTimeField(default=timezone.now, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["tool", "occurred_at"]),
+            models.Index(fields=["client", "occurred_at"]),
+            models.Index(fields=["api_key", "occurred_at"]),
+        ]
+        ordering = ["-occurred_at", "-created_at"]
+
+    def __str__(self):
+        client_label = getattr(self.client, "customer_code", "") or "legacy"
+        return f"{self.tool} - {client_label} - {self.occurred_at.isoformat()}"
+
+
 class DocumentIndex(models.Model):
     STATUS_PENDING = "pending"
     STATUS_READY = "ready"

@@ -6,7 +6,12 @@ import jwt
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
-from integrations.models import DocumentIndex, IntegrationApiKey, IntegrationClient
+from integrations.models import (
+    DocumentIndex,
+    IntegrationApiKey,
+    IntegrationClient,
+    IntegrationUsageRecord,
+)
 from integrations.services.mcp_auth import (
     build_mcp_access_token,
     decode_mcp_access_token,
@@ -216,6 +221,76 @@ class RicercaDocumentaleViewMCPAuthTests(TestCase):
                 )
             },
         )
+
+    @override_settings(
+        OPENAI_PROMPT_ID_RICERCA_DOCUMENTALE="pmpt_test",
+        MCP_SERVER_URL="https://mcp.example.test/sse",
+        MCP_INTERNAL_AUTH_SECRET="test-mcp-secret",
+        MCP_INTERNAL_AUTH_ISSUER="backend-integrations",
+        MCP_INTERNAL_AUTH_AUDIENCE="mcp-ricerca",
+    )
+    @patch("integrations.views.ricerca_documentale.client.conversations.create")
+    @patch("integrations.views.ricerca_documentale.client.responses.create")
+    def test_ricerca_documentale_records_integration_usage_audit(
+        self,
+        mock_create_response,
+        mock_create_conversation,
+    ):
+        mock_create_conversation.return_value = Mock(id="conv_test")
+        mock_create_response.return_value = Mock(
+            output_text='{"response_text":"ok","keys":[]}'
+        )
+
+        response = self.api_client.post(
+            "/api/integrations/v1/ricerca-documentale/",
+            {"input": "Quando e stata approvata l'ultima RSO?"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        usage_record = IntegrationUsageRecord.objects.get()
+        self.assertEqual(
+            usage_record.tool,
+            "RICERCA_DOCUMENTALE",
+        )
+        self.assertEqual(usage_record.client, self.integration_client)
+        self.assertEqual(usage_record.api_key.client, self.integration_client)
+        self.assertEqual(usage_record.auth_mode, "api_key")
+        self.assertEqual(usage_record.conversation_id, "conv_test")
+        self.assertGreater(usage_record.prompt_length, 0)
+        self.assertIn("customer_code", usage_record.metadata)
+
+    @override_settings(
+        OPENAI_PROMPT_ID_RICERCA_DOCUMENTALE="pmpt_test",
+        MCP_SERVER_URL="https://mcp.example.test/sse",
+        INTEGRATION_API_KEY="legacy-shared-key",
+    )
+    @patch("integrations.views.ricerca_documentale.client.conversations.create")
+    @patch("integrations.views.ricerca_documentale.client.responses.create")
+    def test_ricerca_documentale_records_legacy_usage_audit_without_api_key(
+        self,
+        mock_create_response,
+        mock_create_conversation,
+    ):
+        legacy_client = APIClient()
+        legacy_client.credentials(HTTP_AUTHORIZATION="Api-Key legacy-shared-key")
+        mock_create_conversation.return_value = Mock(id="conv_legacy")
+        mock_create_response.return_value = Mock(
+            output_text='{"response_text":"ok","keys":[]}'
+        )
+
+        response = legacy_client.post(
+            "/api/integrations/v1/ricerca-documentale/",
+            {"input": "Liste os documentos sobre compliance"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        usage_record = IntegrationUsageRecord.objects.get()
+        self.assertIsNone(usage_record.client)
+        self.assertIsNone(usage_record.api_key)
+        self.assertEqual(usage_record.auth_mode, "legacy_shared_key")
+        self.assertEqual(usage_record.auth_identifier, "legacy_shared_key")
 
 
 class InternalDocumentIndexAuthTests(TestCase):
