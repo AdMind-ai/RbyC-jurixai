@@ -19,6 +19,9 @@ from integrations.services.ricerca_documentale_runtime import (
     build_ricerca_documentale_request_context,
     extract_ricerca_documentale_response_payload,
 )
+from integrations.services.usage_audit import (
+    record_integration_ricerca_documentale_usage,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -256,6 +259,23 @@ class RicercaDocumentaleView(APIView):
             len(response_keys),
             len(documents_urls),
             len(request_context.model_input or ""),
+        )
+
+        record_integration_ricerca_documentale_usage(
+            auth=request.auth,
+            integration_client=integration_client,
+            request_id=request_id,
+            conversation_id=assistant_thread.thread_id or "",
+            prompt=prompt,
+            request_context=request_context,
+            response_text=response_text,
+            documents_count=len(documents_urls),
+            metadata={
+                "openai_duration_ms": openai_duration_ms,
+                "presign_duration_ms": presign_duration_ms,
+                "total_duration_ms": total_duration_ms,
+                "response_keys_count": len(response_keys),
+            },
         )
 
         return Response(

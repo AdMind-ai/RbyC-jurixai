@@ -1,7 +1,12 @@
 from django.contrib import admin
 from django import forms
 
-from integrations.models import DocumentIndex, IntegrationApiKey, IntegrationClient
+from integrations.models import (
+    DocumentIndex,
+    IntegrationApiKey,
+    IntegrationClient,
+    IntegrationUsageRecord,
+)
 
 
 class IntegrationApiKeyAdminForm(forms.ModelForm):
@@ -167,3 +172,26 @@ class DocumentIndexAdmin(admin.ModelAdmin):
     )
     date_hierarchy = "s3_last_modified"
     ordering = ("-document_date", "-s3_last_modified", "-indexed_at")
+
+
+@admin.register(IntegrationUsageRecord)
+class IntegrationUsageRecordAdmin(admin.ModelAdmin):
+    list_display = (
+        "occurred_at",
+        "tool",
+        "client",
+        "api_key",
+        "auth_mode",
+        "auth_identifier",
+        "intent_type",
+        "documents_count",
+    )
+    list_filter = ("tool", "auth_mode", "intent_type", "occurred_at", "client")
+    search_fields = (
+        "request_id",
+        "conversation_id",
+        "client__client_name",
+        "client__customer_code",
+        "auth_identifier",
+    )
+    readonly_fields = ("created_at",)
