@@ -38,8 +38,6 @@ RECENCY_QUERY_MARKERS = (
     "ultim",
     "piu recente",
     "recent",
-    "approvat",
-    "approvazione",
 )
 
 try:
@@ -61,6 +59,10 @@ def extract_text_from_doc(filepath: str) -> str:
 
 BUCKET_NAME = os.getenv("S3_BUCKET", "rbyc")
 DOCUMENT_INDEX_API_URL = os.getenv("DOCUMENT_INDEX_API_URL", "").strip()
+DOCUMENT_INDEX_CONTENT_API_URL = os.getenv(
+    "DOCUMENT_INDEX_CONTENT_API_URL",
+    "",
+).strip()
 DOCUMENT_INDEX_API_KEY = os.getenv("DOCUMENT_INDEX_API_KEY", "").strip()
 MCP_CUSTOMER_CODE = os.getenv("MCP_CUSTOMER_CODE", "default").strip()
 MCP_INTERNAL_AUTH_SECRET = (
@@ -336,6 +338,7 @@ def _list_documents_from_index(
 ) -> Optional[list]:
     if not DOCUMENT_INDEX_API_URL or not DOCUMENT_INDEX_API_KEY:
         return None
+
     client_context = _get_active_client_context()
 
     params = {
@@ -364,7 +367,6 @@ def _list_documents_from_index(
         DOCUMENT_INDEX_TIMEOUT_SECONDS,
     )
     try:
-        client_context = _get_active_client_context()
         headers = {
             "Accept": "application/json",
             "Accept-Encoding": "identity",
@@ -411,6 +413,71 @@ def _list_documents_from_index(
         return None
 
 
+def _document_index_content_url() -> str:
+    if DOCUMENT_INDEX_CONTENT_API_URL:
+        return DOCUMENT_INDEX_CONTENT_API_URL
+    if DOCUMENT_INDEX_API_URL.endswith("/internal/document-index/"):
+        return DOCUMENT_INDEX_API_URL.replace(
+            "/internal/document-index/",
+            "/internal/document-index-content/",
+        )
+    return ""
+
+
+def _persist_document_content_to_index(
+    *,
+    document_key: str,
+    text_preview: str,
+    extracted_text: str,
+) -> None:
+    content_url = _document_index_content_url()
+    if not content_url or not DOCUMENT_INDEX_API_KEY:
+        return
+
+    client_context = _get_active_client_context()
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "User-Agent": "rbyc-mcp-document-index/1.0",
+        "X-Internal-API-Key": DOCUMENT_INDEX_API_KEY,
+    }
+    if client_context.access_token:
+        headers["Authorization"] = f"Bearer {client_context.access_token}"
+
+    payload = {
+        "key": document_key,
+        "text_preview": (text_preview or "")[:6000],
+        "extracted_text": (extracted_text or "")[:30000],
+    }
+    try:
+        response = requests.post(
+            content_url,
+            headers=headers,
+            json=payload,
+            timeout=DOCUMENT_INDEX_TIMEOUT_SECONDS,
+        )
+        if response.status_code >= 400:
+            logger.warning(
+                "[mcp_ricerca] document_index_content_update_failed status=%s key=%s response_length=%s",
+                response.status_code,
+                document_key,
+                len(response.content),
+            )
+        else:
+            logger.info(
+                "[mcp_ricerca] document_index_content_update_completed key=%s preview_chars=%s extracted_chars=%s",
+                document_key,
+                len(payload["text_preview"]),
+                len(payload["extracted_text"]),
+            )
+    except requests.RequestException as exc:
+        logger.warning(
+            "[mcp_ricerca] document_index_content_update_failed error=%s key=%s",
+            exc,
+            document_key,
+        )
+
+
 def _normalize_search_value(value: str) -> str:
     normalized = unicodedata.normalize("NFKD", value or "")
     normalized = "".join(
@@ -455,6 +522,20 @@ def _query_requires_approval_evidence(query: str) -> bool:
         marker in normalized
         for marker in ("approvat", "approvazione", "deliberat", "delibera")
     )
+
+
+def _compute_candidate_limit(
+    *,
+    limit: int,
+    strong_structured_filters: bool,
+    recency_sensitive_query: bool,
+    approval_sensitive_query: bool,
+) -> int:
+    if strong_structured_filters:
+        return max(12, min(limit * 4, 40))
+    if recency_sensitive_query or approval_sensitive_query:
+        return max(18, min(limit * 6, 60))
+    return max(20, min(limit * 8, 80))
 
 
 def _is_searchable_document(document: dict) -> bool:
@@ -567,14 +648,33 @@ def _score_s3_search_document(document: dict, query: str) -> int:
     return score
 
 
+def _score_index_search_document(document: dict, query: str) -> int:
+    backend_score = 0
+    try:
+        backend_score = int(document.get("relevance_score") or 0)
+    except (TypeError, ValueError):
+        backend_score = 0
+
+    lexical_score = _score_search_document(document, query)
+    if backend_score <= 0:
+        return lexical_score
+
+    # The backend index already applies richer FTS + metadata/artifact-aware ranking.
+    # In index/hybrid mode, preserve that ordering signal and only let local lexical
+    # scoring provide a small tie-break/boost instead of re-ranking from scratch.
+    return backend_score + min(lexical_score, 12)
+
+
 def _document_relevance_score(document: dict, query: str, *, source: str) -> int:
     if source == "s3":
         return _score_s3_search_document(document, query)
     if source == "hybrid":
         return max(
-            _score_search_document(document, query),
+            _score_index_search_document(document, query),
             _score_s3_search_document(document, query),
         )
+    if source == "index":
+        return _score_index_search_document(document, query)
     return _score_search_document(document, query)
 
 
@@ -671,10 +771,8 @@ async def search_documents(
         client_context = _get_active_client_context()
         limit = max(1, min(limit, 20))
         preview_chars = max(300, min(preview_chars, 3000))
-        candidate_limit = max(20, min(limit * 8, 100))
-        enough_candidate_count = max(3, min(limit, 5))
-        recency_sensitive_query = _query_requires_recency(query)
         approval_sensitive_query = _query_requires_approval_evidence(query)
+        recency_sensitive_query = _query_requires_recency(query)
         strong_structured_filters = any(
             (
                 (year or "").strip(),
@@ -683,6 +781,18 @@ async def search_documents(
                 (control_function_tags or "").strip(),
                 (topic_tags or "").strip(),
             )
+        )
+        candidate_limit = _compute_candidate_limit(
+            limit=limit,
+            strong_structured_filters=strong_structured_filters,
+            recency_sensitive_query=recency_sensitive_query,
+            approval_sensitive_query=approval_sensitive_query,
+        )
+        enough_candidate_count = max(3, min(limit, 4))
+        allow_hybrid_recency = (
+            recency_sensitive_query
+            and not approval_sensitive_query
+            and not strong_structured_filters
         )
 
         candidate_documents = []
@@ -724,7 +834,7 @@ async def search_documents(
                 for document in _dedupe_documents(candidate_documents)
                 if _is_searchable_document(document)
             ]
-            if recency_sensitive_query:
+            if allow_hybrid_recency:
                 s3_documents = []
                 for search_query in _document_search_queries(query):
                     documents = _list_documents_from_s3(
@@ -747,7 +857,7 @@ async def search_documents(
                             unique_documents + s3_documents
                         )
                         if _is_searchable_document(document)
-                    ]
+                    ][:candidate_limit]
 
             ranked_documents = _sort_documents_by_score_and_recency(
                 unique_documents,
@@ -892,7 +1002,7 @@ def _resolve_document_from_index(filename: str) -> Optional[dict]:
         )
         return None
 
-    resolved_document = exact_matches[0]
+    resolved_document = _select_accessible_document(exact_matches) or exact_matches[0]
     resolved_key = resolved_document.get("key")
     if resolved_key and resolved_key != requested_filename:
         logger.info(
@@ -902,6 +1012,73 @@ def _resolve_document_from_index(filename: str) -> Optional[dict]:
             len(exact_matches),
         )
     return resolved_document
+
+
+def _resolve_document_from_s3(filename: str) -> Optional[dict]:
+    requested_filename = (filename or "").strip()
+    if not requested_filename:
+        return None
+
+    if "/" in requested_filename:
+        return {
+            "key": requested_filename,
+            "path": requested_filename,
+            "filename": requested_filename.rsplit("/", 1)[-1],
+            "text_preview": "",
+        }
+
+    documents = _list_documents_from_s3(
+        filename_contains=requested_filename,
+        limit=25,
+        sort_by="last_modified",
+        sort_order="desc",
+    )
+    if not documents:
+        return None
+
+    requested_lower = requested_filename.lower()
+    exact_matches = [
+        document
+        for document in documents
+        if (document.get("filename") or "").lower() == requested_lower
+        or (document.get("key") or "").lower().endswith(f"/{requested_lower}")
+    ]
+    if not exact_matches:
+        logger.info(
+            "[mcp_ricerca] resolve_document_key_from_s3 skipped filename=%s candidates=%s",
+            requested_filename,
+            len(documents),
+        )
+        return None
+
+    resolved_document = exact_matches[0]
+    logger.info(
+        "[mcp_ricerca] resolve_document_key_from_s3 completed filename=%s resolved_key=%s candidates=%s",
+        requested_filename,
+        resolved_document.get("key") or "<empty>",
+        len(exact_matches),
+    )
+    return resolved_document
+
+
+def _s3_object_exists(object_key: str) -> bool:
+    if not object_key:
+        return False
+
+    client_context = _get_active_client_context()
+    try:
+        s3.head_object(Bucket=client_context.bucket_name, Key=object_key)
+        return True
+    except ClientError:
+        return False
+
+
+def _select_accessible_document(documents: list[dict]) -> Optional[dict]:
+    for document in documents:
+        object_key = (document.get("key") or document.get("path") or "").strip()
+        if object_key and _s3_object_exists(object_key):
+            return document
+    return None
 
 
 def _resolve_document_key_from_index(filename: str) -> Optional[str]:
@@ -1259,6 +1436,8 @@ async def get_document(
         client_context = _get_active_client_context()
         requested_filename = filename
         resolved_document = _resolve_document_from_index(filename)
+        if not resolved_document:
+            resolved_document = _resolve_document_from_s3(filename)
         resolved_filename = (
             resolved_document.get("key")
             if resolved_document and resolved_document.get("key")
@@ -1366,6 +1545,14 @@ async def get_document(
                         content,
                         max_chars=max_chars,
                         metadata_prefix=metadata_prefix,
+                    )
+
+                if content and not content.startswith("[ERRO]") and not content.startswith("[ERROR]"):
+                    compact_preview = " ".join(content.split())[:6000].strip()
+                    _persist_document_content_to_index(
+                        document_key=resolved_filename,
+                        text_preview=compact_preview,
+                        extracted_text=content,
                     )
 
                 duration_ms = round((perf_counter() - started_at) * 1000, 2)

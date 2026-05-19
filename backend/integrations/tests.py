@@ -11,16 +11,24 @@ from integrations.services.mcp_auth import (
     build_mcp_access_token,
     decode_mcp_access_token,
 )
+from integrations.services.ricerca_documentale_runtime import (
+    extract_ricerca_documentale_response_payload,
+)
 from core.services.document_retrieval.intent_classifier import classify_document_search_intent
 from core.services.document_retrieval.presearch import (
+    build_retrieval_guidance_candidates,
     build_presearch_candidates,
-    build_related_approval_candidates,
+    should_run_presearch,
 )
 from core.services.document_retrieval.prompt_context import build_document_search_input
 from core.services.document_retrieval.retrieval_strategies import get_retrieval_strategy
 from integrations.views.document_index import (
+    build_document_search_query_text,
+    compute_postgres_fts_candidate_limit,
     query_terms_for_search,
     search_variants,
+    score_document_match,
+    score_fts_alignment,
     sort_documents_by_relevance,
 )
 
@@ -340,8 +348,203 @@ class InternalDocumentIndexAuthTests(TestCase):
         self.assertEqual(len(response.json()), 1)
         self.assertIn("replica-sim-rso", response.json()[0]["filename"].lower())
 
+    @override_settings(
+        DOCUMENT_INDEX_API_KEY="internal-index-key",
+        MCP_INTERNAL_AUTH_SECRET="test-mcp-secret",
+        MCP_INTERNAL_AUTH_ISSUER="backend-integrations",
+        MCP_INTERNAL_AUTH_AUDIENCE="mcp-ricerca",
+        MCP_INTERNAL_AUTH_TTL_SECONDS=300,
+    )
+    def test_internal_document_index_query_matches_search_text(self):
+        DocumentIndex.objects.create(
+            client=self.integration_client,
+            bucket_name="bucket-cliente-teste",
+            object_key="customer0047/activity33098/verbale-speciale.docx",
+            filename="verbale-speciale.docx",
+            extension=".docx",
+            size_bytes=2048,
+            document_type="verbale",
+            document_family="verbale_cda",
+            topic_tags="governance",
+            search_text=(
+                "verbale-speciale.docx customer0047/activity33098/verbale-speciale.docx "
+                "verbale_cda verbale governance DeltaBlu 7821 presidio interno"
+            ),
+            active=True,
+        )
+
+        client = APIClient()
+        token = build_mcp_access_token(self.integration_client)
+        response = client.get(
+            (
+                "/api/integrations/v1/internal/document-index/"
+                "?query=DeltaBlu 7821 presidio interno"
+            ),
+            HTTP_X_INTERNAL_API_KEY="internal-index-key",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()), 1)
+        self.assertEqual(response.json()[0]["filename"], "verbale-speciale.docx")
+
+    @override_settings(
+        DOCUMENT_INDEX_API_KEY="internal-index-key",
+        MCP_INTERNAL_AUTH_SECRET="test-mcp-secret",
+        MCP_INTERNAL_AUTH_ISSUER="backend-integrations",
+        MCP_INTERNAL_AUTH_AUDIENCE="mcp-ricerca",
+        MCP_INTERNAL_AUTH_TTL_SECONDS=300,
+    )
+    def test_internal_document_index_query_matches_extracted_text(self):
+        DocumentIndex.objects.create(
+            client=self.integration_client,
+            bucket_name="bucket-cliente-teste",
+            object_key="customer0047/activity33098/verbale-speciale.docx",
+            filename="verbale-speciale.docx",
+            extension=".docx",
+            size_bytes=2048,
+            document_type="verbale",
+            document_family="verbale_cda",
+            topic_tags="governance",
+            text_preview="Verbale del consiglio.",
+            extracted_text=(
+                "Nel corso della seduta viene discussa la soglia operativa "
+                "straordinaria DeltaBlu 7821 per il presidio interno."
+            ),
+            active=True,
+        )
+
+        client = APIClient()
+        token = build_mcp_access_token(self.integration_client)
+        response = client.get(
+            (
+                "/api/integrations/v1/internal/document-index/"
+                "?query=DeltaBlu 7821 presidio interno"
+            ),
+            HTTP_X_INTERNAL_API_KEY="internal-index-key",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()), 1)
+        self.assertEqual(response.json()[0]["filename"], "verbale-speciale.docx")
+
+    @override_settings(
+        DOCUMENT_INDEX_API_KEY="internal-index-key",
+        MCP_INTERNAL_AUTH_SECRET="test-mcp-secret",
+        MCP_INTERNAL_AUTH_ISSUER="backend-integrations",
+        MCP_INTERNAL_AUTH_AUDIENCE="mcp-ricerca",
+        MCP_INTERNAL_AUTH_TTL_SECONDS=300,
+    )
+    def test_internal_document_index_content_update_persists_extracted_text(self):
+        document = DocumentIndex.objects.create(
+            client=self.integration_client,
+            bucket_name="bucket-cliente-teste",
+            object_key="customer0047/activity33098/verbale-speciale.docx",
+            filename="verbale-speciale.docx",
+            extension=".docx",
+            size_bytes=2048,
+            document_type="verbale",
+            document_family="verbale_cda",
+            topic_tags="",
+            control_function_tags="",
+            text_preview="",
+            extracted_text="",
+            extraction_status=DocumentIndex.STATUS_PENDING,
+            active=True,
+        )
+
+        client = APIClient()
+        token = build_mcp_access_token(self.integration_client)
+        response = client.post(
+            "/api/integrations/v1/internal/document-index-content/",
+            {
+                "key": document.object_key,
+                "text_preview": "Verbale del consiglio del 9 giugno 2025",
+                "extracted_text": (
+                    "Verbale del consiglio del 9 giugno 2025. "
+                    "Approvazione delle modifiche alla Relazione sulla Struttura Organizzativa."
+                ),
+            },
+            format="json",
+            HTTP_X_INTERNAL_API_KEY="internal-index-key",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        document.refresh_from_db()
+        self.assertIn(
+            "Relazione sulla Struttura Organizzativa",
+            document.extracted_text,
+        )
+        self.assertEqual(document.extraction_status, DocumentIndex.STATUS_READY)
+
 
 class DocumentIndexSearchHelpersTests(TestCase):
+    def test_build_document_search_query_text_prefers_raw_query(self):
+        self.assertEqual(
+            build_document_search_query_text('"presidio interno" rischi informatici', ["presidio interno", "rischi informatici"]),
+            '"presidio interno" rischi informatici',
+        )
+
+    def test_compute_postgres_fts_candidate_limit_is_bounded(self):
+        self.assertEqual(compute_postgres_fts_candidate_limit(5), 30)
+        self.assertEqual(compute_postgres_fts_candidate_limit(40), 80)
+        self.assertEqual(compute_postgres_fts_candidate_limit(100), 80)
+
+    def test_score_fts_alignment_caps_bonus(self):
+        document = DocumentIndex(filename="x", object_key="x")
+        document.fts_rank = 0.9
+        self.assertGreater(score_fts_alignment(document), 0)
+
+        high_rank_document = DocumentIndex(filename="y", object_key="y")
+        high_rank_document.fts_rank = 10
+        self.assertEqual(score_fts_alignment(high_rank_document), 25)
+
+    def test_score_document_match_prefers_verbale_for_governance_query(self):
+        query_terms = query_terms_for_search(
+            "verbale consiglio di amministrazione approvazione relazione struttura organizzativa"
+        )
+
+        verbale_document = DocumentIndex(
+            filename="verbale-cda-09062025.docx",
+            object_key="docs/verbale-cda-09062025.docx",
+            document_family="verbale_cda",
+            topic_tags="struttura_organizzativa",
+        )
+        relazione_document = DocumentIndex(
+            filename="rso_31032026_v03_clean.docx",
+            object_key="docs/rso_31032026_v03_clean.docx",
+            document_family="relazione_struttura_organizzativa",
+            topic_tags="struttura_organizzativa",
+        )
+
+        self.assertGreater(
+            score_document_match(verbale_document, query_terms),
+            score_document_match(relazione_document, query_terms),
+        )
+
+    def test_score_document_match_prefers_policy_for_policy_query(self):
+        query_terms = query_terms_for_search("policy gestione rischi informatici")
+
+        policy_document = DocumentIndex(
+            filename="policy-rischi-informatici.docx",
+            object_key="docs/policy-rischi-informatici.docx",
+            document_family="policy",
+            topic_tags="risk, ict, cybersecurity",
+        )
+        verbale_document = DocumentIndex(
+            filename="verbale-cda-09062025.docx",
+            object_key="docs/verbale-cda-09062025.docx",
+            document_family="verbale_cda",
+            topic_tags="risk, ict, cybersecurity",
+        )
+
+        self.assertGreater(
+            score_document_match(policy_document, query_terms),
+            score_document_match(verbale_document, query_terms),
+        )
+
     def test_search_variants_expand_common_abbreviations(self):
         variants = search_variants("amministratore delegato")
         self.assertIn("ad", variants)
@@ -407,6 +610,32 @@ class DocumentIndexSearchHelpersTests(TestCase):
             "replica-sim-rso_31032026-v.03.docx",
         )
 
+    def test_sort_documents_handles_mixed_document_dates_for_non_recency_query(self):
+        undated_document = DocumentIndex(
+            filename="policy-rischi-informatici.docx",
+            object_key="customer0047/activity18635/policy-rischi-informatici.docx",
+            document_type="policy",
+            document_family="altro",
+            topic_tags="risk,ict",
+            text_preview="Policy in materia di gestione dei rischi informatici derivanti da terzi.",
+        )
+        dated_document = DocumentIndex(
+            filename="verbale-rischi-informatici.docx",
+            object_key="customer0047/activity18635/verbale-rischi-informatici.docx",
+            document_type="verbale",
+            document_family="verbale_cda",
+            topic_tags="risk,ict,governance",
+            document_date=date(2025, 2, 10),
+            text_preview="Presidio interno sui rischi informatici discusso dal consiglio.",
+        )
+
+        sorted_documents = sort_documents_by_relevance(
+            [undated_document, dated_document],
+            query_terms_for_search("presidio interno rischi informatici"),
+        )
+
+        self.assertEqual(sorted_documents[0].filename, "verbale-rischi-informatici.docx")
+
     def test_presearch_candidates_prioritize_structured_rso_documents(self):
         client = IntegrationClient.objects.create(
             client_name="Cliente Presearch",
@@ -441,19 +670,80 @@ class DocumentIndexSearchHelpersTests(TestCase):
             active=True,
         )
 
-        intent = classify_document_search_intent(
-            "Quando è stata approvata l'ultima RSO?"
-        )
+        user_input = "Confronta la RSO 2024 e 2025"
+        intent = classify_document_search_intent(user_input)
         strategy = get_retrieval_strategy(intent.intent_type)
         candidates = build_presearch_candidates(
-            user_input="Quando è stata approvata l'ultima RSO?",
+            user_input=user_input,
             intent_classification=intent,
             retrieval_strategy=strategy,
             customer_code="cliente_presearch",
         )
 
-        self.assertTrue(candidates)
+
+        self.assertEqual(len(candidates), 2)
         self.assertEqual(candidates[0].filename, "rso-31032026.docx")
+
+    def test_presearch_is_disabled_for_approval_or_verbale_queries(self):
+        user_input = "Approvazione delle modifiche alla Relazione sulla Struttura Organizzativa della Societa"
+        intent = classify_document_search_intent(user_input)
+        strategy = get_retrieval_strategy(intent.intent_type)
+
+        self.assertFalse(
+            should_run_presearch(
+                user_input=user_input,
+                intent_classification=intent,
+                retrieval_strategy=strategy,
+            )
+        )
+
+    def test_presearch_is_disabled_for_non_year_grouped_queries(self):
+        user_input = "Nomina dell'amministratore delegato e attribuzione dei poteri"
+        intent = classify_document_search_intent(user_input)
+        strategy = get_retrieval_strategy(intent.intent_type)
+
+        self.assertFalse(
+            should_run_presearch(
+                user_input=user_input,
+                intent_classification=intent,
+                retrieval_strategy=strategy,
+            )
+        )
+
+    def test_retrieval_guidance_skips_related_candidates_when_presearch_is_disabled(self):
+        client = IntegrationClient.objects.create(
+            client_name="Cliente Guidance",
+            customer_code="cliente_guidance",
+            bucket_name="bucket-guidance",
+            active=True,
+        )
+        DocumentIndex.objects.create(
+            client=client,
+            bucket_name="bucket-guidance",
+            object_key="CDA/2025/verbale-cda-09062025.docx",
+            filename="verbale-cda-09062025.docx",
+            extension=".docx",
+            size_bytes=100,
+            document_type="verbale",
+            document_family="verbale_cda",
+            topic_tags="struttura_organizzativa",
+            text_preview="Approvazione delle modifiche alla Relazione sulla Struttura Organizzativa.",
+            document_date=date(2025, 6, 9),
+            active=True,
+        )
+
+        user_input = "Approvazione delle modifiche alla Relazione sulla Struttura Organizzativa della Societa"
+        intent = classify_document_search_intent(user_input)
+        strategy = get_retrieval_strategy(intent.intent_type)
+        guidance = build_retrieval_guidance_candidates(
+            user_input=user_input,
+            intent_classification=intent,
+            retrieval_strategy=strategy,
+            customer_code="cliente_guidance",
+        )
+
+        self.assertEqual(guidance.presearch_candidates, [])
+        self.assertEqual(guidance.related_approval_candidates, [])
 
     def test_prompt_context_marks_primary_presearch_candidate(self):
         client = IntegrationClient.objects.create(
@@ -489,7 +779,7 @@ class DocumentIndexSearchHelpersTests(TestCase):
             active=True,
         )
 
-        user_input = "Quando è stata approvata l'ultima RSO?"
+        user_input = "Confronta la RSO 2024 e 2025"
         intent = classify_document_search_intent(user_input)
         strategy = get_retrieval_strategy(intent.intent_type)
         candidates = build_presearch_candidates(
@@ -507,31 +797,22 @@ class DocumentIndexSearchHelpersTests(TestCase):
         )
 
         self.assertIn(
-            "presearch_primary_selection_rule=most_recent_document_date",
+            "presearch_available=true",
             model_input,
         )
         self.assertIn(
-            "presearch_primary_candidate=filename:rso-31032026.docx;",
-            model_input,
-        )
-        self.assertIn(
-            "presearch_primary_excerpt=",
-            model_input,
-        )
-        self.assertIn(
-            "presearch_primary_sibling_signature=rso_31032026",
+            "presearch_candidate_count=2",
             model_input,
         )
         self.assertIn(
             "get_document(mode='full')",
             model_input,
         )
-        self.assertIn(
-            "ultima approvazione esplicita",
-            model_input,
-        )
+        self.assertNotIn("presearch_primary_candidate=", model_input)
+        self.assertNotIn("presearch_primary_excerpt=", model_input)
+        self.assertNotIn("presearch_primary_sibling_signature=", model_input)
 
-    def test_related_approval_candidates_are_added_to_prompt_context(self):
+    def test_related_approval_candidates_are_not_exposed_in_prompt_context(self):
         client = IntegrationClient.objects.create(
             client_name="Cliente Approval",
             customer_code="cliente_approval",
@@ -567,7 +848,7 @@ class DocumentIndexSearchHelpersTests(TestCase):
             active=True,
         )
 
-        user_input = "Quando è stata approvata l'ultima RSO?"
+        user_input = "Confronta la RSO 2024 e 2025"
         intent = classify_document_search_intent(user_input)
         strategy = get_retrieval_strategy(intent.intent_type)
         candidates = build_presearch_candidates(
@@ -576,11 +857,7 @@ class DocumentIndexSearchHelpersTests(TestCase):
             retrieval_strategy=strategy,
             customer_code="cliente_approval",
         )
-        related_approval_candidates = build_related_approval_candidates(
-            user_input=user_input,
-            primary_candidate=candidates[0],
-            customer_code="cliente_approval",
-        )
+        related_approval_candidates = candidates[:1]
 
         model_input = build_document_search_input(
             user_input,
@@ -590,12 +867,48 @@ class DocumentIndexSearchHelpersTests(TestCase):
             related_approval_candidates=related_approval_candidates,
         )
 
+        self.assertTrue(candidates)
         self.assertTrue(related_approval_candidates)
-        self.assertIn(
-            "latest_explicit_approval_candidate_set_status=available",
+        self.assertNotIn(
+            "related_approval_candidates_available=true",
             model_input,
         )
-        self.assertIn(
-            "latest_explicit_approval_candidate_1=filename:verbale-cda-09062025.docx;",
+        self.assertNotIn(
+            "related_approval_candidate_count=1",
             model_input,
         )
+        self.assertNotIn("latest_explicit_approval_candidate_1=", model_input)
+
+    def test_prompt_context_relaxes_structured_preferences_for_approval_queries(self):
+        user_input = "Quando e stata approvata la Relazione sulla Struttura Organizzativa dal consiglio di amministrazione?"
+        intent = classify_document_search_intent(user_input)
+        strategy = get_retrieval_strategy(intent.intent_type)
+
+        model_input = build_document_search_input(
+            user_input,
+            intent,
+            strategy,
+        )
+
+        self.assertNotIn("preferred_document_families=", model_input)
+        self.assertNotIn("preferred_topic_tags=", model_input)
+        self.assertNotIn("group_by=", model_input)
+        self.assertNotIn("evidence_grouping=", model_input)
+        self.assertNotIn("retrieval_notes=", model_input)
+        self.assertNotIn("stopping_rule=", model_input)
+        self.assertNotIn("matched_signals=", model_input)
+        self.assertNotIn("evidence_plan=", model_input)
+        self.assertIn("evita catene di ricerche esplorative", model_input)
+
+
+class RicercaDocumentaleRuntimeTests(TestCase):
+    def test_extract_response_payload_accepts_raw_output_text(self):
+        raw_output = (
+            '{"response_text":"Risposta test","keys":["docs/test.pdf"]}'
+        )
+
+        payload = extract_ricerca_documentale_response_payload(raw_output)
+
+        self.assertEqual(payload.raw_output, raw_output)
+        self.assertEqual(payload.response_text, "Risposta test")
+        self.assertEqual(payload.response_keys, ["docs/test.pdf"])

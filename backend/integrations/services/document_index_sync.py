@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from core.utils.s3_utils import _get_s3_client
 from integrations.models import DocumentIndex, IntegrationClient
+from integrations.services.document_search_index import refresh_document_search_text
 
 
 logger = logging.getLogger(__name__)
@@ -22,7 +23,7 @@ class DocumentIndexSyncResult:
     elapsed_seconds: float = 0.0
 
 
-def sync_all_document_indexes(deactivate_missing: bool = False):
+def sync_all_document_indexes(deactivate_missing: bool = True):
     s3_client = _get_s3_client()
     results = []
     clients = IntegrationClient.objects.filter(active=True)
@@ -40,7 +41,7 @@ def sync_all_document_indexes(deactivate_missing: bool = False):
 def sync_client_document_index(
     client: IntegrationClient,
     s3_client=None,
-    deactivate_missing: bool = False,
+    deactivate_missing: bool = True,
 ) -> DocumentIndexSyncResult:
     started_at = timezone.now()
     s3_client = s3_client or _get_s3_client()
@@ -174,6 +175,8 @@ def refresh_enriched_tags(document: DocumentIndex):
     if document.topic_tags != topic_tags:
         document.topic_tags = topic_tags
         update_fields.append("topic_tags")
+    if refresh_document_search_text(document):
+        update_fields.append("search_text")
 
     if update_fields:
         document.save(update_fields=update_fields)
