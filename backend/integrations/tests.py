@@ -11,6 +11,9 @@ from integrations.services.mcp_auth import (
     build_mcp_access_token,
     decode_mcp_access_token,
 )
+from integrations.services.ricerca_documentale_runtime import (
+    extract_ricerca_documentale_response_payload,
+)
 from core.services.document_retrieval.intent_classifier import classify_document_search_intent
 from core.services.document_retrieval.presearch import (
     build_retrieval_guidance_candidates,
@@ -896,3 +899,16 @@ class DocumentIndexSearchHelpersTests(TestCase):
         self.assertNotIn("matched_signals=", model_input)
         self.assertNotIn("evidence_plan=", model_input)
         self.assertIn("evita catene di ricerche esplorative", model_input)
+
+
+class RicercaDocumentaleRuntimeTests(TestCase):
+    def test_extract_response_payload_accepts_raw_output_text(self):
+        raw_output = (
+            '{"response_text":"Risposta test","keys":["docs/test.pdf"]}'
+        )
+
+        payload = extract_ricerca_documentale_response_payload(raw_output)
+
+        self.assertEqual(payload.raw_output, raw_output)
+        self.assertEqual(payload.response_text, "Risposta test")
+        self.assertEqual(payload.response_keys, ["docs/test.pdf"])
