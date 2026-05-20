@@ -47,6 +47,15 @@ const ConsumptionTable: React.FC<ConsumptionTableProps> = ({ report }) => {
 
   const integrationBreakdown = report.integrationBreakdown || [];
 
+  const getUserCountForTool = (toolId: ToolId | SubToolId, user: MonthlyReport['userBreakdown'][number]) => {
+    const isSubTool = toolId === SubToolId.DOCUMENTI_AI || toolId === SubToolId.ASSISTENTE_LEGALE;
+    const toolKey = isSubTool ? ToolId.SEGRETERIA_SOCIETARIA : toolId;
+    const subToolKey = String(toolId);
+    return isSubTool
+      ? user.subToolCounts?.[toolKey]?.[subToolKey] ?? 0
+      : user.counts[toolKey] || 0;
+  };
+
   return (
     <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden font-sans">
       <table className="w-full border-collapse table-fixed">
@@ -108,12 +117,10 @@ const ConsumptionTable: React.FC<ConsumptionTableProps> = ({ report }) => {
                       <div className="py-6 space-y-3 animate-in slide-in-from-top-2 duration-200">
                         <p className="text-sm font-normal text-gray-400 mb-4 px-8">Dettaglio per utente</p>
                         <div className="px-4 space-y-3">
-                          {report.userBreakdown.map((user) => {
-                            const toolKey = isSubTool ? ToolId.SEGRETERIA_SOCIETARIA : id;
-                            const subToolKey = String(id);
-                            const userCount = isSubTool
-                              ? user.subToolCounts?.[toolKey]?.[subToolKey] ?? 0
-                              : user.counts[toolKey] || 0;
+                          {report.userBreakdown
+                            .filter((user) => getUserCountForTool(id, user) > 0)
+                            .map((user) => {
+                            const userCount = getUserCountForTool(id, user);
                             return (
                               <div key={user.userId} className="bg-white rounded-xl border border-gray-100/50 shadow-sm overflow-hidden">
                                 <div className="grid grid-cols-[55%_30%_15%] items-center">
