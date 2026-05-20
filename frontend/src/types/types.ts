@@ -129,6 +129,23 @@ export interface UserConsumption {
   subToolCounts?: Record<string, Record<string, number>>;
 }
 
+export interface IntegrationApiKeyConsumption {
+  apiKeyId?: number | null;
+  label: string;
+  authMode: string;
+  counts: Record<string, number>;
+  totalCount: number;
+}
+
+export interface IntegrationConsumption {
+  clientId?: number | null;
+  clientName: string;
+  customerCode?: string;
+  counts: Record<string, number>;
+  totalCount: number;
+  apiKeys: IntegrationApiKeyConsumption[];
+}
+
 export interface MonthlyReport {
   month: string;
   monthLabel?: string;
@@ -136,4 +153,5 @@ export interface MonthlyReport {
   totalRequests: number;
   toolUsage: Record<string, ConsumptionStats>;
   userBreakdown: UserConsumption[];
+  integrationBreakdown?: IntegrationConsumption[];
 }

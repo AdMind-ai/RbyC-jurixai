@@ -27,6 +27,23 @@ class UserBreakdownSerializer(serializers.Serializer):
     )
 
 
+class IntegrationApiKeyBreakdownSerializer(serializers.Serializer):
+    apiKeyId = serializers.IntegerField(required=False, allow_null=True)
+    label = serializers.CharField()
+    authMode = serializers.CharField()
+    counts = serializers.DictField(child=serializers.IntegerField())
+    totalCount = serializers.IntegerField()
+
+
+class IntegrationBreakdownSerializer(serializers.Serializer):
+    clientId = serializers.IntegerField(required=False, allow_null=True)
+    clientName = serializers.CharField()
+    customerCode = serializers.CharField(required=False, allow_blank=True)
+    counts = serializers.DictField(child=serializers.IntegerField())
+    totalCount = serializers.IntegerField()
+    apiKeys = IntegrationApiKeyBreakdownSerializer(many=True)
+
+
 class UsageReportSerializer(serializers.Serializer):
     month = serializers.CharField()
     monthLabel = serializers.CharField()
@@ -34,6 +51,7 @@ class UsageReportSerializer(serializers.Serializer):
     totalRequests = serializers.IntegerField()
     toolUsage = serializers.DictField(child=ToolBreakdownSerializer())
     userBreakdown = UserBreakdownSerializer(many=True)
+    integrationBreakdown = IntegrationBreakdownSerializer(many=True, required=False)
 
 
 class UsageMonthOptionSerializer(serializers.Serializer):

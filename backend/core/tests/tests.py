@@ -14,6 +14,11 @@ from core.services.document_retrieval.intent_classifier import (
 )
 from core.services.usage_service import UsageReportFilters, UsageReportService
 from core.services.usage_tracking import UsageTrackingService
+from integrations.models import (
+	IntegrationApiKey,
+	IntegrationClient,
+	IntegrationUsageRecord,
+)
 
 
 class UsageTrackingServiceTests(TestCase):
@@ -148,6 +153,63 @@ class UsageReportServiceMonthTests(TestCase):
 				{"value": "2026-03", "label": "Marzo 2026"},
 			],
 		)
+
+	def test_build_report_includes_integration_usage_breakdown(self):
+		tz = timezone.get_current_timezone()
+		UsageRecord.objects.create(
+			user=self.user,
+			tool=UsageTool.RICERCA_DOCUMENTALE,
+			occurred_at=timezone.make_aware(datetime(2026, 4, 4, 10, 0), tz),
+		)
+		integration_client = IntegrationClient.objects.create(
+			client_name="Customer 0047",
+			customer_code="customer0047",
+			bucket_name="customer0047",
+			active=True,
+		)
+		api_key = IntegrationApiKey.objects.create(
+			client=integration_client,
+			key_hash=IntegrationApiKey.hash_key("usage-integration-key"),
+			active=True,
+			description="produzione",
+		)
+		IntegrationUsageRecord.objects.create(
+			client=integration_client,
+			api_key=api_key,
+			tool="RICERCA_DOCUMENTALE",
+			auth_mode="api_key",
+			auth_identifier="produzione",
+			occurred_at=timezone.make_aware(datetime(2026, 4, 12, 12, 0), tz),
+		)
+
+		report = UsageReportService.build_report(UsageReportFilters(month="2026-04"))
+
+		self.assertEqual(report["totalRequests"], 2)
+		self.assertEqual(report["toolUsage"][UsageTool.RICERCA_DOCUMENTALE]["count"], 2)
+		self.assertEqual(len(report["userBreakdown"]), 1)
+		self.assertEqual(len(report["integrationBreakdown"]), 1)
+		self.assertEqual(report["integrationBreakdown"][0]["clientName"], "Customer 0047")
+		self.assertEqual(report["integrationBreakdown"][0]["apiKeys"][0]["label"], "produzione")
+
+	def test_list_available_months_includes_integration_only_months(self):
+		tz = timezone.get_current_timezone()
+		integration_client = IntegrationClient.objects.create(
+			client_name="Customer 0047",
+			customer_code="customer0047",
+			bucket_name="customer0047",
+			active=True,
+		)
+		IntegrationUsageRecord.objects.create(
+			client=integration_client,
+			tool="RICERCA_DOCUMENTALE",
+			auth_mode="legacy_shared_key",
+			auth_identifier="legacy_shared_key",
+			occurred_at=timezone.make_aware(datetime(2026, 5, 2, 9, 0), tz),
+		)
+
+		months = list(UsageReportService.list_available_months(UsageReportFilters()))
+
+		self.assertEqual(months[0], {"value": "2026-05", "label": "Maggio 2026"})
 
 
 class DocumentSearchIntentClassifierTests(TestCase):
