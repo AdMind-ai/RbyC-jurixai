@@ -45,6 +45,8 @@ const ConsumptionTable: React.FC<ConsumptionTableProps> = ({ report }) => {
     });
   }, [report]);
 
+  const integrationBreakdown = report.integrationBreakdown || [];
+
   return (
     <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden font-sans">
       <table className="w-full border-collapse table-fixed">
@@ -146,6 +148,54 @@ const ConsumptionTable: React.FC<ConsumptionTableProps> = ({ report }) => {
                             );
                           })}
                         </div>
+                        {integrationBreakdown.length > 0 && (
+                          <>
+                            <p className="text-sm font-normal text-gray-400 mb-4 px-8 pt-2">Dettagli dell'API di integrazione</p>
+                            <div className="px-4 space-y-3">
+                              {integrationBreakdown.map((integration) => {
+                                const toolKey = isSubTool ? ToolId.SEGRETERIA_SOCIETARIA : id;
+                                const integrationCount = integration.counts[toolKey] || 0;
+
+                                if (!integrationCount) return null;
+
+                                return (
+                                  <div key={`${id}-${integration.clientId ?? integration.clientName}`} className="bg-white rounded-xl border border-gray-100/50 shadow-sm overflow-hidden">
+                                    <div className="grid grid-cols-[55%_30%_15%] items-center">
+                                      <div className="pl-4 pr-4 py-4">
+                                        <p className="text-base font-normal text-[#172554] truncate">{integration.clientName}</p>
+                                        <p className="text-[13px] text-gray-400 font-normal truncate">
+                                          {integration.customerCode || 'integrazione legacy'}
+                                        </p>
+                                        {integration.apiKeys.length > 0 && (
+                                          <div className="mt-3 flex flex-wrap gap-2">
+                                            {integration.apiKeys
+                                              .filter((apiKey) => (apiKey.counts[toolKey] || 0) > 0 && Boolean(apiKey.label))
+                                              .map((apiKey) => (
+                                                <span
+                                                  key={`${integration.clientId ?? integration.clientName}-${apiKey.apiKeyId ?? apiKey.label}`}
+                                                  className="inline-flex items-center gap-2 rounded-full bg-[#EEF2FF] px-3 py-1 text-[11px] font-medium text-[#1F3A8B]"
+                                                >
+                                                  <span>{apiKey.label}</span>
+                                                  <span className="text-[#172554]">{apiKey.counts[toolKey] || 0}</span>
+                                                </span>
+                                              ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div className="px-4 py-4 text-left">
+                                        <p className="text-base font-bold text-[#172554]">{integrationCount}</p>
+                                        <p className="text-[11px] text-gray-400 font-normal leading-tight truncate">
+                                          {METRIC_LABELS[id] || 'UnitÃ '}
+                                        </p>
+                                      </div>
+                                      <div className="px-4 py-4"></div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>

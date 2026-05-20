@@ -32,7 +32,7 @@ def record_integration_ricerca_documentale_usage(
         auth_identifier = (
             api_key.description
             or api_key.environment
-            or f"hash:{api_key.key_hash[:12]}"
+            or ""
         )
     elif auth:
         auth_mode = "legacy_shared_key"

@@ -50,5 +50,36 @@ export const getReport = (month: string): MonthlyReport => {
     totalRequests,
     toolUsage,
     userBreakdown,
+    integrationBreakdown: [
+      {
+        clientId: 1,
+        clientName: 'Customer 0047',
+        customerCode: 'customer0047',
+        counts: {
+          [ToolId.RICERCA_DOCUMENTALE]: 18,
+        },
+        totalCount: 18,
+        apiKeys: [
+          {
+            apiKeyId: 10,
+            label: 'produzione',
+            authMode: 'api_key',
+            counts: {
+              [ToolId.RICERCA_DOCUMENTALE]: 12,
+            },
+            totalCount: 12,
+          },
+          {
+            apiKeyId: 11,
+            label: 'staging',
+            authMode: 'api_key',
+            counts: {
+              [ToolId.RICERCA_DOCUMENTALE]: 6,
+            },
+            totalCount: 6,
+          },
+        ],
+      },
+    ],
   };
 };
