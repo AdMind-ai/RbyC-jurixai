@@ -166,21 +166,6 @@ const ConsumptionTable: React.FC<ConsumptionTableProps> = ({ report }) => {
                                         <p className="text-[13px] text-gray-400 font-normal truncate">
                                           {integration.customerCode || 'integrazione legacy'}
                                         </p>
-                                        {integration.apiKeys.length > 0 && (
-                                          <div className="mt-3 flex flex-wrap gap-2">
-                                            {integration.apiKeys
-                                              .filter((apiKey) => (apiKey.counts[toolKey] || 0) > 0 && Boolean(apiKey.label))
-                                              .map((apiKey) => (
-                                                <span
-                                                  key={`${integration.clientId ?? integration.clientName}-${apiKey.apiKeyId ?? apiKey.label}`}
-                                                  className="inline-flex items-center gap-2 rounded-full bg-[#EEF2FF] px-3 py-1 text-[11px] font-medium text-[#1F3A8B]"
-                                                >
-                                                  <span>{apiKey.label}</span>
-                                                  <span className="text-[#172554]">{apiKey.counts[toolKey] || 0}</span>
-                                                </span>
-                                              ))}
-                                          </div>
-                                        )}
                                       </div>
                                       <div className="px-4 py-4 text-left">
                                         <p className="text-base font-bold text-[#172554]">{integrationCount}</p>
