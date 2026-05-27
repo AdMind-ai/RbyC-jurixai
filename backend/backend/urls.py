@@ -19,6 +19,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
+from billing.views import InternalCostsView
 from core.views.api import CoreViewSet, APIRootView
 from drf_spectacular.views import (
     SpectacularAPIView,
@@ -35,6 +36,7 @@ urlpatterns = [
     path('api/auth/', include('users.urls')),
     path('api/', include('core.urls')),
     path('api/billing/', include('billing.urls')),
+    path('api/internal/costs', InternalCostsView.as_view(), name='internal-costs'),
     
     # API de integração
     path("api/integrations/", include("integrations.urls")),
