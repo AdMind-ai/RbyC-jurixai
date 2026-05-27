@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import secrets
+
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework import permissions, status
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -10,6 +13,11 @@ from billing.serializers import (
     BillingMonthlySummarySerializer,
     BillingSetupSessionSerializer,
     BillingStatusSerializer,
+)
+from billing.services.internal_costs import (
+    InternalCostsConfigurationError,
+    InternalCostsSettings,
+    build_internal_costs_payload,
 )
 from billing.services.monthly_billing import MonthlyBillingService
 from billing.services.stripe_billing import StripeBillingService
@@ -59,6 +67,31 @@ class BillingSetupSessionView(APIView):
         )
         serializer = BillingSetupSessionSerializer(payload)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class InternalCostsView(APIView):
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        try:
+            internal_settings = InternalCostsSettings.from_settings()
+        except InternalCostsConfigurationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        auth_header = request.headers.get("Authorization", "")
+        expected_header = f"Bearer {internal_settings.token}"
+        if not auth_header or not secrets.compare_digest(auth_header, expected_header):
+            return Response({"detail": "Unauthorized."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        try:
+            payload = build_internal_costs_payload(request.query_params.get("month"))
+        except ValueError as exc:
+            raise ValidationError({"month": str(exc)}) from exc
+        except InternalCostsConfigurationError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response(payload)
 
 
 @method_decorator(csrf_exempt, name="dispatch")
