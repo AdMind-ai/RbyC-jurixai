@@ -40,6 +40,79 @@ RECENCY_QUERY_MARKERS = (
     "recent",
 )
 
+QUERY_STOPWORDS = {
+    "a",
+    "ai",
+    "al",
+    "alla",
+    "alle",
+    "allo",
+    "anche",
+    "che",
+    "chi",
+    "come",
+    "con",
+    "cosa",
+    "da",
+    "dal",
+    "dalla",
+    "de",
+    "dei",
+    "del",
+    "della",
+    "delle",
+    "di",
+    "dove",
+    "e",
+    "ed",
+    "gli",
+    "ha",
+    "hanno",
+    "i",
+    "il",
+    "in",
+    "la",
+    "le",
+    "lo",
+    "manca",
+    "nei",
+    "nel",
+    "nella",
+    "nelle",
+    "non",
+    "parla",
+    "parlato",
+    "parlati",
+    "parlata",
+    "parlate",
+    "per",
+    "quale",
+    "quali",
+    "quando",
+    "quante",
+    "quanti",
+    "risulta",
+    "si",
+    "sono",
+    "stata",
+    "stato",
+    "sul",
+    "sulla",
+    "tra",
+    "un",
+    "una",
+    "volta",
+    "volte",
+}
+
+QUERY_SCOPE_TERMS = {
+    "cda",
+    "consiglio",
+    "amministrazione",
+    "verbale",
+    "verbali",
+}
+
 try:
     import textract
 except ImportError:
@@ -488,7 +561,14 @@ def _normalize_search_value(value: str) -> str:
 
 def _query_terms(query: str) -> list[str]:
     normalized = _normalize_search_value(query)
-    return [term for term in normalized.split() if len(term) > 2][:8]
+    return [
+        term
+        for term in normalized.replace("'", " ").split()
+        if (
+            term in QUERY_SCOPE_TERMS
+            or (len(term) > 2 and term not in QUERY_STOPWORDS)
+        )
+    ][:8]
 
 
 def _expanded_query_terms(query: str) -> list[str]:
@@ -596,9 +676,13 @@ def _document_search_queries(query: str) -> list[str]:
     cleaned = " ".join((query or "").strip().split())
     normalized = _normalize_search_value(cleaned)
     queries = []
-    for candidate in [cleaned, normalized]:
-        if candidate and candidate not in queries:
-            queries.append(candidate)
+    terms = _query_terms(cleaned)
+    if len(terms) >= 2:
+        focused_query = " ".join(terms)
+        if focused_query not in queries:
+            queries.append(focused_query)
+    elif terms:
+        queries.append(terms[0])
 
     for source, synonyms in QUERY_SYNONYMS.items():
         if source in normalized:
@@ -611,10 +695,10 @@ def _document_search_queries(query: str) -> list[str]:
                 if normalized_synonym and normalized_synonym not in queries:
                     queries.append(normalized_synonym)
 
-    terms = _query_terms(cleaned)
     if terms:
         # Keep the fallback space narrow: prefer the strongest lexical anchor only.
-        longest_term = max(terms, key=len)
+        anchor_terms = [term for term in terms if term not in QUERY_SCOPE_TERMS]
+        longest_term = max(anchor_terms or terms, key=len)
         if longest_term not in queries:
             queries.append(longest_term)
     return queries[:3] or [""]

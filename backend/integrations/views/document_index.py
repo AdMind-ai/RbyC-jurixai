@@ -147,6 +147,8 @@ class InternalDocumentIndexView(APIView):
             raise
 
         documents = sort_documents_by_relevance(documents, query_terms)
+        for document in documents:
+            document.relevance_score = score_document_match(document, query_terms)
         payload = serialize_document_index_documents(documents)
 
         log_document_index_search_result(

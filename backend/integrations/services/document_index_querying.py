@@ -5,7 +5,11 @@ from django.db.models import Q
 from django.contrib.postgres.search import SearchQuery, SearchRank, SearchVector
 
 from integrations.models import DocumentIndex
-from integrations.services.document_index_search import search_variants
+from integrations.services.document_index_search import (
+    is_scope_query_term,
+    normalize_search_value,
+    search_variants,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -60,10 +64,67 @@ def can_use_postgres_fts() -> bool:
 
 
 def build_document_search_query_text(raw_query: str, query_terms: list[str]) -> str:
-    cleaned_query = " ".join((raw_query or "").split())
-    if cleaned_query:
-        return cleaned_query
-    return " ".join(query_terms)
+    effective_terms = query_terms_for_filtering(query_terms)
+    cleaned_terms = [
+        " ".join((term or "").split())
+        for term in effective_terms
+        if " ".join((term or "").split())
+    ]
+    if cleaned_terms:
+        return " ".join(cleaned_terms)
+    return " ".join((raw_query or "").split())
+
+
+def query_terms_for_filtering(query_terms: list[str]) -> list[str]:
+    anchor_terms = [
+        term for term in query_terms if term and not is_scope_query_term(term)
+    ]
+    return anchor_terms or query_terms
+
+
+def high_precision_query_terms(query_terms: list[str]) -> list[str]:
+    anchor_terms = query_terms_for_filtering(query_terms)
+    phrase_terms = [term for term in anchor_terms if " " in normalize_search_value(term)]
+    if not phrase_terms:
+        return []
+
+    precision_terms = []
+    for phrase in phrase_terms:
+        normalized_phrase = normalize_search_value(phrase)
+        if normalized_phrase and normalized_phrase not in precision_terms:
+            precision_terms.append(normalized_phrase)
+        for token in normalized_phrase.split():
+            if 2 < len(token) <= 3 and token not in precision_terms:
+                precision_terms.append(token)
+    return precision_terms
+
+
+def document_matches_any_query_term(document: DocumentIndex, query_terms: list[str]) -> bool:
+    if not query_terms:
+        return True
+
+    combined_text = normalize_search_value(
+        " ".join(
+            [
+                document.filename or "",
+                document.object_key or "",
+                document.document_type or "",
+                document.document_family or "",
+                document.topic_tags or "",
+                document.control_function_tags or "",
+                document.year or "",
+                document.text_preview or "",
+                getattr(document, "search_text", "") or "",
+                getattr(document, "extracted_text", "") or "",
+            ]
+        )
+    )
+    for term in query_terms:
+        for variant in search_variants(term):
+            normalized_variant = normalize_search_value(variant)
+            if normalized_variant and normalized_variant in combined_text:
+                return True
+    return False
 
 
 def compute_postgres_fts_candidate_limit(limit: int) -> int:
@@ -242,20 +303,32 @@ def search_documents_in_index(
         documents = documents.filter(path_filter)
 
     if query_terms:
+        filter_query_terms = query_terms_for_filtering(query_terms)
+        precision_query_terms = high_precision_query_terms(query_terms)
         if include_extended_text:
             fts_documents = search_documents_with_postgres_fts(
                 documents=documents,
                 raw_query=raw_query,
-                query_terms=query_terms,
+                query_terms=filter_query_terms,
                 sort_by=sort_by,
                 sort_order=sort_order,
                 limit=limit,
             )
             if fts_documents:
-                return fts_documents
+                if precision_query_terms:
+                    fts_documents = [
+                        document
+                        for document in fts_documents
+                        if document_matches_any_query_term(
+                            document,
+                            precision_query_terms,
+                        )
+                    ]
+                if fts_documents:
+                    return fts_documents
 
         strict_documents = documents
-        for term in query_terms:
+        for term in filter_query_terms:
             strict_documents = strict_documents.filter(
                 build_document_search_filter_for_mode(
                     term,
@@ -263,11 +336,11 @@ def search_documents_in_index(
                 )
             )
 
-        if strict_documents.exists() or len(query_terms) == 1:
+        if strict_documents.exists() or len(filter_query_terms) == 1:
             documents = strict_documents
         else:
             broad_filter = Q()
-            for term in query_terms:
+            for term in precision_query_terms or filter_query_terms:
                 broad_filter |= build_document_search_filter_for_mode(
                     term,
                     include_preview=True,

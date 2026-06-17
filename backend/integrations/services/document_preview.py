@@ -30,6 +30,17 @@ class DocumentPreviewResult:
     attempted_ids: list[int] = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class DocumentExtractedContent:
+    text_preview: str
+    extracted_text: str
+
+
+DEFAULT_SEARCH_TEXT_CHARS = int(
+    os.environ.get("DOCUMENT_INDEX_SEARCH_TEXT_CHARS", "120000")
+)
+
+
 def build_missing_document_previews(
     customer_code: str = "",
     filename_contains: str = "",
@@ -69,18 +80,20 @@ def build_missing_document_previews(
     for document in documents:
         result.attempted_ids.append(document.id)
         try:
-            preview = extract_document_preview(document, s3_client=s3_client)
-            if preview:
-                document.text_preview = preview
+            content = extract_document_content(document, s3_client=s3_client)
+            if content.text_preview or content.extracted_text:
+                document.text_preview = content.text_preview
+                document.extracted_text = content.extracted_text
+                source_text = content.extracted_text or content.text_preview
                 document.control_function_tags = (
                     DocumentIndex.infer_control_function_tags(
                         document.object_key,
-                        preview,
+                        source_text,
                     )
                 )
                 document.topic_tags = DocumentIndex.infer_topic_tags(
                     document.object_key,
-                    preview,
+                    source_text,
                 )
                 document.extraction_status = DocumentIndex.STATUS_READY
                 document.extraction_error = ""
@@ -95,6 +108,7 @@ def build_missing_document_previews(
             document.save(
                 update_fields=[
                     "text_preview",
+                    "extracted_text",
                     "search_text",
                     "control_function_tags",
                     "topic_tags",
@@ -180,12 +194,19 @@ def build_document_previews_in_batches(
 
 
 def extract_document_preview(document: DocumentIndex, s3_client=None) -> str:
+    return extract_document_content(document, s3_client=s3_client).text_preview
+
+
+def extract_document_content(
+    document: DocumentIndex,
+    s3_client=None,
+) -> DocumentExtractedContent:
     if document.size_bytes > DEFAULT_MAX_FILE_BYTES:
-        return ""
+        return DocumentExtractedContent(text_preview="", extracted_text="")
 
     extension = (document.extension or "").lower()
     if extension not in {".pdf", ".docx", ".pptx", ".txt", ".md", ".csv"}:
-        return ""
+        return DocumentExtractedContent(text_preview="", extracted_text="")
 
     s3_client = s3_client or _get_s3_client()
     suffix = extension or ".tmp"
@@ -197,26 +218,34 @@ def extract_document_preview(document: DocumentIndex, s3_client=None) -> str:
             tmp.flush()
             tmp.seek(0)
             if extension in {".txt", ".md", ".csv"}:
-                preview = tmp.read(DEFAULT_PREVIEW_CHARS * 2).decode(
+                extracted_text = tmp.read(DEFAULT_SEARCH_TEXT_CHARS * 2).decode(
                     "utf-8",
                     errors="replace",
                 )
+                preview = extracted_text
             else:
                 preview = ""
+                extracted_text = ""
 
         if extension == ".pdf":
             preview = _extract_pdf_preview(temp_path)
+            extracted_text = preview
         elif extension == ".docx":
-            preview = _extract_docx_preview(temp_path)
+            extracted_text = _extract_docx_text(temp_path)
+            preview = extracted_text
         elif extension == ".pptx":
             preview = _extract_pptx_preview(temp_path)
+            extracted_text = preview
     finally:
         try:
             os.remove(temp_path)
         except FileNotFoundError:
             pass
 
-    return _normalize_preview(preview)
+    return DocumentExtractedContent(
+        text_preview=_normalize_preview(preview),
+        extracted_text=_normalize_extracted_text(extracted_text),
+    )
 
 
 def _extract_pdf_preview(filepath: str) -> str:
@@ -230,16 +259,25 @@ def _extract_pdf_preview(filepath: str) -> str:
 
 
 def _extract_docx_preview(filepath: str) -> str:
+    return _extract_docx_text(filepath)[:DEFAULT_PREVIEW_CHARS]
+
+
+def _extract_docx_text(filepath: str) -> str:
     import docx
 
-    document = docx.Document(filepath)
     texts = []
-    for paragraph in document.paragraphs:
-        text = paragraph.text.strip()
-        if text:
-            texts.append(text)
-        if len("\n".join(texts)) >= DEFAULT_PREVIEW_CHARS:
-            break
+    try:
+        with zipfile.ZipFile(filepath) as archive:
+            root = ET.fromstring(archive.read("word/document.xml"))
+            for node in root.iter():
+                if node.tag.endswith("}t") and node.text:
+                    texts.append(node.text.strip())
+    except Exception:
+        document = docx.Document(filepath)
+        for paragraph in document.paragraphs:
+            text = paragraph.text.strip()
+            if text:
+                texts.append(text)
     return "\n".join(texts)
 
 
@@ -265,3 +303,9 @@ def _normalize_preview(text: str) -> str:
     preview = "\n".join(line.strip() for line in (text or "").splitlines())
     preview = "\n".join(line for line in preview.splitlines() if line)
     return preview[:DEFAULT_PREVIEW_CHARS].strip()
+
+
+def _normalize_extracted_text(text: str) -> str:
+    extracted_text = "\n".join(line.strip() for line in (text or "").splitlines())
+    extracted_text = "\n".join(line for line in extracted_text.splitlines() if line)
+    return extracted_text[:DEFAULT_SEARCH_TEXT_CHARS].strip()
