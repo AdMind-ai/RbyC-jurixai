@@ -511,6 +511,117 @@ class InternalDocumentIndexAuthTests(TestCase):
         MCP_INTERNAL_AUTH_AUDIENCE="mcp-ricerca",
         MCP_INTERNAL_AUTH_TTL_SECONDS=300,
     )
+    def test_internal_document_index_finds_multiple_cda_mentions_for_bff_bank(self):
+        for filename, meeting_date in [
+            ("verbale-cda-14122023.docx", date(2023, 12, 14)),
+            ("verbale-cda-27012026.docx", date(2026, 1, 27)),
+        ]:
+            DocumentIndex.objects.create(
+                client=self.integration_client,
+                bucket_name="bucket-cliente-teste",
+                object_key=f"customer0047/activity33098/{filename}",
+                filename=filename,
+                extension=".docx",
+                size_bytes=2048,
+                document_type="verbale",
+                document_family="verbale_cda",
+                topic_tags="governance",
+                document_date=meeting_date,
+                extracted_text=(
+                    "VERBALE DEL CONSIGLIO DI AMMINISTRAZIONE. "
+                    "Nel corso della seduta viene menzionata BFF Bank S.p.A."
+                ),
+                active=True,
+            )
+
+        DocumentIndex.objects.create(
+            client=self.integration_client,
+            bucket_name="bucket-cliente-teste",
+            object_key="customer0047/activity33098/email-bff-bank.docx",
+            filename="email-bff-bank.docx",
+            extension=".docx",
+            size_bytes=512,
+            document_type="email",
+            document_family="altro",
+            extracted_text="Comunicazione operativa con BFF Bank S.p.A.",
+            active=True,
+        )
+
+        client = APIClient()
+        token = build_mcp_access_token(self.integration_client)
+        response = client.get(
+            (
+                "/api/integrations/v1/internal/document-index/"
+                "?query=Quando%20si%20%C3%A8%20parlato%20in%20cda%20di%20BFF%20Bank"
+                "&document_family=verbale_cda,estratto_cda"
+            ),
+            HTTP_X_INTERNAL_API_KEY="internal-index-key",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        filenames = [item["filename"] for item in response.json()]
+        self.assertEqual(
+            filenames,
+            ["verbale-cda-27012026.docx", "verbale-cda-14122023.docx"],
+        )
+
+    @override_settings(
+        DOCUMENT_INDEX_API_KEY="internal-index-key",
+        MCP_INTERNAL_AUTH_SECRET="test-mcp-secret",
+        MCP_INTERNAL_AUTH_ISSUER="backend-integrations",
+        MCP_INTERNAL_AUTH_AUDIENCE="mcp-ricerca",
+        MCP_INTERNAL_AUTH_TTL_SECONDS=300,
+    )
+    def test_internal_document_index_finds_multiple_cda_mentions_for_impegni(self):
+        for filename, meeting_date in [
+            ("verbale-cda-28102025.docx", date(2025, 10, 28)),
+            ("verbale-cda-27012026.docx", date(2026, 1, 27)),
+        ]:
+            DocumentIndex.objects.create(
+                client=self.integration_client,
+                bucket_name="bucket-cliente-teste",
+                object_key=f"customer0047/activity33098/{filename}",
+                filename=filename,
+                extension=".docx",
+                size_bytes=2048,
+                document_type="verbale",
+                document_family="verbale_cda",
+                topic_tags="consob",
+                document_date=meeting_date,
+                extracted_text=(
+                    "VERBALE DEL CONSIGLIO DI AMMINISTRAZIONE. "
+                    "Procedimento sanzionatorio CONSOB e proposta di impegni."
+                ),
+                active=True,
+            )
+
+        client = APIClient()
+        token = build_mcp_access_token(self.integration_client)
+        response = client.get(
+            (
+                "/api/integrations/v1/internal/document-index/"
+                "?query=Quante%20volte%20in%20cda%20si%20%C3%A8%20parlato%20di%20impegni"
+                "&document_family=verbale_cda,estratto_cda"
+            ),
+            HTTP_X_INTERNAL_API_KEY="internal-index-key",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        filenames = [item["filename"] for item in response.json()]
+        self.assertEqual(
+            filenames,
+            ["verbale-cda-27012026.docx", "verbale-cda-28102025.docx"],
+        )
+
+    @override_settings(
+        DOCUMENT_INDEX_API_KEY="internal-index-key",
+        MCP_INTERNAL_AUTH_SECRET="test-mcp-secret",
+        MCP_INTERNAL_AUTH_ISSUER="backend-integrations",
+        MCP_INTERNAL_AUTH_AUDIENCE="mcp-ricerca",
+        MCP_INTERNAL_AUTH_TTL_SECONDS=300,
+    )
     def test_internal_document_index_content_update_persists_extracted_text(self):
         document = DocumentIndex.objects.create(
             client=self.integration_client,
@@ -554,12 +665,57 @@ class InternalDocumentIndexAuthTests(TestCase):
         )
         self.assertEqual(document.extraction_status, DocumentIndex.STATUS_READY)
 
+    @override_settings(
+        DOCUMENT_INDEX_API_KEY="internal-index-key",
+        MCP_INTERNAL_AUTH_SECRET="test-mcp-secret",
+        MCP_INTERNAL_AUTH_ISSUER="backend-integrations",
+        MCP_INTERNAL_AUTH_AUDIENCE="mcp-ricerca",
+        MCP_INTERNAL_AUTH_TTL_SECONDS=300,
+    )
+    def test_internal_document_index_content_update_keeps_long_search_text(self):
+        document = DocumentIndex.objects.create(
+            client=self.integration_client,
+            bucket_name="bucket-cliente-teste",
+            object_key="customer0047/activity33098/verbale-lungo.docx",
+            filename="verbale-lungo.docx",
+            extension=".docx",
+            size_bytes=4096,
+            document_type="verbale",
+            document_family="verbale_cda",
+            extraction_status=DocumentIndex.STATUS_PENDING,
+            active=True,
+        )
+        long_extracted_text = (
+            "Verbale del consiglio. "
+            + ("contenuto ordinario " * 2500)
+            + "BFF Bank S.p.A. viene discussa in CdA."
+        )
+
+        client = APIClient()
+        token = build_mcp_access_token(self.integration_client)
+        response = client.post(
+            "/api/integrations/v1/internal/document-index-content/",
+            {
+                "key": document.object_key,
+                "text_preview": "Verbale del consiglio.",
+                "extracted_text": long_extracted_text,
+            },
+            format="json",
+            HTTP_X_INTERNAL_API_KEY="internal-index-key",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        document.refresh_from_db()
+        self.assertIn("BFF Bank", document.extracted_text)
+        self.assertIn("BFF Bank", document.search_text)
+
 
 class DocumentIndexSearchHelpersTests(TestCase):
-    def test_build_document_search_query_text_prefers_raw_query(self):
+    def test_build_document_search_query_text_prefers_cleaned_terms(self):
         self.assertEqual(
             build_document_search_query_text('"presidio interno" rischi informatici', ["presidio interno", "rischi informatici"]),
-            '"presidio interno" rischi informatici',
+            "presidio interno rischi informatici",
         )
 
     def test_compute_postgres_fts_candidate_limit_is_bounded(self):
@@ -628,6 +784,23 @@ class DocumentIndexSearchHelpersTests(TestCase):
         terms = query_terms_for_search("direttore generale nomina")
         self.assertIn("direttore generale", terms)
 
+    def test_query_terms_for_search_removes_question_noise(self):
+        terms = query_terms_for_search("Quando si è parlato in cda di BFF Bank?")
+
+        self.assertIn("bff bank", terms)
+        self.assertIn("bff", terms)
+        self.assertIn("bank", terms)
+        self.assertIn("cda", terms)
+        self.assertNotIn("quando", terms)
+        self.assertNotIn("parlato", terms)
+
+    def test_query_terms_for_search_keeps_topic_after_scope_terms(self):
+        terms = query_terms_for_search("Quante volte in cda si è parlato di impegni?")
+
+        self.assertIn("cda", terms)
+        self.assertIn("impegni", terms)
+        self.assertNotIn("cda impegni", terms)
+
     def test_search_variants_expand_rso_abbreviation(self):
         variants = search_variants("rso")
         self.assertIn("struttura organizzativa", variants)
@@ -650,6 +823,20 @@ class DocumentIndexSearchHelpersTests(TestCase):
                 "customer0047/activity33098/replica-sim-rso_31032026-v.03.docx"
             ),
             date(2026, 3, 31),
+        )
+
+    def test_document_index_infers_document_date_from_italian_month_name(self):
+        self.assertEqual(
+            DocumentIndex.infer_document_date(
+                "customer0047/activity33098/replica-sim_verbale-cda-27-gennaio-2026_clean.docx"
+            ),
+            date(2026, 1, 27),
+        )
+        self.assertEqual(
+            DocumentIndex.infer_document_date(
+                "customer0047/activity33098/replica-sim_verbale-cda-16-dicembre-2025.docx"
+            ),
+            date(2025, 12, 16),
         )
 
     def test_sort_documents_prioritizes_document_date_for_latest_rso(self):

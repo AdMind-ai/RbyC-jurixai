@@ -92,6 +92,7 @@ def serialize_document_index_documents(documents: list) -> list[dict[str, object
             "control_function_tags": document.control_function_tags,
             "topic_tags": document.topic_tags,
             "text_preview": document.text_preview,
+            "relevance_score": getattr(document, "relevance_score", 0),
         }
         for document in documents
     ]
