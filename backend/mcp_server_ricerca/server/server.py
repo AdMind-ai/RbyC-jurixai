@@ -113,6 +113,16 @@ QUERY_SCOPE_TERMS = {
     "verbali",
 }
 
+DOCUMENT_FAMILY_ALIASES = {
+    "governance": "verbale_cda,estratto_cda,nomina",
+    "governance societaria": "verbale_cda,estratto_cda,nomina",
+    "governance_societaria": "verbale_cda,estratto_cda,nomina",
+    "verbale": "verbale_cda,estratto_cda",
+    "verbali": "verbale_cda,estratto_cda",
+    "verbali cda": "verbale_cda,estratto_cda",
+    "verbali_cda": "verbale_cda,estratto_cda",
+}
+
 try:
     import textract
 except ImportError:
@@ -559,6 +569,21 @@ def _normalize_search_value(value: str) -> str:
     return " ".join(normalized.casefold().split())
 
 
+def _normalize_document_family_filter(value: str) -> str:
+    families = []
+    for raw_item in (value or "").split(","):
+        item = raw_item.strip()
+        if not item:
+            continue
+        normalized_item = _normalize_search_value(item).replace("-", "_")
+        replacement = DOCUMENT_FAMILY_ALIASES.get(normalized_item, item)
+        for family in replacement.split(","):
+            family = family.strip()
+            if family and family not in families:
+                families.append(family)
+    return ",".join(families)
+
+
 def _query_terms(query: str) -> list[str]:
     normalized = _normalize_search_value(query)
     return [
@@ -666,7 +691,16 @@ def _score_search_document(document: dict, query: str) -> int:
 
 
 def _compact_preview(document: dict, max_chars: int) -> str:
+    matched_excerpt = " ".join((document.get("matched_excerpt") or "").split())
     preview = " ".join((document.get("text_preview") or "").split())
+    if matched_excerpt:
+        if preview and matched_excerpt not in preview:
+            combined = f"Trecho relevante: {matched_excerpt}\n\nPreview: {preview}"
+        else:
+            combined = matched_excerpt
+        if len(combined) <= max_chars:
+            return combined
+        return f"{combined[:max_chars].rstrip()}..."
     if len(preview) <= max_chars:
         return preview
     return f"{preview[:max_chars].rstrip()}..."
@@ -855,6 +889,7 @@ async def search_documents(
         client_context = _get_active_client_context()
         limit = max(1, min(limit, 20))
         preview_chars = max(300, min(preview_chars, 3000))
+        document_family = _normalize_document_family_filter(document_family)
         approval_sensitive_query = _query_requires_approval_evidence(query)
         recency_sensitive_query = _query_requires_recency(query)
         strong_structured_filters = any(
@@ -996,6 +1031,7 @@ async def search_documents(
                     ),
                     "last_modified": document.get("last_modified"),
                     "size_bytes": document.get("size_bytes") or 0,
+                    "matched_excerpt": document.get("matched_excerpt") or "",
                     "preview": _compact_preview(document, preview_chars),
                     "relevance_score": _document_relevance_score(
                         document,
@@ -1239,6 +1275,7 @@ async def list_documents(
     try:
         client_context = _get_active_client_context()
         limit = max(1, min(limit, 300))
+        document_family = _normalize_document_family_filter(document_family)
         sort_by = (sort_by or "last_modified").strip().lower()
         sort_order = (sort_order or "desc").strip().lower()
         if sort_by not in {"last_modified", "s3_last_modified", "document_date", "size", "filename"}:

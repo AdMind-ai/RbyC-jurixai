@@ -15,6 +15,7 @@ from integrations.services.document_index_auth import (
     validate_internal_document_index_request,
 )
 from integrations.services.document_index_content import apply_document_index_content_update
+from integrations.services.document_index_excerpt import build_document_matched_excerpt
 from integrations.services.document_index_search import (
     query_terms_for_search,
     search_variants,
@@ -66,6 +67,7 @@ class InternalDocumentIndexView(APIView):
         control_function_tags = serializers.CharField(allow_blank=True)
         topic_tags = serializers.CharField(allow_blank=True)
         text_preview = serializers.CharField(allow_blank=True)
+        matched_excerpt = serializers.CharField(allow_blank=True)
 
     def get(self, request):
         started_at = perf_counter()
@@ -149,6 +151,10 @@ class InternalDocumentIndexView(APIView):
         documents = sort_documents_by_relevance(documents, query_terms)
         for document in documents:
             document.relevance_score = score_document_match(document, query_terms)
+            document.matched_excerpt = build_document_matched_excerpt(
+                document,
+                query_terms,
+            )
         payload = serialize_document_index_documents(documents)
 
         log_document_index_search_result(

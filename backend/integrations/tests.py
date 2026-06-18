@@ -16,6 +16,7 @@ from integrations.services.mcp_auth import (
     build_mcp_access_token,
     decode_mcp_access_token,
 )
+from integrations.services.document_index_excerpt import build_document_matched_excerpt
 from integrations.services.ricerca_documentale_runtime import (
     extract_ricerca_documentale_response_payload,
 )
@@ -565,6 +566,7 @@ class InternalDocumentIndexAuthTests(TestCase):
             filenames,
             ["verbale-cda-27012026.docx", "verbale-cda-14122023.docx"],
         )
+        self.assertIn("BFF Bank", response.json()[0]["matched_excerpt"])
 
     @override_settings(
         DOCUMENT_INDEX_API_KEY="internal-index-key",
@@ -712,6 +714,49 @@ class InternalDocumentIndexAuthTests(TestCase):
 
 
 class DocumentIndexSearchHelpersTests(TestCase):
+    def test_build_document_matched_excerpt_finds_late_extracted_text_match(self):
+        document = DocumentIndex(
+            filename="verbale-lungo.docx",
+            text_preview="Verbale del consiglio senza la banca nel preview.",
+            extracted_text=(
+                "Verbale del consiglio. "
+                + ("contenuto ordinario " * 500)
+                + "La seduta discute BFF Bank S.p.A. come banca depositaria."
+            ),
+        )
+
+        excerpt = build_document_matched_excerpt(
+            document,
+            query_terms_for_search("Quando si è parlato in cda di BFF Bank?"),
+            max_chars=260,
+        )
+
+        self.assertIn("BFF Bank", excerpt)
+        self.assertLess(len(excerpt), len(document.extracted_text))
+
+    def test_mcp_document_family_filter_normalizes_common_aliases(self):
+        try:
+            from mcp_server_ricerca.server.server import (
+                _normalize_document_family_filter,
+            )
+        except ModuleNotFoundError as exc:
+            if exc.name == "fastmcp":
+                self.skipTest("fastmcp is not installed in the Django test environment")
+            raise
+
+        self.assertEqual(
+            _normalize_document_family_filter("Governance"),
+            "verbale_cda,estratto_cda,nomina",
+        )
+        self.assertEqual(
+            _normalize_document_family_filter("verbali"),
+            "verbale_cda,estratto_cda",
+        )
+        self.assertEqual(
+            _normalize_document_family_filter("verbale_cda,Governance"),
+            "verbale_cda,estratto_cda,nomina",
+        )
+
     def test_build_document_search_query_text_prefers_cleaned_terms(self):
         self.assertEqual(
             build_document_search_query_text('"presidio interno" rischi informatici', ["presidio interno", "rischi informatici"]),
