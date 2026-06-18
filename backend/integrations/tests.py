@@ -17,6 +17,7 @@ from integrations.services.mcp_auth import (
     decode_mcp_access_token,
 )
 from integrations.services.document_index_excerpt import build_document_matched_excerpt
+from integrations.services.document_index_querying import merge_document_candidates
 from integrations.services.ricerca_documentale_runtime import (
     extract_ricerca_documentale_response_payload,
 )
@@ -714,6 +715,30 @@ class InternalDocumentIndexAuthTests(TestCase):
 
 
 class DocumentIndexSearchHelpersTests(TestCase):
+    def test_merge_document_candidates_keeps_text_fallback_matches(self):
+        fts_document = DocumentIndex(
+            id=1,
+            filename="verbale-cda-18112025.docx",
+        )
+        fallback_document = DocumentIndex(
+            id=2,
+            filename="verbale-cda-27012026.docx",
+        )
+        duplicate_document = DocumentIndex(
+            id=1,
+            filename="verbale-cda-18112025-copy.docx",
+        )
+
+        merged = merge_document_candidates(
+            [fts_document],
+            [duplicate_document, fallback_document],
+        )
+
+        self.assertEqual(
+            [document.filename for document in merged],
+            ["verbale-cda-18112025.docx", "verbale-cda-27012026.docx"],
+        )
+
     def test_build_document_matched_excerpt_finds_late_extracted_text_match(self):
         document = DocumentIndex(
             filename="verbale-lungo.docx",
