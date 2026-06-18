@@ -855,6 +855,56 @@ def _format_search_result_sample(results: list[dict], *, max_items: int = 20) ->
     return " || ".join(sample) if sample else "<empty>"
 
 
+def _coverage_group_key(document: dict) -> str:
+    document_family = _normalize_search_value(document.get("document_family") or "")
+    document_date = str(document.get("document_date") or "").strip()
+    if document_date and any(
+        family in document_family
+        for family in ("verbale_cda", "estratto_cda", "verbale", "estratto")
+    ):
+        return f"meeting:{document_date}"
+    return f"document:{document.get('key') or document.get('path') or document.get('filename') or ''}"
+
+
+def _coverage_evidence_text(document: dict, *, max_chars: int = 360) -> str:
+    text = " ".join(
+        (
+            document.get("matched_excerpt")
+            or document.get("preview")
+            or document.get("text_preview")
+            or ""
+        ).split()
+    )
+    if len(text) <= max_chars:
+        return text
+    return f"{text[:max_chars].rstrip()}..."
+
+
+def _build_coverage_candidates(results: list[dict]) -> list[dict]:
+    candidates = []
+    seen_groups = {}
+    for result in results:
+        group_key = _coverage_group_key(result)
+        duplicate_of = seen_groups.get(group_key)
+        is_primary = duplicate_of is None
+        if is_primary:
+            seen_groups[group_key] = result.get("key") or result.get("filename") or group_key
+            candidates.append(
+                {
+                    "coverage_group_key": group_key,
+                    "document_date": result.get("document_date") or "",
+                    "filename": result.get("filename") or "",
+                    "key": result.get("key") or "",
+                    "relevance_score": result.get("relevance_score") or 0,
+                    "evidence": _coverage_evidence_text(result),
+                }
+            )
+        result["coverage_group_key"] = group_key
+        result["coverage_primary"] = is_primary
+        result["coverage_duplicate_of"] = duplicate_of or ""
+    return candidates
+
+
 def _read_cost_tier(
     *,
     mode: str,
@@ -1056,6 +1106,17 @@ async def search_documents(
                 }
             )
 
+        coverage_candidates = _build_coverage_candidates(results)
+        if results and coverage_candidates:
+            results[0]["coverage_candidates"] = coverage_candidates
+            results[0]["coverage_instruction"] = (
+                "Per domande su quando, quante volte, in quali verbali o dove "
+                "si parla di un tema, usa coverage_candidates come candidate "
+                "set deduplicato per seduta/documento. Conta solo i candidati "
+                "pertinenti secondo il criterio dichiarato e spiega eventuali "
+                "esclusioni."
+            )
+
         top_result = results[0] if results else None
         if top_result:
             ranking_debug = _document_ranking_debug(
@@ -1091,6 +1152,20 @@ async def search_documents(
             len(results),
             _format_search_result_sample(results, max_items=limit),
         )
+        if coverage_candidates:
+            logger.info(
+                "[mcp_ricerca] search_documents_coverage_candidates query=%s coverage_count=%s candidates=%s",
+                query or "<empty>",
+                len(coverage_candidates),
+                " || ".join(
+                    "date={date} score={score} filename={filename}".format(
+                        date=candidate.get("document_date") or "<empty>",
+                        score=candidate.get("relevance_score") or 0,
+                        filename=candidate.get("filename") or "<empty>",
+                    )
+                    for candidate in coverage_candidates[:limit]
+                ),
+            )
 
         duration_ms = round((perf_counter() - started_at) * 1000, 2)
         logger.info(

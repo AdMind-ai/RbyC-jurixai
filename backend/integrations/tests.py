@@ -782,6 +782,53 @@ class DocumentIndexSearchHelpersTests(TestCase):
             "verbale_cda,estratto_cda,nomina",
         )
 
+    def test_mcp_coverage_candidates_group_documents_by_meeting_date(self):
+        try:
+            from mcp_server_ricerca.server.server import (
+                _build_coverage_candidates,
+            )
+        except ModuleNotFoundError as exc:
+            if exc.name == "fastmcp":
+                self.skipTest("fastmcp is not installed in the Django test environment")
+            raise
+
+        results = [
+            {
+                "key": "ai/customer/verbale-1.docx",
+                "filename": "verbale-1.docx",
+                "document_family": "verbale_cda",
+                "document_date": "2026-01-27",
+                "relevance_score": 20,
+                "matched_excerpt": "Aggiornamento sulla procedura.",
+            },
+            {
+                "key": "ai/customer/verbale-1-copy.docx",
+                "filename": "verbale-1-copy.docx",
+                "document_family": "verbale_cda",
+                "document_date": "2026-01-27",
+                "relevance_score": 18,
+                "matched_excerpt": "Copia della stessa seduta.",
+            },
+            {
+                "key": "ai/customer/verbale-2.docx",
+                "filename": "verbale-2.docx",
+                "document_family": "verbale_cda",
+                "document_date": "2026-02-24",
+                "relevance_score": 17,
+                "matched_excerpt": "Ulteriore aggiornamento.",
+            },
+        ]
+
+        candidates = _build_coverage_candidates(results)
+
+        self.assertEqual(len(candidates), 2)
+        self.assertTrue(results[0]["coverage_primary"])
+        self.assertFalse(results[1]["coverage_primary"])
+        self.assertEqual(
+            results[1]["coverage_duplicate_of"],
+            "ai/customer/verbale-1.docx",
+        )
+
     def test_build_document_search_query_text_prefers_cleaned_terms(self):
         self.assertEqual(
             build_document_search_query_text('"presidio interno" rischi informatici', ["presidio interno", "rischi informatici"]),
