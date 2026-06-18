@@ -166,7 +166,11 @@ def build_document_search_input(
             "in quali documenti o dove si parla di un tema, non ridurre la "
             "risposta ai soli 3-5 risultati piu rilevanti: usa i risultati "
             "come candidate set, deduplica documenti o sedute equivalenti e "
-            "distingui occorrenze testuali da trattazioni esplicite."
+            "distingui occorrenze testuali da trattazioni esplicite. Prima "
+            "del conteggio finale, verifica anche i candidati meno alti in "
+            "ranking quando hanno matched excerpt, preview o metadati "
+            "direttamente pertinenti; non ometterli senza un criterio "
+            "esplicito come duplicato, occorrenza generica o fuori ambito."
         )
     return (
         f"{context_block}\n\n"

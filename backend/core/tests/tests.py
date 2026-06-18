@@ -252,3 +252,5 @@ class DocumentSearchIntentClassifierTests(TestCase):
 		self.assertIn("preferred_document_families=verbale_cda,estratto_cda", model_input)
 		self.assertIn("evidence_plan=", model_input)
 		self.assertIn("candidate set", model_input)
+		self.assertIn("candidati meno alti in ranking", model_input)
+		self.assertIn("non ometterli senza un criterio esplicito", model_input)

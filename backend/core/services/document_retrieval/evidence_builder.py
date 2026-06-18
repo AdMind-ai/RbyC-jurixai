@@ -211,6 +211,13 @@ def build_evidence_plan(
             "possibile. Per ogni candidato rilevante, conserva data, tipo di "
             "evidenza e motivo della pertinenza. Distingui chiaramente tra "
             "semplice occorrenza testuale e trattazione esplicita del tema. "
+            "Non escludere un candidato solo perche ha ranking piu basso se "
+            "il matched excerpt, la preview o il documento mostrano una "
+            "pertinenza diretta con il tema. Se decidi di non contare un "
+            "candidato recuperato che contiene il termine o un riferimento "
+            "diretto, fallo solo per un motivo esplicito di criterio, ad "
+            "esempio duplicato della stessa seduta, occorrenza generica o "
+            "documento fuori ambito. "
             "Solo dopo aver costruito questa vista trasversale, produci il "
             "conteggio, l'elenco di date o la sintesi richiesta."
         )

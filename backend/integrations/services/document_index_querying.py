@@ -232,6 +232,32 @@ def search_documents_with_postgres_fts(
     return ranked_documents
 
 
+def merge_document_candidates(
+    primary_documents: list[DocumentIndex],
+    secondary_documents: list[DocumentIndex],
+) -> list[DocumentIndex]:
+    merged_documents = []
+    seen_ids = set()
+    for document in [*primary_documents, *secondary_documents]:
+        document_id = getattr(document, "pk", None) or id(document)
+        if document_id in seen_ids:
+            continue
+        seen_ids.add(document_id)
+        merged_documents.append(document)
+    return merged_documents
+
+
+def build_broad_query_filter(query_terms: list[str], *, include_extended_text: bool) -> Q:
+    broad_filter = Q()
+    for term in query_terms:
+        broad_filter |= build_document_search_filter_for_mode(
+            term,
+            include_preview=True,
+            include_extended_text=include_extended_text,
+        )
+    return broad_filter
+
+
 def search_documents_in_index(
     *,
     raw_query: str,
@@ -302,6 +328,17 @@ def search_documents_in_index(
             path_filter |= Q(object_key__icontains=variant)
         documents = documents.filter(path_filter)
 
+    order_fields = {
+        "last_modified": "s3_last_modified",
+        "s3_last_modified": "s3_last_modified",
+        "document_date": "document_date",
+        "size": "size_bytes",
+        "filename": "filename",
+    }
+    order_field = order_fields.get(sort_by, "s3_last_modified")
+    if sort_order != "asc":
+        order_field = f"-{order_field}"
+
     if query_terms:
         filter_query_terms = query_terms_for_filtering(query_terms)
         precision_query_terms = high_precision_query_terms(query_terms)
@@ -325,7 +362,18 @@ def search_documents_in_index(
                         )
                     ]
                 if fts_documents:
-                    return fts_documents
+                    fallback_filter = build_broad_query_filter(
+                        precision_query_terms or filter_query_terms,
+                        include_extended_text=include_extended_text,
+                    )
+                    fallback_documents = list(
+                        documents.filter(fallback_filter)
+                        .order_by(order_field, "-indexed_at")[:limit]
+                    )
+                    return merge_document_candidates(
+                        fts_documents,
+                        fallback_documents,
+                    )
 
         strict_documents = documents
         for term in filter_query_terms:
@@ -339,24 +387,10 @@ def search_documents_in_index(
         if strict_documents.exists() or len(filter_query_terms) == 1:
             documents = strict_documents
         else:
-            broad_filter = Q()
-            for term in precision_query_terms or filter_query_terms:
-                broad_filter |= build_document_search_filter_for_mode(
-                    term,
-                    include_preview=True,
-                    include_extended_text=include_extended_text,
-                )
+            broad_filter = build_broad_query_filter(
+                precision_query_terms or filter_query_terms,
+                include_extended_text=include_extended_text,
+            )
             documents = documents.filter(broad_filter)
-
-    order_fields = {
-        "last_modified": "s3_last_modified",
-        "s3_last_modified": "s3_last_modified",
-        "document_date": "document_date",
-        "size": "size_bytes",
-        "filename": "filename",
-    }
-    order_field = order_fields.get(sort_by, "s3_last_modified")
-    if sort_order != "asc":
-        order_field = f"-{order_field}"
 
     return list(documents.order_by(order_field, "-indexed_at")[:limit])

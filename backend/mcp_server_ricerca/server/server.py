@@ -840,6 +840,21 @@ def _document_ranking_debug(document: dict, query: str, *, source: str) -> dict:
     }
 
 
+def _format_search_result_sample(results: list[dict], *, max_items: int = 20) -> str:
+    sample = []
+    for index, document in enumerate(results[:max_items], start=1):
+        sample.append(
+            "rank={rank} date={date} score={score} filename={filename} key={key}".format(
+                rank=index,
+                date=document.get("document_date") or "<empty>",
+                score=document.get("relevance_score") or 0,
+                filename=document.get("filename") or "<empty>",
+                key=document.get("key") or "<empty>",
+            )
+        )
+    return " || ".join(sample) if sample else "<empty>"
+
+
 def _read_cost_tier(
     *,
     mode: str,
@@ -1068,6 +1083,14 @@ async def search_documents(
                     or top_result.get("last_modified")
                     or "<empty>",
                 )
+
+        logger.info(
+            "[mcp_ricerca] search_documents_results_sample query=%s source=%s returned_documents=%s sample=%s",
+            query or "<empty>",
+            used_source,
+            len(results),
+            _format_search_result_sample(results, max_items=limit),
+        )
 
         duration_ms = round((perf_counter() - started_at) * 1000, 2)
         logger.info(
