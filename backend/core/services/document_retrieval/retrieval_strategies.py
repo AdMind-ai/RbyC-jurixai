@@ -4,6 +4,7 @@ from core.services.document_retrieval.intent_classifier import (
     INTENT_APPOINTMENT_AND_POWERS,
     INTENT_CONSOB_TOPIC_MEETING_TRACKING,
     INTENT_CONTROL_FUNCTIONS_FINDINGS_AND_REMEDIES,
+    INTENT_CROSS_DOCUMENT_COVERAGE,
     INTENT_DIRECTOR_GENERAL_APPOINTMENT_CHECK,
     INTENT_FINANCIAL_SUMMARY_LAST_THREE_YEARS,
     INTENT_GENERIC_DOCUMENT_SEARCH,
@@ -168,6 +169,23 @@ RETRIEVAL_STRATEGIES = {
             "modo esplicito contestazioni o procedimento sanzionatorio Consob, "
             "non espandere la ricerca con nuove varianti salvo dubbio reale su "
             "altre riunioni con lo stesso livello di evidenza."
+        ),
+    ),
+    INTENT_CROSS_DOCUMENT_COVERAGE: RetrievalStrategy(
+        intent_type=INTENT_CROSS_DOCUMENT_COVERAGE,
+        prefer_preview_only=False,
+        max_documents_to_open=6,
+        group_by="document_or_meeting",
+        preferred_document_families=("verbale_cda", "estratto_cda"),
+        notes=(
+            "Usar cobertura transversal quando a pergunta pede quando, quantas "
+            "vezes, em quais documentos/reunioes/sedute ou onde um tema aparece."
+        ),
+        stopping_rule=(
+            "Non fermarti ai primi 3-5 risultati se la domanda chiede conteggio, "
+            "date, occorrenze o copertura trasversale. Costruisci prima un "
+            "candidate set dei documenti o delle sedute pertinenti, deduplica "
+            "copie/versioni della stessa seduta quando possibile, poi sintetizza."
         ),
     ),
     INTENT_GENERIC_DOCUMENT_SEARCH: RetrievalStrategy(

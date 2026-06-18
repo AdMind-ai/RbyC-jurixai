@@ -9,9 +9,12 @@ from rest_framework.test import APIClient
 
 from core.models.usage import UsageRecord, UsageTool
 from core.services.document_retrieval.intent_classifier import (
+	INTENT_CROSS_DOCUMENT_COVERAGE,
 	INTENT_ORGANIZATIONAL_STRUCTURE_YEAR_COMPARISON,
 	classify_document_search_intent,
 )
+from core.services.document_retrieval.prompt_context import build_document_search_input
+from core.services.document_retrieval.retrieval_strategies import get_retrieval_strategy
 from core.services.usage_service import UsageReportFilters, UsageReportService
 from core.services.usage_tracking import UsageTrackingService
 from integrations.models import (
@@ -223,3 +226,29 @@ class DocumentSearchIntentClassifierTests(TestCase):
 			INTENT_ORGANIZATIONAL_STRUCTURE_YEAR_COMPARISON,
 		)
 		self.assertIn("rso", classification.matched_signals)
+
+	def test_classify_board_topic_count_query_as_cross_document_coverage(self):
+		classification = classify_document_search_intent(
+			"Quante volte in cda si e parlato di un tema operativo?"
+		)
+
+		self.assertEqual(classification.intent_type, INTENT_CROSS_DOCUMENT_COVERAGE)
+		self.assertIn("quante volte", classification.matched_signals)
+		self.assertIn("cda", classification.matched_signals)
+
+	def test_cross_document_coverage_context_preserves_transversal_guidance(self):
+		classification = classify_document_search_intent(
+			"Quando si e parlato in cda di una banca depositaria?"
+		)
+		strategy = get_retrieval_strategy(classification.intent_type)
+
+		model_input = build_document_search_input(
+			"Quando si e parlato in cda di una banca depositaria?",
+			classification,
+			strategy,
+		)
+
+		self.assertIn("intent_type=cross_document_coverage", model_input)
+		self.assertIn("preferred_document_families=verbale_cda,estratto_cda", model_input)
+		self.assertIn("evidence_plan=", model_input)
+		self.assertIn("candidate set", model_input)
