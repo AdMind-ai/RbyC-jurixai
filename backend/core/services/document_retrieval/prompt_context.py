@@ -1,4 +1,5 @@
 from core.services.document_retrieval.intent_classifier import (
+    INTENT_CROSS_DOCUMENT_COVERAGE,
     IntentClassification,
 )
 from core.services.document_retrieval.evidence_builder import (
@@ -13,6 +14,8 @@ from core.services.document_retrieval.retrieval_strategies import (
 def _should_relax_structured_preferences(
     intent_classification: IntentClassification,
 ) -> bool:
+    if intent_classification.intent_type == INTENT_CROSS_DOCUMENT_COVERAGE:
+        return False
     normalized_input = getattr(intent_classification, "normalized_input", "") or ""
     approval_markers = ("approvat", "approvazione", "delibera", "verbale", "consiglio di amministrazione", "cda")
     return any(marker in normalized_input for marker in approval_markers)
@@ -21,6 +24,8 @@ def _should_relax_structured_preferences(
 def _should_use_compact_prompt_context(
     intent_classification: IntentClassification,
 ) -> bool:
+    if intent_classification.intent_type == INTENT_CROSS_DOCUMENT_COVERAGE:
+        return False
     return _should_relax_structured_preferences(intent_classification)
 
 
@@ -154,6 +159,18 @@ def build_document_search_input(
             "Per domande su ultima versione o documento piu recente, usa document_date come criterio principale di recenza "
             "e distingui con chiarezza tra documento piu recente, approvazione esplicita e evidenza societaria correlata. "
             "Quando e presente un evidence_plan, seguilo per comprimere l'evidenza prima della sintesi finale."
+        )
+    if intent_classification.intent_type == INTENT_CROSS_DOCUMENT_COVERAGE:
+        guidance_text += (
+            " Per domande di copertura trasversale, come quando, quante volte, "
+            "in quali documenti o dove si parla di un tema, non ridurre la "
+            "risposta ai soli 3-5 risultati piu rilevanti: usa i risultati "
+            "come candidate set, deduplica documenti o sedute equivalenti e "
+            "distingui occorrenze testuali da trattazioni esplicite. Prima "
+            "del conteggio finale, verifica anche i candidati meno alti in "
+            "ranking quando hanno matched excerpt, preview o metadati "
+            "direttamente pertinenti; non ometterli senza un criterio "
+            "esplicito come duplicato, occorrenza generica o fuori ambito."
         )
     return (
         f"{context_block}\n\n"

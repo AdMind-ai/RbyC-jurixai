@@ -16,6 +16,7 @@ INTENT_ORGANIZATIONAL_STRUCTURE_YEAR_COMPARISON = (
     "organizational_structure_year_comparison"
 )
 INTENT_CONSOB_TOPIC_MEETING_TRACKING = "consob_topic_meeting_tracking"
+INTENT_CROSS_DOCUMENT_COVERAGE = "cross_document_coverage"
 INTENT_GENERIC_DOCUMENT_SEARCH = "generic_document_search"
 
 
@@ -114,6 +115,64 @@ INTENT_RULES = (
     ),
 )
 
+COVERAGE_QUESTION_SIGNALS = (
+    "quando",
+    "quante volte",
+    "quanti",
+    "in quali",
+    "dove",
+    "compare",
+    "menzion",
+    "parlato",
+    "discusso",
+    "trattato",
+)
+COVERAGE_ACTION_SIGNALS = (
+    "menzion",
+    "parlato",
+    "discusso",
+    "trattato",
+    "compare",
+)
+COVERAGE_ENUMERATION_SIGNALS = (
+    "quante volte",
+    "quanti",
+    "in quali",
+    "dove",
+)
+COVERAGE_SCOPE_SIGNALS = (
+    "cda",
+    "consiglio di amministrazione",
+    "verbale",
+    "verbali",
+    "riunioni",
+    "sedute",
+    "documenti",
+    "materiali",
+)
+
+
+def _looks_like_cross_document_coverage(
+    normalized_input: str,
+) -> tuple[str, ...]:
+    question_matches = tuple(
+        signal for signal in COVERAGE_QUESTION_SIGNALS if signal in normalized_input
+    )
+    scope_matches = tuple(
+        signal for signal in COVERAGE_SCOPE_SIGNALS if signal in normalized_input
+    )
+    action_matches = tuple(
+        signal for signal in COVERAGE_ACTION_SIGNALS if signal in normalized_input
+    )
+    enumeration_matches = tuple(
+        signal
+        for signal in COVERAGE_ENUMERATION_SIGNALS
+        if signal in normalized_input
+    )
+    if scope_matches and (action_matches or enumeration_matches):
+        return (*question_matches, *scope_matches)
+    return ()
+
 
 def normalize_intent_text(value: str) -> str:
     normalized = unicodedata.normalize("NFKD", value or "")
@@ -125,6 +184,15 @@ def normalize_intent_text(value: str) -> str:
 
 def classify_document_search_intent(user_input: str) -> IntentClassification:
     normalized_input = normalize_intent_text(user_input)
+    coverage_signals = _looks_like_cross_document_coverage(normalized_input)
+    if coverage_signals:
+        confidence = "high" if len(coverage_signals) >= 3 else "medium"
+        return IntentClassification(
+            intent_type=INTENT_CROSS_DOCUMENT_COVERAGE,
+            confidence=confidence,
+            matched_signals=coverage_signals,
+            normalized_input=normalized_input,
+        )
 
     best_rule = None
     best_score = 0

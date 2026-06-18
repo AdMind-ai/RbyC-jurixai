@@ -2,6 +2,7 @@ from core.services.document_retrieval.intent_classifier import (
     INTENT_APPOINTMENT_AND_POWERS,
     INTENT_CONSOB_TOPIC_MEETING_TRACKING,
     INTENT_CONTROL_FUNCTIONS_FINDINGS_AND_REMEDIES,
+    INTENT_CROSS_DOCUMENT_COVERAGE,
     INTENT_DIRECTOR_GENERAL_APPOINTMENT_CHECK,
     INTENT_FINANCIAL_SUMMARY_LAST_THREE_YEARS,
     INTENT_INVESTMENT_POLICIES_SUMMARY_BY_BOARD,
@@ -194,6 +195,31 @@ def build_evidence_plan(
             "data, tipo di coinvolgimento e nesso con la politica di "
             "investimento. Solo dopo aver costruito l'elenco delle riunioni "
             "rilevanti, produci il conteggio finale e la sintesi conclusiva."
+        )
+
+    if (
+        intent_classification.intent_type
+        == INTENT_CROSS_DOCUMENT_COVERAGE
+    ):
+        return (
+            "Prima di sintetizzare, tratta la domanda come copertura "
+            "trasversale. Usa i risultati di search_documents come candidate "
+            "set iniziale dei documenti o delle sedute pertinenti, non come "
+            "semplice lista da ridurre ai primi elementi. Raggruppa per "
+            "documento o, quando emergono date di riunione, per seduta; "
+            "deduplica copie, bozze o versioni della stessa seduta quando "
+            "possibile. Per ogni candidato rilevante, conserva data, tipo di "
+            "evidenza e motivo della pertinenza. Distingui chiaramente tra "
+            "semplice occorrenza testuale e trattazione esplicita del tema. "
+            "Non escludere un candidato solo perche ha ranking piu basso se "
+            "il matched excerpt, la preview o il documento mostrano una "
+            "pertinenza diretta con il tema. Se decidi di non contare un "
+            "candidato recuperato che contiene il termine o un riferimento "
+            "diretto, fallo solo per un motivo esplicito di criterio, ad "
+            "esempio duplicato della stessa seduta, occorrenza generica o "
+            "documento fuori ambito. "
+            "Solo dopo aver costruito questa vista trasversale, produci il "
+            "conteggio, l'elenco di date o la sintesi richiesta."
         )
 
     return ""

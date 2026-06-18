@@ -2,6 +2,7 @@ from django.utils import timezone
 
 from integrations.models import DocumentIndex
 from integrations.services.document_search_index import refresh_document_search_text
+from integrations.services.document_preview import DEFAULT_SEARCH_TEXT_CHARS
 
 
 def apply_document_index_content_update(
@@ -11,7 +12,7 @@ def apply_document_index_content_update(
     extracted_text: str,
 ) -> dict[str, object]:
     normalized_preview = text_preview[:6000]
-    normalized_extracted_text = extracted_text[:30000]
+    normalized_extracted_text = extracted_text[:DEFAULT_SEARCH_TEXT_CHARS]
     source_text = normalized_extracted_text or normalized_preview
 
     update_fields = ["updated_at"]

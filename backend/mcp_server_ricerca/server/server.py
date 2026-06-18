@@ -40,6 +40,89 @@ RECENCY_QUERY_MARKERS = (
     "recent",
 )
 
+QUERY_STOPWORDS = {
+    "a",
+    "ai",
+    "al",
+    "alla",
+    "alle",
+    "allo",
+    "anche",
+    "che",
+    "chi",
+    "come",
+    "con",
+    "cosa",
+    "da",
+    "dal",
+    "dalla",
+    "de",
+    "dei",
+    "del",
+    "della",
+    "delle",
+    "di",
+    "dove",
+    "e",
+    "ed",
+    "gli",
+    "ha",
+    "hanno",
+    "i",
+    "il",
+    "in",
+    "la",
+    "le",
+    "lo",
+    "manca",
+    "nei",
+    "nel",
+    "nella",
+    "nelle",
+    "non",
+    "parla",
+    "parlato",
+    "parlati",
+    "parlata",
+    "parlate",
+    "per",
+    "quale",
+    "quali",
+    "quando",
+    "quante",
+    "quanti",
+    "risulta",
+    "si",
+    "sono",
+    "stata",
+    "stato",
+    "sul",
+    "sulla",
+    "tra",
+    "un",
+    "una",
+    "volta",
+    "volte",
+}
+
+QUERY_SCOPE_TERMS = {
+    "cda",
+    "consiglio",
+    "amministrazione",
+    "verbale",
+    "verbali",
+}
+
+DOCUMENT_FAMILY_ALIASES = {
+    "governance": "verbale_cda,estratto_cda,nomina",
+    "governance societaria": "verbale_cda,estratto_cda,nomina",
+    "governance_societaria": "verbale_cda,estratto_cda,nomina",
+    "verbale": "verbale_cda,estratto_cda",
+    "verbali": "verbale_cda,estratto_cda",
+    "verbali cda": "verbale_cda,estratto_cda",
+    "verbali_cda": "verbale_cda,estratto_cda",
+}
+
 try:
     import textract
 except ImportError:
@@ -486,9 +569,31 @@ def _normalize_search_value(value: str) -> str:
     return " ".join(normalized.casefold().split())
 
 
+def _normalize_document_family_filter(value: str) -> str:
+    families = []
+    for raw_item in (value or "").split(","):
+        item = raw_item.strip()
+        if not item:
+            continue
+        normalized_item = _normalize_search_value(item).replace("-", "_")
+        replacement = DOCUMENT_FAMILY_ALIASES.get(normalized_item, item)
+        for family in replacement.split(","):
+            family = family.strip()
+            if family and family not in families:
+                families.append(family)
+    return ",".join(families)
+
+
 def _query_terms(query: str) -> list[str]:
     normalized = _normalize_search_value(query)
-    return [term for term in normalized.split() if len(term) > 2][:8]
+    return [
+        term
+        for term in normalized.replace("'", " ").split()
+        if (
+            term in QUERY_SCOPE_TERMS
+            or (len(term) > 2 and term not in QUERY_STOPWORDS)
+        )
+    ][:8]
 
 
 def _expanded_query_terms(query: str) -> list[str]:
@@ -586,7 +691,16 @@ def _score_search_document(document: dict, query: str) -> int:
 
 
 def _compact_preview(document: dict, max_chars: int) -> str:
+    matched_excerpt = " ".join((document.get("matched_excerpt") or "").split())
     preview = " ".join((document.get("text_preview") or "").split())
+    if matched_excerpt:
+        if preview and matched_excerpt not in preview:
+            combined = f"Trecho relevante: {matched_excerpt}\n\nPreview: {preview}"
+        else:
+            combined = matched_excerpt
+        if len(combined) <= max_chars:
+            return combined
+        return f"{combined[:max_chars].rstrip()}..."
     if len(preview) <= max_chars:
         return preview
     return f"{preview[:max_chars].rstrip()}..."
@@ -596,9 +710,13 @@ def _document_search_queries(query: str) -> list[str]:
     cleaned = " ".join((query or "").strip().split())
     normalized = _normalize_search_value(cleaned)
     queries = []
-    for candidate in [cleaned, normalized]:
-        if candidate and candidate not in queries:
-            queries.append(candidate)
+    terms = _query_terms(cleaned)
+    if len(terms) >= 2:
+        focused_query = " ".join(terms)
+        if focused_query not in queries:
+            queries.append(focused_query)
+    elif terms:
+        queries.append(terms[0])
 
     for source, synonyms in QUERY_SYNONYMS.items():
         if source in normalized:
@@ -611,10 +729,10 @@ def _document_search_queries(query: str) -> list[str]:
                 if normalized_synonym and normalized_synonym not in queries:
                     queries.append(normalized_synonym)
 
-    terms = _query_terms(cleaned)
     if terms:
         # Keep the fallback space narrow: prefer the strongest lexical anchor only.
-        longest_term = max(terms, key=len)
+        anchor_terms = [term for term in terms if term not in QUERY_SCOPE_TERMS]
+        longest_term = max(anchor_terms or terms, key=len)
         if longest_term not in queries:
             queries.append(longest_term)
     return queries[:3] or [""]
@@ -722,6 +840,71 @@ def _document_ranking_debug(document: dict, query: str, *, source: str) -> dict:
     }
 
 
+def _format_search_result_sample(results: list[dict], *, max_items: int = 20) -> str:
+    sample = []
+    for index, document in enumerate(results[:max_items], start=1):
+        sample.append(
+            "rank={rank} date={date} score={score} filename={filename} key={key}".format(
+                rank=index,
+                date=document.get("document_date") or "<empty>",
+                score=document.get("relevance_score") or 0,
+                filename=document.get("filename") or "<empty>",
+                key=document.get("key") or "<empty>",
+            )
+        )
+    return " || ".join(sample) if sample else "<empty>"
+
+
+def _coverage_group_key(document: dict) -> str:
+    document_family = _normalize_search_value(document.get("document_family") or "")
+    document_date = str(document.get("document_date") or "").strip()
+    if document_date and any(
+        family in document_family
+        for family in ("verbale_cda", "estratto_cda", "verbale", "estratto")
+    ):
+        return f"meeting:{document_date}"
+    return f"document:{document.get('key') or document.get('path') or document.get('filename') or ''}"
+
+
+def _coverage_evidence_text(document: dict, *, max_chars: int = 360) -> str:
+    text = " ".join(
+        (
+            document.get("matched_excerpt")
+            or document.get("preview")
+            or document.get("text_preview")
+            or ""
+        ).split()
+    )
+    if len(text) <= max_chars:
+        return text
+    return f"{text[:max_chars].rstrip()}..."
+
+
+def _build_coverage_candidates(results: list[dict]) -> list[dict]:
+    candidates = []
+    seen_groups = {}
+    for result in results:
+        group_key = _coverage_group_key(result)
+        duplicate_of = seen_groups.get(group_key)
+        is_primary = duplicate_of is None
+        if is_primary:
+            seen_groups[group_key] = result.get("key") or result.get("filename") or group_key
+            candidates.append(
+                {
+                    "coverage_group_key": group_key,
+                    "document_date": result.get("document_date") or "",
+                    "filename": result.get("filename") or "",
+                    "key": result.get("key") or "",
+                    "relevance_score": result.get("relevance_score") or 0,
+                    "evidence": _coverage_evidence_text(result),
+                }
+            )
+        result["coverage_group_key"] = group_key
+        result["coverage_primary"] = is_primary
+        result["coverage_duplicate_of"] = duplicate_of or ""
+    return candidates
+
+
 def _read_cost_tier(
     *,
     mode: str,
@@ -771,6 +954,7 @@ async def search_documents(
         client_context = _get_active_client_context()
         limit = max(1, min(limit, 20))
         preview_chars = max(300, min(preview_chars, 3000))
+        document_family = _normalize_document_family_filter(document_family)
         approval_sensitive_query = _query_requires_approval_evidence(query)
         recency_sensitive_query = _query_requires_recency(query)
         strong_structured_filters = any(
@@ -912,6 +1096,7 @@ async def search_documents(
                     ),
                     "last_modified": document.get("last_modified"),
                     "size_bytes": document.get("size_bytes") or 0,
+                    "matched_excerpt": document.get("matched_excerpt") or "",
                     "preview": _compact_preview(document, preview_chars),
                     "relevance_score": _document_relevance_score(
                         document,
@@ -919,6 +1104,17 @@ async def search_documents(
                         source=used_source,
                     ),
                 }
+            )
+
+        coverage_candidates = _build_coverage_candidates(results)
+        if results and coverage_candidates:
+            results[0]["coverage_candidates"] = coverage_candidates
+            results[0]["coverage_instruction"] = (
+                "Per domande su quando, quante volte, in quali verbali o dove "
+                "si parla di un tema, usa coverage_candidates come candidate "
+                "set deduplicato per seduta/documento. Conta solo i candidati "
+                "pertinenti secondo il criterio dichiarato e spiega eventuali "
+                "esclusioni."
             )
 
         top_result = results[0] if results else None
@@ -948,6 +1144,28 @@ async def search_documents(
                     or top_result.get("last_modified")
                     or "<empty>",
                 )
+
+        logger.info(
+            "[mcp_ricerca] search_documents_results_sample query=%s source=%s returned_documents=%s sample=%s",
+            query or "<empty>",
+            used_source,
+            len(results),
+            _format_search_result_sample(results, max_items=limit),
+        )
+        if coverage_candidates:
+            logger.info(
+                "[mcp_ricerca] search_documents_coverage_candidates query=%s coverage_count=%s candidates=%s",
+                query or "<empty>",
+                len(coverage_candidates),
+                " || ".join(
+                    "date={date} score={score} filename={filename}".format(
+                        date=candidate.get("document_date") or "<empty>",
+                        score=candidate.get("relevance_score") or 0,
+                        filename=candidate.get("filename") or "<empty>",
+                    )
+                    for candidate in coverage_candidates[:limit]
+                ),
+            )
 
         duration_ms = round((perf_counter() - started_at) * 1000, 2)
         logger.info(
@@ -1155,6 +1373,7 @@ async def list_documents(
     try:
         client_context = _get_active_client_context()
         limit = max(1, min(limit, 300))
+        document_family = _normalize_document_family_filter(document_family)
         sort_by = (sort_by or "last_modified").strip().lower()
         sort_order = (sort_order or "desc").strip().lower()
         if sort_by not in {"last_modified", "s3_last_modified", "document_date", "size", "filename"}:

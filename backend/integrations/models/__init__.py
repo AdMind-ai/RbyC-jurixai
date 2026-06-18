@@ -200,6 +200,48 @@ class DocumentIndex(models.Model):
     @staticmethod
     def infer_document_date(object_key: str):
         value = object_key or ""
+        italian_months = {
+            "gennaio": 1,
+            "gen": 1,
+            "febbraio": 2,
+            "feb": 2,
+            "marzo": 3,
+            "mar": 3,
+            "aprile": 4,
+            "apr": 4,
+            "maggio": 5,
+            "mag": 5,
+            "giugno": 6,
+            "giu": 6,
+            "luglio": 7,
+            "lug": 7,
+            "agosto": 8,
+            "ago": 8,
+            "settembre": 9,
+            "sett": 9,
+            "set": 9,
+            "ottobre": 10,
+            "ott": 10,
+            "novembre": 11,
+            "nov": 11,
+            "dicembre": 12,
+            "dic": 12,
+        }
+        month_pattern = "|".join(sorted(italian_months, key=len, reverse=True))
+        text_date_match = re.search(
+            rf"(?<!\d)(\d{{1,2}})[\s._/-]+({month_pattern})[\s._/-]+(20\d{{2}})(?!\d)",
+            value,
+            flags=re.IGNORECASE,
+        )
+        if text_date_match:
+            day = int(text_date_match.group(1))
+            month = italian_months[text_date_match.group(2).lower()]
+            year = int(text_date_match.group(3))
+            try:
+                return datetime(year, month, day).date()
+            except ValueError:
+                pass
+
         date_patterns = (
             (lambda groups: f"{groups[0]}{groups[1]}{groups[2]}", "%d%m%Y", r"(?<!\d)(\d{2})(\d{2})(20\d{2})(?!\d)"),
             (lambda groups: f"{groups[0]}-{groups[1]}-{groups[2]}", "%d-%m-%Y", r"(?<!\d)(\d{2})[-_./](\d{2})[-_./](20\d{2})(?!\d)"),
