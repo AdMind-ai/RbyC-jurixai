@@ -6,6 +6,8 @@ import {
   Bot,
   Search,
   ShieldCheck,
+  MessageSquareText,
+  FolderOpen,
   Home,
   ChevronRight,
   ChevronDown,
@@ -23,7 +25,9 @@ const routeMap = {
   home: '/',
   search: '/search',
   draft: '/draft-document',
-  compliance: '/compliance',
+  compliance: '/compliance/chat',
+  'compliance-chat': '/compliance/chat',
+  'compliance-documents': '/compliance/documents',
   'chat-general': '/chat-general',
   accessi: '/accessi',
   usage: '/usage',
@@ -44,6 +48,11 @@ const segreteriaTabs: { key: RouteKey; label: string; Icon: SvgIconComponent }[]
   { key: 'seg-assistant', label: 'Assistente Legale', Icon: Bot },
 ];
 
+const complianceTabs: { key: RouteKey; label: string; Icon: SvgIconComponent }[] = [
+  { key: 'compliance-chat', label: 'Chat', Icon: MessageSquareText },
+  { key: 'compliance-documents', label: 'Documenti', Icon: FolderOpen },
+];
+
 type SidebarProps = {
   onCollapseChange?: (collapsed: boolean) => void;
 };
@@ -62,12 +71,19 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapseChange }) => {
   const location = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isSegreteriaOpen, setIsSegreteriaOpen] = useState(false);
+  const [isComplianceOpen, setIsComplianceOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
   // Open Segreteria if current route matches
   useEffect(() => {
     if (location.pathname.startsWith('/segreteria') || location.pathname.startsWith('/seg-')) {
       setIsSegreteriaOpen(true);
+    }
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (location.pathname.startsWith('/compliance')) {
+      setIsComplianceOpen(true);
     }
   }, [location.pathname]);
 
@@ -86,6 +102,14 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapseChange }) => {
     setIsSegreteriaOpen(!isSegreteriaOpen);
     if (!isSegreteriaOpen && !(location.pathname.startsWith('/segreteria') || location.pathname.startsWith('/seg-'))) {
       navigate(routeMap['seg-dashboard']);
+    }
+  };
+
+  const toggleCompliance = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsComplianceOpen(!isComplianceOpen);
+    if (!isComplianceOpen && !location.pathname.startsWith('/compliance')) {
+      navigate(routeMap['compliance-chat']);
     }
   };
 
@@ -176,17 +200,41 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapseChange }) => {
           <span className={`${isCollapsed ? 'hidden' : 'font-medium text-sm'}`}>Draft Document</span>
         </button>
 
-        <button
-          onClick={() => handleNav('compliance')}
-          title={isCollapsed ? 'Check compliance' : undefined}
-          className={`w-full flex items-center gap-3 ${isCollapsed ? 'justify-center py-3' : 'px-4 py-3'} rounded-lg transition-all duration-200 ${location.pathname === routeMap['compliance']
-            ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
-            : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
-            }`}
-        >
-          <ShieldCheck size={iconSize} />
-          <span className={`${isCollapsed ? 'hidden' : 'font-medium text-sm'}`}>Check compliance</span>
-        </button>
+        <div>
+          <button
+            onClick={toggleCompliance}
+            title={isCollapsed ? 'Check compliance' : undefined}
+            className={`w-full flex items-center ${isCollapsed ? 'justify-center py-3' : 'justify-between px-4 py-3'} rounded-lg transition-all duration-200 ${location.pathname.startsWith('/compliance')
+              ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
+              : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
+              }`}
+          >
+            <div className="flex items-center gap-3">
+              <ShieldCheck size={iconSize} />
+              <span className={`${isCollapsed ? 'hidden' : 'font-medium text-sm'}`}>Check compliance</span>
+            </div>
+            {!isCollapsed && (isComplianceOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />)}
+          </button>
+
+          {isComplianceOpen && (
+            <div className={`${isCollapsed ? 'mt-1 ml-0 space-y-1' : 'mt-1 ml-4 space-y-1 border-l border-blue-700 pl-2'}`}>
+              {complianceTabs.map(tab => (
+                <button
+                  key={tab.key}
+                  title={isCollapsed ? tab.label : undefined}
+                  onClick={() => handleNav(tab.key)}
+                  className={`w-full flex items-center gap-3 ${isCollapsed ? 'justify-center py-3' : 'px-4 py-2'} rounded-lg text-xs transition-all duration-200 ${location.pathname === routeMap[tab.key]
+                    ? 'text-[#4ade80] font-semibold bg-blue-900/50'
+                    : 'text-blue-300 hover:text-white'
+                    }`}
+                >
+                  <tab.Icon size={subIconSize} />
+                  <span className={`${isCollapsed ? 'hidden' : 'text-xs font-medium'}`}>{tab.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         <button
           onClick={() => handleNav('chat-general')}
