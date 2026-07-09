@@ -15,6 +15,12 @@ from .company_document_layout_view import CompanyDocumentLayoutView, CompanyDocu
 from .draft_document.generate_document_view import DraftDocumentView, DraftDocumentFileView
 from .extract_content_view import ExtractContentView
 from .check_compliance_view import CheckComplianceAnalyzeView, CheckComplianceView
+from .check_compliance_documents_view import (
+    CheckComplianceDocumentDeleteView,
+    CheckComplianceDocumentListView,
+    CheckComplianceDocumentRestoreView,
+    CheckComplianceDocumentUploadView,
+)
 from .s3_upload_view import S3UploadView, S3TokenView
 from .segretaria_societaria.deadline_view import DeadlineListCreateView, DeadlineUpdateView
 from .segretaria_societaria.company_view import CompanyListCreateView, CompanyUpdateView, CompanyLetterheadProxyView, GenerateDocumentPDFView
@@ -42,6 +48,10 @@ __all__ = [
     'OpenAIDocumentGeneratorView',
     'CheckComplianceView',
     'CheckComplianceAnalyzeView',
+    'CheckComplianceDocumentDeleteView',
+    'CheckComplianceDocumentListView',
+    'CheckComplianceDocumentRestoreView',
+    'CheckComplianceDocumentUploadView',
     'DeadlineListCreateView',
     'DeadlineUpdateView',
     'CompanyListCreateView',
