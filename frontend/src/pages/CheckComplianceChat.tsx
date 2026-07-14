@@ -1,7 +1,6 @@
-import React, { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bot,
-  FileText,
   History,
   Paperclip,
   Plus,
@@ -10,6 +9,7 @@ import {
   User,
   X,
 } from 'lucide-react';
+import { checkComplianceChatService } from '../services/checkComplianceChatService';
 
 type LocalChatMessage = {
   id: string;
@@ -30,14 +30,6 @@ type SavedConversation = {
 
 const SAVED_CONVERSATIONS_KEY = 'check-compliance-saved-conversations';
 
-const formatFileSize = (bytes: number) => {
-  if (!bytes) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  const value = bytes / Math.pow(1024, index);
-  return `${value.toFixed(value >= 10 || index === 0 ? 0 : 1)} ${units[index]}`;
-};
-
 const initialMessages: LocalChatMessage[] = [
   {
     id: 'welcome',
@@ -54,17 +46,16 @@ const suggestedPrompts = [
 ];
 
 const CheckComplianceChat: React.FC = () => {
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const [messages, setMessages] = useState<LocalChatMessage[]>(initialMessages);
   const [question, setQuestion] = useState('');
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [savedConversations, setSavedConversations] = useState<SavedConversation[]>([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   const canSend = useMemo(() => {
-    return question.trim().length > 0 || selectedFiles.length > 0;
-  }, [question, selectedFiles]);
+    return question.trim().length > 0;
+  }, [question]);
 
   const hasStartedConversation = messages.length > 1;
 
@@ -82,27 +73,18 @@ const CheckComplianceChat: React.FC = () => {
     }
   }, []);
 
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [messages]);
+
   const persistSavedConversations = (items: SavedConversation[]) => {
     setSavedConversations(items);
     localStorage.setItem(SAVED_CONVERSATIONS_KEY, JSON.stringify(items));
   };
 
-  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files ?? []);
-    setSelectedFiles((current) => [...current, ...files]);
-    event.target.value = '';
-  };
-
-  const handleRemoveFile = (indexToRemove: number) => {
-    setSelectedFiles((current) =>
-      current.filter((_, index) => index !== indexToRemove)
-    );
-  };
-
   const handleNewAnalysis = () => {
     setMessages(initialMessages);
     setQuestion('');
-    setSelectedFiles([]);
   };
 
   const handleSaveConversation = () => {
@@ -124,38 +106,68 @@ const CheckComplianceChat: React.FC = () => {
   const handleLoadConversation = (conversation: SavedConversation) => {
     setMessages(conversation.messages);
     setQuestion('');
-    setSelectedFiles([]);
     setIsHistoryOpen(false);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!canSend || isSubmitting) return;
-
-    const filesSnapshot = selectedFiles.map((file) => ({
-      name: file.name,
-      size: file.size,
-    }));
 
     const userMessage: LocalChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
-      content: question.trim() || 'Analisi compliance sui documenti allegati.',
-      files: filesSnapshot,
+      content: question.trim(),
     };
+
+    const userQuestion = userMessage.content;
+    const assistantMessageId = crypto.randomUUID();
 
     setMessages((current) => [
       ...current,
       userMessage,
       {
-        id: crypto.randomUUID(),
+        id: assistantMessageId,
         role: 'assistant',
-        content:
-          'Richiesta ricevuta. L analisi verra elaborata dal servizio Check Compliance.',
+        content: '',
       },
     ]);
     setQuestion('');
-    setSelectedFiles([]);
-    setIsSubmitting(false);
+    setIsSubmitting(true);
+
+    try {
+      const response = await checkComplianceChatService.streamMessage(
+        userQuestion,
+        (delta) => {
+          setMessages((current) =>
+            current.map((message) =>
+              message.id === assistantMessageId
+                ? { ...message, content: `${message.content}${delta}` }
+                : message
+            )
+          );
+        }
+      );
+      if (!response.answer) {
+        setMessages((current) =>
+          current.map((message) =>
+            message.id === assistantMessageId
+              ? { ...message, content: 'Nessuna risposta ricevuta.' }
+              : message
+          )
+        );
+      }
+    } catch (error) {
+      const detail =
+        error instanceof Error
+          ? error.message
+          : 'Non e stato possibile completare la richiesta. Riprova tra poco.';
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === assistantMessageId ? { ...message, content: detail } : message
+        )
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -277,26 +289,9 @@ const CheckComplianceChat: React.FC = () => {
                         : 'border border-slate-200 bg-slate-50 text-slate-700'
                     }`}
                   >
-                    <p className="whitespace-pre-wrap text-sm leading-6">{message.content}</p>
-
-                    {message.files && message.files.length > 0 && (
-                      <div className="mt-3 space-y-2">
-                        {message.files.map((file) => (
-                          <div
-                            key={`${message.id}-${file.name}-${file.size}`}
-                            className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs ${
-                              isUser
-                                ? 'bg-white/10 text-blue-50'
-                                : 'border border-slate-200 bg-white text-slate-600'
-                            }`}
-                          >
-                            <FileText className="h-4 w-4 shrink-0" />
-                            <span className="min-w-0 flex-1 truncate">{file.name}</span>
-                            <span className="shrink-0 opacity-80">{formatFileSize(file.size)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    <p className="whitespace-pre-wrap text-sm leading-6">
+                      {message.content || 'Sto elaborando la richiesta...'}
+                    </p>
                   </div>
 
                   {isUser && (
@@ -307,6 +302,7 @@ const CheckComplianceChat: React.FC = () => {
                 </div>
               );
             })}
+            <div ref={messagesEndRef} />
           </div>
 
           <div
@@ -329,42 +325,12 @@ const CheckComplianceChat: React.FC = () => {
               </div>
             )}
 
-            {selectedFiles.length > 0 && (
-              <div className="mb-3 flex max-h-28 flex-wrap gap-2 overflow-y-auto">
-                {selectedFiles.map((file, index) => (
-                  <div
-                    key={`${file.name}-${file.size}-${index}`}
-                    className="inline-flex max-w-full items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600"
-                  >
-                    <FileText className="h-4 w-4 shrink-0 text-[#1F3A8B]" />
-                    <span className="truncate">{file.name}</span>
-                    <span className="shrink-0 text-slate-400">{formatFileSize(file.size)}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveFile(index)}
-                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-red-50 hover:text-red-600"
-                      title="Rimuovi file"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
             <div className="flex items-end gap-3">
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                onChange={handleFileChange}
-                className="hidden"
-              />
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50"
-                title="Allega documenti"
+                disabled
+                className="inline-flex h-11 w-11 shrink-0 cursor-not-allowed items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-300"
+                title="Allegati disponibili nella prossima fase"
               >
                 <Paperclip className="h-5 w-5" />
               </button>
@@ -384,7 +350,7 @@ const CheckComplianceChat: React.FC = () => {
                 className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-[#1F3A8B] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#172554] disabled:bg-slate-300"
               >
                 <Send className="h-4 w-4" />
-                Invia
+                {isSubmitting ? 'Invio...' : 'Invia'}
               </button>
             </div>
           </div>
