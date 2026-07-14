@@ -55,6 +55,8 @@ urlpatterns = [
            name='perplexity-chat-assistant'),
    
     # Check Compliance
+    path('check-compliance/chat/', CheckComplianceChatView.as_view(),
+         name='check-compliance-chat'),
     path('check-compliance/documents/', CheckComplianceDocumentListView.as_view(),
          name='check-compliance-documents-list'),
     path('check-compliance/documents/upload/', CheckComplianceDocumentUploadView.as_view(),

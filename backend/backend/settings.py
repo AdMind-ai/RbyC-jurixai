@@ -43,6 +43,12 @@ COMPLIANCE_DOCUMENTS_BUCKET_NAME = os.environ.get(
     'COMPLIANCE_DOCUMENTS_BUCKET_NAME',
     'rbyc-compliance-knowledge-prod',
 )
+VERA_API_BASE_URL = os.environ.get('VERA_API_BASE_URL', 'https://vera-api.admind.ai/v1')
+VERA_API_SERVER_KEY = os.environ.get('VERA_API_SERVER_KEY')
+VERA_API_MODEL = os.environ.get('VERA_API_MODEL', 'vera-compliance')
+VERA_DEFAULT_ORGANIZATION_ID = os.environ.get('VERA_DEFAULT_ORGANIZATION_ID')
+VERA_DEFAULT_CLIENT_ID = os.environ.get('VERA_DEFAULT_CLIENT_ID')
+VERA_DEFAULT_MATTER_ID = os.environ.get('VERA_DEFAULT_MATTER_ID')
 
 FUNCTIONALITY_DOCUMENTS_BUCKET_NAME = os.environ.get('FUNCTIONALITY_DOCUMENTS_BUCKET_NAME')
 

@@ -197,6 +197,90 @@ class CheckComplianceDocumentViewTests(TestCase):
 		self.assertIn("outside the allowed prefixes", response.data["detail"])
 
 
+class CheckComplianceChatViewTests(TestCase):
+	def setUp(self):
+		user_model = get_user_model()
+		self.user = user_model.objects.create_user(
+			email="vera-chat@example.com",
+			username="vera-chat",
+			password="secret123",
+		)
+		self.client = APIClient()
+		self.client.force_authenticate(user=self.user)
+
+	@override_settings(
+		VERA_API_BASE_URL="https://vera.example.test/v1",
+		VERA_API_SERVER_KEY="test-key",
+		VERA_API_MODEL="vera-compliance",
+		VERA_DEFAULT_ORGANIZATION_ID="org",
+		VERA_DEFAULT_CLIENT_ID="client",
+		VERA_DEFAULT_MATTER_ID="matter",
+	)
+	@patch("core.views.check_compliance_chat_view.VeraComplianceService")
+	def test_chat_sends_message_to_vera_service(self, mock_service_class):
+		mock_service = Mock()
+		mock_service.send_message.return_value = "API_OK"
+		mock_service_class.return_value = mock_service
+
+		response = self.client.post(
+			"/api/check-compliance/chat/",
+			{"message": "Ola, Vera. Responda API_OK"},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data["answer"], "API_OK")
+		self.assertEqual(response.data["sessionKey"], f"vera:org:client:matter:{self.user.pk}")
+		mock_service.send_message.assert_called_once_with(
+			messages=[
+				{
+					"role": "user",
+					"content": "Ola, Vera. Responda API_OK",
+				}
+			],
+			session_key=f"vera:org:client:matter:{self.user.pk}",
+		)
+
+	@override_settings(VERA_API_BASE_URL="", VERA_API_SERVER_KEY="")
+	def test_chat_returns_configuration_error_when_vera_is_not_configured(self):
+		response = self.client.post(
+			"/api/check-compliance/chat/",
+			{"message": "Teste"},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, 500)
+		self.assertIn("not configured", response.data["detail"])
+
+	@override_settings(
+		VERA_API_BASE_URL="https://vera.example.test/v1",
+		VERA_API_SERVER_KEY="test-key",
+		VERA_API_MODEL="vera-compliance",
+		VERA_DEFAULT_ORGANIZATION_ID="org",
+		VERA_DEFAULT_CLIENT_ID="client",
+		VERA_DEFAULT_MATTER_ID="matter",
+	)
+	@patch("core.views.check_compliance_chat_view.VeraComplianceService")
+	def test_chat_streams_vera_deltas(self, mock_service_class):
+		mock_service = Mock()
+		mock_service.stream_message.return_value = iter(["API", "_OK"])
+		mock_service_class.return_value = mock_service
+
+		response = self.client.post(
+			"/api/check-compliance/chat/",
+			{"message": "Teste stream", "stream": True},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response["Content-Type"], "text/event-stream")
+		body = b"".join(response.streaming_content).decode("utf-8")
+		self.assertIn("event: answer_delta", body)
+		self.assertIn('"delta": "API"', body)
+		self.assertIn('"delta": "_OK"', body)
+		self.assertIn('"answer": "API_OK"', body)
+
+
 class UsageReportServiceMonthTests(TestCase):
 	def setUp(self):
 		user_model = get_user_model()
