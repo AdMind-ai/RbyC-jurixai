@@ -25,7 +25,7 @@ const Home: React.FC = () => {
       title: 'Check compliance',
       icon: ShieldCheck,
       desc: 'Verifica la conformità normativa dei documenti caricati rispetto alle policy interne e GDPR.',
-      action: '/compliance'
+      action: '/compliance/chat'
     },
     {
       id: 'chat',

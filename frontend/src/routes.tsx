@@ -11,7 +11,8 @@ import DocumentGenerator from './components/SegreteriaSocietaria/DocumentGenerat
 import Chat from './pages/Chat'
 import DocSearch from './pages/DocSearch'
 import TeamManagement from './pages/TeamManagement'
-import CheckCompliance from './pages/CheckCompliance'
+import CheckComplianceChat from './pages/CheckComplianceChat'
+import CheckComplianceDocuments from './pages/CheckComplianceDocuments'
 import AIAssistant from './components/SegreteriaSocietaria/AIAssistant'
 import { DraftDocument } from './pages/DraftDocument'
 import Usage from './pages/Usage'
@@ -34,7 +35,9 @@ const AppRoutes = () => {
           {/* Tools Routes */}
           <Route path="/search" element={<DocSearch />} />
           <Route path="/draft-document" element={<DraftDocument />} />
-          <Route path="/compliance" element={<CheckCompliance />} />
+          <Route path="/compliance" element={<Navigate to="/compliance/chat" replace />} />
+          <Route path="/compliance/chat" element={<CheckComplianceChat />} />
+          <Route path="/compliance/documents" element={<CheckComplianceDocuments />} />
           <Route path="/chat-general" element={<Chat />} />
 
           {/* Access Routes */}
