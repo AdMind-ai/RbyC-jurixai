@@ -43,6 +43,18 @@ COMPLIANCE_DOCUMENTS_BUCKET_NAME = os.environ.get(
     'COMPLIANCE_DOCUMENTS_BUCKET_NAME',
     'rbyc-compliance-knowledge-prod',
 )
+COMPLIANCE_DOCUMENTS_BUCKET_REGION = os.environ.get(
+    'COMPLIANCE_DOCUMENTS_BUCKET_REGION',
+    'eu-central-1',
+)
+COMPLIANCE_CHAT_BUCKET_NAME = os.environ.get('COMPLIANCE_CHAT_BUCKET_NAME')
+COMPLIANCE_CHAT_UPLOAD_PREFIX = os.environ.get(
+    'COMPLIANCE_CHAT_UPLOAD_PREFIX',
+    'documents/chat-uploads/',
+)
+COMPLIANCE_CHAT_MAX_UPLOAD_SIZE = int(
+    os.environ.get('COMPLIANCE_CHAT_MAX_UPLOAD_SIZE', str(200 * 1024 * 1024))
+)
 VERA_API_BASE_URL = os.environ.get('VERA_API_BASE_URL', 'https://vera-api.admind.ai/v1')
 VERA_API_SERVER_KEY = os.environ.get('VERA_API_SERVER_KEY')
 VERA_API_MODEL = os.environ.get('VERA_API_MODEL', 'vera-compliance')

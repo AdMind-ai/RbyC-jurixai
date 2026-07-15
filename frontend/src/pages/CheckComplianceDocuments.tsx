@@ -1,6 +1,8 @@
 import React, { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArchiveRestore,
+  AlertTriangle,
+  Download,
   File as FileIcon,
   FileArchive,
   FileCode,
@@ -10,6 +12,7 @@ import {
   FileType,
   FileUp,
   FolderOpen,
+  MoreVertical,
   Presentation,
   RefreshCw,
   Search,
@@ -149,6 +152,9 @@ const CheckComplianceDocuments: React.FC = () => {
   const [customFolderName, setCustomFolderName] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [documentToDelete, setDocumentToDelete] = useState<ComplianceDocument | null>(null);
+  const [deleteConfirmationStep, setDeleteConfirmationStep] = useState(1);
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
+  const [openActionKey, setOpenActionKey] = useState<string | null>(null);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -246,17 +252,45 @@ const CheckComplianceDocuments: React.FC = () => {
     }
   };
 
-  const handleMoveToTrash = async () => {
+  const closeDeleteModal = () => {
+    setDocumentToDelete(null);
+    setDeleteConfirmationStep(1);
+    setDeleteConfirmationText('');
+  };
+
+  const handleDownload = async (document: ComplianceDocument) => {
+    setActionLoading(`download:${document.key}`);
+    setOpenActionKey(null);
+    setError(null);
+    try {
+      const { url } = await checkComplianceDocumentsService.getDownloadUrl(document.key);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Errore durante il download del documento.';
+      setError(message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const openDeleteModal = (document: ComplianceDocument) => {
+    setOpenActionKey(null);
+    setDocumentToDelete(document);
+    setDeleteConfirmationStep(1);
+    setDeleteConfirmationText('');
+  };
+
+  const handlePermanentDelete = async () => {
     if (!documentToDelete) return;
     const document = documentToDelete;
     setActionLoading(document.key);
     setError(null);
     try {
-      await checkComplianceDocumentsService.moveToTrash(document.key);
-      setDocumentToDelete(null);
+      await checkComplianceDocumentsService.permanentlyDeleteDocument(document.key);
+      closeDeleteModal();
       await loadDocuments();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Errore durante la rimozione del documento.';
+      const message = err instanceof Error ? err.message : 'Errore durante eliminazione del documento.';
       setError(message);
     } finally {
       setActionLoading(null);
@@ -421,25 +455,53 @@ const CheckComplianceDocuments: React.FC = () => {
                             </p>
                           </td>
                           <td className="px-3 py-3">
-                            <div className="flex justify-center">
-                              {activeView === 'documents' ? (
-                                <button
-                                  onClick={() => setDocumentToDelete(document)}
-                                  disabled={actionLoading === document.key}
-                                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
-                                  title="Sposta nel cestino"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={() => handleRestore(document)}
-                                  disabled={actionLoading === document.key}
-                                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-[#1F3A8B] transition-colors hover:bg-blue-50 disabled:opacity-50"
-                                  title="Ripristina"
-                                >
-                                  <ArchiveRestore className="h-4 w-4" />
-                                </button>
+                            <div className="relative flex justify-center">
+                              <button
+                                onClick={() =>
+                                  setOpenActionKey((current) =>
+                                    current === document.key ? null : document.key
+                                  )
+                                }
+                                disabled={actionLoading === document.key}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+                                title="Azioni"
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </button>
+
+                              {openActionKey === document.key && (
+                                <div className="absolute right-4 top-10 z-30 w-40 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-left shadow-lg">
+                                  <button
+                                    onClick={() => handleDownload(document)}
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                                  >
+                                    <Download className="h-4 w-4" />
+                                    Scarica
+                                  </button>
+
+                                  {activeView === 'trash' && (
+                                    <button
+                                      onClick={() => {
+                                        setOpenActionKey(null);
+                                        handleRestore(document);
+                                      }}
+                                      disabled={actionLoading === document.key}
+                                      className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium text-[#1F3A8B] transition-colors hover:bg-blue-50 disabled:opacity-50"
+                                    >
+                                      <ArchiveRestore className="h-4 w-4" />
+                                      Ripristina
+                                    </button>
+                                  )}
+
+                                  <button
+                                    onClick={() => openDeleteModal(document)}
+                                    disabled={actionLoading === document.key}
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                    Elimina
+                                  </button>
+                                </div>
                               )}
                             </div>
                           </td>
@@ -613,13 +675,33 @@ const CheckComplianceDocuments: React.FC = () => {
           <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
             <div className="mb-4 flex items-start gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-50 text-red-600">
-                <Trash2 className="h-5 w-5" />
+                <AlertTriangle className="h-5 w-5" />
               </div>
               <div className="min-w-0">
-                <h2 className="text-lg font-bold text-slate-900">Spostare nel cestino?</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-500">
-                  Il documento verra rimosso da documents/ e potra essere ripristinato dal cestino.
-                </p>
+                <h2 className="text-lg font-bold text-slate-900">Eliminare definitivamente?</h2>
+                {deleteConfirmationStep === 1 && (
+                  <p className="mt-2 text-sm leading-6 text-slate-500">
+                    Questa azione eliminera il documento da S3. L'operazione e irreversibile.
+                  </p>
+                )}
+                {deleteConfirmationStep === 2 && (
+                  <p className="mt-2 text-sm leading-6 text-slate-500">
+                    Conferma ancora: il documento non verra spostato nel cestino e non potra essere recuperato dalla schermata.
+                  </p>
+                )}
+                {deleteConfirmationStep === 3 && (
+                  <div className="mt-2">
+                    <p className="text-sm leading-6 text-slate-500">
+                      Per completare, scrivi <span className="font-bold text-red-600">ELIMINA</span>.
+                    </p>
+                    <input
+                      value={deleteConfirmationText}
+                      onChange={(event) => setDeleteConfirmationText(event.target.value)}
+                      placeholder="ELIMINA"
+                      className="mt-3 w-full rounded-lg border border-red-100 px-3 py-2 text-sm font-semibold text-slate-700 outline-none transition-colors focus:border-red-500"
+                    />
+                  </div>
+                )}
                 <p className="mt-3 truncate rounded-lg bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">
                   {documentToDelete.name}
                 </p>
@@ -627,19 +709,32 @@ const CheckComplianceDocuments: React.FC = () => {
             </div>
             <div className="mt-6 flex justify-end gap-3">
               <button
-                onClick={() => setDocumentToDelete(null)}
+                onClick={closeDeleteModal}
                 disabled={actionLoading === documentToDelete.key}
                 className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-60"
               >
                 Annulla
               </button>
-              <button
-                onClick={handleMoveToTrash}
-                disabled={actionLoading === documentToDelete.key}
-                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:bg-slate-300"
-              >
-                {actionLoading === documentToDelete.key ? 'Spostamento...' : 'Sposta nel cestino'}
-              </button>
+              {deleteConfirmationStep < 3 ? (
+                <button
+                  onClick={() => setDeleteConfirmationStep((step) => step + 1)}
+                  disabled={actionLoading === documentToDelete.key}
+                  className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:bg-slate-300"
+                >
+                  Conferma
+                </button>
+              ) : (
+                <button
+                  onClick={handlePermanentDelete}
+                  disabled={
+                    actionLoading === documentToDelete.key
+                    || deleteConfirmationText.trim() !== 'ELIMINA'
+                  }
+                  className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:bg-slate-300"
+                >
+                  {actionLoading === documentToDelete.key ? 'Eliminazione...' : 'Elimina definitivamente'}
+                </button>
+              )}
             </div>
           </div>
         </div>
