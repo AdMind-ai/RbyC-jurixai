@@ -57,6 +57,19 @@ export const checkComplianceDocumentsService = {
     return data;
   },
 
+  async getDownloadUrl(key: string) {
+    const { data } = await api.post<{ url: string; expiresIn: number }>(
+      '/check-compliance/documents/download/',
+      { key }
+    );
+    return data;
+  },
+
+  async permanentlyDeleteDocument(key: string) {
+    const { data } = await api.post('/check-compliance/documents/permanent-delete/', { key });
+    return data;
+  },
+
   async restoreDocument(key: string) {
     const { data } = await api.post('/check-compliance/documents/restore/', { key });
     return data;

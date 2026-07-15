@@ -53,7 +53,7 @@ def _s3_client():
         "s3",
         aws_access_key_id=getattr(settings, "AWS_ACCESS_KEY_ID", None),
         aws_secret_access_key=getattr(settings, "AWS_SECRET_ACCESS_KEY", None),
-        region_name=getattr(settings, "AWS_S3_REGION_NAME", None),
+        region_name=getattr(settings, "COMPLIANCE_DOCUMENTS_BUCKET_REGION", None),
     )
 
 
@@ -239,6 +239,78 @@ class CheckComplianceDocumentDeleteView(APIView):
 
     def post(self, request):
         return _move_document_to_trash(request)
+
+
+class CheckComplianceDocumentDownloadView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        bucket = _bucket_name()
+        if not bucket:
+            return Response(
+                {"detail": "Compliance documents bucket is not configured."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        try:
+            key = _validate_key(
+                request.data.get("key"),
+                [DOCUMENTS_PREFIX, TRASH_DOCUMENTS_PREFIX],
+            )
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        s3 = _s3_client()
+        try:
+            url = s3.generate_presigned_url(
+                "get_object",
+                Params={
+                    "Bucket": bucket,
+                    "Key": key,
+                    "ResponseContentDisposition": (
+                        f'attachment; filename="{PurePosixPath(key).name}"'
+                    ),
+                },
+                ExpiresIn=300,
+            )
+        except ClientError as exc:
+            return Response(
+                {"detail": "Error generating document download URL.", "error": str(exc)},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response({"url": url, "expiresIn": 300})
+
+
+class CheckComplianceDocumentPermanentDeleteView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        bucket = _bucket_name()
+        if not bucket:
+            return Response(
+                {"detail": "Compliance documents bucket is not configured."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        try:
+            key = _validate_key(
+                request.data.get("key"),
+                [DOCUMENTS_PREFIX, TRASH_DOCUMENTS_PREFIX],
+            )
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        s3 = _s3_client()
+        try:
+            s3.delete_object(Bucket=bucket, Key=key)
+        except ClientError as exc:
+            return Response(
+                {"detail": "Error permanently deleting compliance document.", "error": str(exc)},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        return Response({"key": key, "status": "permanently_deleted"})
 
 
 class CheckComplianceDocumentRestoreView(APIView):
