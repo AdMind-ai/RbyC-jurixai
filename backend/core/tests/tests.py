@@ -9,6 +9,7 @@ from unittest.mock import Mock, patch
 from rest_framework.test import APIClient
 
 from core.models.usage import UsageRecord, UsageTool
+from core.models import CheckComplianceConversation
 from core.services.document_retrieval.intent_classifier import (
 	INTENT_CROSS_DOCUMENT_COVERAGE,
 	INTENT_ORGANIZATIONAL_STRUCTURE_YEAR_COMPARISON,
@@ -316,6 +317,43 @@ class CheckComplianceChatViewTests(TestCase):
 			response.data["sessionKey"],
 			f"vera:org:client:check-compliance-session-123:{self.user.pk}",
 		)
+
+	def test_can_save_check_compliance_session_with_vera_session_id(self):
+		response = self.client.post(
+			"/api/check-compliance/chat/conversations/",
+			{
+				"title": "Analisi GDPR",
+				"vera_session_id": "vera-session-123",
+				"messages": [
+					{
+						"role": "user",
+						"content": "Analizza il documento",
+						"files": [{"name": "doc.pdf", "size": 100}],
+						"documents": [
+							{
+								"bucket": "rbyc-compliance-chat",
+								"s3_key": "documents/chat-uploads/1/session/doc.pdf",
+								"filename": "doc.pdf",
+								"content_type": "application/pdf",
+								"size": 100,
+							}
+						],
+					},
+					{
+						"role": "assistant",
+						"content": "Analisi completata",
+					},
+				],
+			},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, 201)
+		self.assertEqual(response.data["vera_session_id"], "vera-session-123")
+		conversation = CheckComplianceConversation.objects.get(id=response.data["id"])
+		self.assertEqual(conversation.vera_session_id, "vera-session-123")
+		self.assertEqual(conversation.messages.count(), 2)
+		self.assertEqual(conversation.attachments.count(), 1)
 
 	@override_settings(
 		VERA_API_BASE_URL="https://vera.example.test/v1",
