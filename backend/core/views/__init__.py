@@ -18,6 +18,8 @@ from .check_compliance_view import CheckComplianceAnalyzeView, CheckComplianceVi
 from .check_compliance_chat_view import (
     CheckComplianceChatAttachmentUploadView,
     CheckComplianceChatView,
+    CheckComplianceConversationDetailView,
+    CheckComplianceConversationListCreateView,
 )
 from .check_compliance_documents_view import (
     CheckComplianceDocumentDeleteView,
@@ -56,6 +58,8 @@ __all__ = [
     'CheckComplianceAnalyzeView',
     'CheckComplianceChatAttachmentUploadView',
     'CheckComplianceChatView',
+    'CheckComplianceConversationDetailView',
+    'CheckComplianceConversationListCreateView',
     'CheckComplianceDocumentDeleteView',
     'CheckComplianceDocumentDownloadView',
     'CheckComplianceDocumentListView',
