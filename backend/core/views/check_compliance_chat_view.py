@@ -8,10 +8,16 @@ from botocore.exceptions import ClientError
 from django.conf import settings
 from django.http import StreamingHttpResponse
 from rest_framework import permissions, serializers, status
+from rest_framework.generics import get_object_or_404
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.models import (
+    CheckComplianceAttachment,
+    CheckComplianceConversation,
+    CheckComplianceMessage,
+)
 from core.services.vera_compliance_service import (
     VeraComplianceConfigurationError,
     VeraComplianceService,
@@ -62,6 +68,41 @@ class VeraSessionContextSerializer(serializers.Serializer):
     client_id = serializers.CharField(required=False, allow_blank=True)
     matter_id = serializers.CharField(required=False, allow_blank=True)
     user_id = serializers.CharField(required=False, allow_blank=True)
+
+
+class CheckComplianceChatDocumentReferenceSerializer(serializers.Serializer):
+    bucket = serializers.CharField()
+    s3_key = serializers.CharField()
+    filename = serializers.CharField()
+    content_type = serializers.CharField(required=False, allow_blank=True)
+    size = serializers.IntegerField(required=False, min_value=0)
+    version_id = serializers.CharField(required=False, allow_blank=True)
+
+
+class CheckComplianceStoredMessageSerializer(serializers.Serializer):
+    role = serializers.ChoiceField(choices=["user", "assistant"])
+    content = serializers.CharField(required=False, allow_blank=True)
+    files = serializers.ListField(
+        child=serializers.DictField(),
+        required=False,
+        allow_empty=True,
+    )
+    documents = serializers.ListField(
+        child=CheckComplianceChatDocumentReferenceSerializer(),
+        required=False,
+        allow_empty=True,
+    )
+
+
+class CheckComplianceConversationSaveSerializer(serializers.Serializer):
+    conversation_id = serializers.UUIDField(required=False)
+    title = serializers.CharField(max_length=255)
+    vera_session_id = serializers.CharField(max_length=128)
+    messages = serializers.ListField(
+        child=CheckComplianceStoredMessageSerializer(),
+        required=True,
+        allow_empty=True,
+    )
 
 
 class CheckComplianceChatInputSerializer(serializers.Serializer):
@@ -154,12 +195,137 @@ def _build_vera_content(message, documents):
     return json.dumps(payload, ensure_ascii=False)
 
 
+def _conversation_summary(conversation):
+    return {
+        "id": str(conversation.id),
+        "title": conversation.title,
+        "vera_session_id": conversation.vera_session_id,
+        "created_at": conversation.created_at,
+        "updated_at": conversation.updated_at,
+    }
+
+
+def _message_payload(message):
+    provider_payload = message.provider_payload or {}
+    return {
+        "id": str(message.id),
+        "role": message.role,
+        "content": message.content,
+        "files": provider_payload.get("files") or [],
+        "documents": provider_payload.get("documents") or [],
+        "created_at": message.created_at,
+    }
+
+
+def _replace_conversation_messages(conversation, messages):
+    conversation.messages.all().delete()
+    for item in messages:
+        files = item.get("files") or []
+        documents = item.get("documents") or []
+        message = CheckComplianceMessage.objects.create(
+            conversation=conversation,
+            role=item["role"],
+            content=item.get("content", ""),
+            provider_payload={
+                "files": files,
+                "documents": documents,
+            },
+        )
+        CheckComplianceAttachment.objects.bulk_create(
+            [
+                CheckComplianceAttachment(
+                    conversation=conversation,
+                    message=message,
+                    bucket=document["bucket"],
+                    s3_key=document["s3_key"],
+                    filename=document["filename"],
+                    content_type=document.get("content_type", ""),
+                    size=document.get("size") or 0,
+                    version_id=document.get("version_id") or None,
+                )
+                for document in documents
+            ]
+        )
+
+
 def _session_context_with_chat_session(session_context, session_id):
     context = dict(session_context or {})
     if session_id and not context.get("matter_id"):
         safe_session_id = str(session_id).replace("\\", "-").replace("/", "-").strip()
         context["matter_id"] = f"check-compliance-{safe_session_id}"
     return context
+
+
+class CheckComplianceConversationListCreateView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        conversations = CheckComplianceConversation.objects.filter(
+            user=request.user,
+            is_saved=True,
+        ).order_by("-updated_at")
+        return Response([_conversation_summary(conversation) for conversation in conversations])
+
+    def post(self, request):
+        serializer = CheckComplianceConversationSaveSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        conversation_id = data.get("conversation_id")
+        if conversation_id:
+            conversation = get_object_or_404(
+                CheckComplianceConversation,
+                id=conversation_id,
+                user=request.user,
+            )
+            created = False
+        else:
+            conversation = CheckComplianceConversation(
+                user=request.user,
+                vera_session_id=data["vera_session_id"],
+            )
+            created = True
+
+        conversation.title = data["title"]
+        conversation.vera_session_id = data["vera_session_id"]
+        conversation.is_saved = True
+        conversation.save()
+        _replace_conversation_messages(conversation, data["messages"])
+
+        return Response(
+            _conversation_summary(conversation),
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+
+class CheckComplianceConversationDetailView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, conversation_id):
+        conversation = get_object_or_404(
+            CheckComplianceConversation,
+            id=conversation_id,
+            user=request.user,
+            is_saved=True,
+        )
+        return Response(
+            {
+                **_conversation_summary(conversation),
+                "messages": [
+                    _message_payload(message)
+                    for message in conversation.messages.order_by("created_at")
+                ],
+            }
+        )
+
+    def delete(self, request, conversation_id):
+        conversation = get_object_or_404(
+            CheckComplianceConversation,
+            id=conversation_id,
+            user=request.user,
+        )
+        conversation.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class CheckComplianceChatView(APIView):
