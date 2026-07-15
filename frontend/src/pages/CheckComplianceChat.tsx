@@ -39,12 +39,6 @@ const initialMessages: LocalChatMessage[] = [
   },
 ];
 
-const suggestedPrompts = [
-  'Analizza questo contratto rispetto alla normativa AML.',
-  'Verifica eventuali criticita rispetto al GDPR.',
-  'Controlla la conformita del documento per una SGR.',
-];
-
 const CheckComplianceChat: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const [messages, setMessages] = useState<LocalChatMessage[]>(initialMessages);
@@ -286,11 +280,11 @@ const CheckComplianceChat: React.FC = () => {
                     } ${
                       isUser
                         ? 'bg-[#1F3A8B] text-white'
-                        : 'border border-slate-200 bg-slate-50 text-slate-700'
+                        : 'border border-slate-200 bg-slate-50 text-slate-800'
                     }`}
                   >
-                    <p className="whitespace-pre-wrap text-sm leading-6">
-                      {message.content || 'Sto elaborando la richiesta...'}
+                    <p className="whitespace-pre-wrap text-[15px] leading-7">
+                      {message.content || 'Scrivendo...'}
                     </p>
                   </div>
 
@@ -310,21 +304,6 @@ const CheckComplianceChat: React.FC = () => {
               messages.length === 1 ? '' : 'border-t border-slate-200'
             }`}
           >
-            {messages.length === 1 && (
-              <div className="mx-auto mb-10 flex max-w-4xl flex-wrap justify-center gap-4">
-                {suggestedPrompts.map((prompt) => (
-                  <button
-                    key={prompt}
-                    type="button"
-                    onClick={() => setQuestion(prompt)}
-                    className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:border-[#1F3A8B] hover:bg-white hover:text-[#1F3A8B]"
-                  >
-                    {prompt}
-                  </button>
-                ))}
-              </div>
-            )}
-
             <div className="flex items-end gap-3">
               <button
                 type="button"
@@ -340,7 +319,7 @@ const CheckComplianceChat: React.FC = () => {
                 onChange={(event) => setQuestion(event.target.value)}
                 placeholder="Scrivi la richiesta di analisi compliance..."
                 rows={1}
-                className="max-h-32 min-h-11 flex-1 resize-none rounded-lg border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition-colors focus:border-[#1F3A8B]"
+                className="max-h-32 min-h-11 flex-1 resize-none rounded-lg border border-slate-200 px-4 py-3 text-[15px] leading-6 text-slate-800 outline-none transition-colors focus:border-[#1F3A8B]"
               />
 
               <button

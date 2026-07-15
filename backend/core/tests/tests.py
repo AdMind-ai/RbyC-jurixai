@@ -196,6 +196,53 @@ class CheckComplianceDocumentViewTests(TestCase):
 		self.assertEqual(response.status_code, 400)
 		self.assertIn("outside the allowed prefixes", response.data["detail"])
 
+	@override_settings(COMPLIANCE_DOCUMENTS_BUCKET_NAME="test-compliance-bucket")
+	@patch("core.views.check_compliance_documents_view._s3_client")
+	def test_download_returns_presigned_url_for_document(self, mock_s3_client):
+		mock_s3 = Mock()
+		mock_s3.generate_presigned_url.return_value = "https://signed-url.test/document"
+		mock_s3_client.return_value = mock_s3
+
+		response = self.client.post(
+			"/api/check-compliance/documents/download/",
+			{"key": "documents/regulatory/eba/test.pdf"},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data["url"], "https://signed-url.test/document")
+		mock_s3.generate_presigned_url.assert_called_once()
+
+	@override_settings(COMPLIANCE_DOCUMENTS_BUCKET_NAME="test-compliance-bucket")
+	@patch("core.views.check_compliance_documents_view._s3_client")
+	def test_permanent_delete_deletes_allowed_document_key(self, mock_s3_client):
+		mock_s3 = Mock()
+		mock_s3_client.return_value = mock_s3
+
+		response = self.client.post(
+			"/api/check-compliance/documents/permanent-delete/",
+			{"key": "documents/regulatory/eba/test.pdf"},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data["status"], "permanently_deleted")
+		mock_s3.delete_object.assert_called_once_with(
+			Bucket="test-compliance-bucket",
+			Key="documents/regulatory/eba/test.pdf",
+		)
+
+	@override_settings(COMPLIANCE_DOCUMENTS_BUCKET_NAME="test-compliance-bucket")
+	def test_permanent_delete_rejects_key_outside_allowed_prefixes(self):
+		response = self.client.post(
+			"/api/check-compliance/documents/permanent-delete/",
+			{"key": "raw/client-excels/source.xlsx"},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, 400)
+		self.assertIn("outside the allowed prefixes", response.data["detail"])
+
 
 class CheckComplianceChatViewTests(TestCase):
 	def setUp(self):
