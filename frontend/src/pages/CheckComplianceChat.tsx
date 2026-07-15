@@ -16,6 +16,11 @@ import {
   CheckComplianceChatDocumentReference,
   checkComplianceChatService,
 } from '../services/checkComplianceChatService';
+import {
+  checkComplianceConversationService,
+  CheckComplianceConversationSummary,
+  CheckComplianceStoredMessage,
+} from '../services/checkComplianceConversationService';
 
 type LocalChatMessage = {
   id: string;
@@ -30,11 +35,9 @@ type LocalChatMessage = {
 type SavedConversation = {
   id: string;
   title: string;
-  createdAt: string;
-  messages: LocalChatMessage[];
+  updatedAt: string;
+  sessionId: string | null;
 };
-
-const SAVED_CONVERSATIONS_KEY = 'check-compliance-saved-conversations';
 
 const formatFileSize = (bytes: number) => {
   if (!bytes) return '0 B';
@@ -53,9 +56,34 @@ const initialMessages: LocalChatMessage[] = [
   },
 ];
 
+const mapMessagesToStoredPayload = (items: LocalChatMessage[]): CheckComplianceStoredMessage[] =>
+  items
+    .filter((message) => message.id !== 'welcome')
+    .map((message) => ({
+      role: message.role,
+      content: message.content,
+      ...(message.files && message.files.length > 0 ? { files: message.files } : {}),
+    }));
+
+const mapSessionSummary = (session: CheckComplianceConversationSummary): SavedConversation => ({
+  id: session.id,
+  title: session.title,
+  updatedAt: session.updated_at,
+  sessionId: session.vera_session_id,
+});
+
 const MarkdownMessage: React.FC<{ content: string; isUser: boolean }> = ({ content, isUser }) => {
   if (!content) {
-    return <div className="text-[15px] leading-7">Scrivendo...</div>;
+    return (
+      <div className="flex items-center gap-2 text-[15px] leading-7 text-slate-500">
+        <span>Scrivendo</span>
+        <span className="flex items-center gap-1 pt-1">
+          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.2s]" />
+          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.1s]" />
+          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400" />
+        </span>
+      </div>
+    );
   }
 
   const linkClassName = isUser
@@ -143,13 +171,18 @@ const MarkdownMessage: React.FC<{ content: string; isUser: boolean }> = ({ conte
 const CheckComplianceChat: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [messages, setMessages] = useState<LocalChatMessage[]>(initialMessages);
   const [question, setQuestion] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [savedConversations, setSavedConversations] = useState<SavedConversation[]>([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [sessionId, setSessionId] = useState(() => crypto.randomUUID());
+  const [sessionId, setSessionId] = useState<string>(() => crypto.randomUUID());
+  const [storedSessionId, setStoredSessionId] = useState<string | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [conversationToDelete, setConversationToDelete] = useState<SavedConversation | null>(null);
 
   const canSend = useMemo(() => {
     return question.trim().length > 0 || selectedFiles.length > 0;
@@ -157,28 +190,34 @@ const CheckComplianceChat: React.FC = () => {
 
   const hasStartedConversation = messages.length > 1;
 
-  useEffect(() => {
-    const stored = localStorage.getItem(SAVED_CONVERSATIONS_KEY);
-    if (!stored) return;
-
+  const loadSavedConversations = async () => {
+    setHistoryLoading(true);
     try {
-      const parsed = JSON.parse(stored) as SavedConversation[];
-      if (Array.isArray(parsed)) {
-        setSavedConversations(parsed);
-      }
-    } catch {
+      const sessions = await checkComplianceConversationService.listConversations();
+      setSavedConversations(sessions.map(mapSessionSummary));
+    } catch (error) {
+      console.error('Errore nel caricamento delle conversazioni Check Compliance:', error);
       setSavedConversations([]);
+    } finally {
+      setHistoryLoading(false);
     }
+  };
+
+  useEffect(() => {
+    void loadSavedConversations();
   }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [messages]);
 
-  const persistSavedConversations = (items: SavedConversation[]) => {
-    setSavedConversations(items);
-    localStorage.setItem(SAVED_CONVERSATIONS_KEY, JSON.stringify(items));
-  };
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    textarea.style.height = '44px';
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 160)}px`;
+  }, [question]);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
@@ -197,34 +236,98 @@ const CheckComplianceChat: React.FC = () => {
     setQuestion('');
     setSelectedFiles([]);
     setSessionId(crypto.randomUUID());
+    setStoredSessionId(null);
   };
 
-  const handleSaveConversation = () => {
+  const handleSaveConversation = async () => {
     if (!hasStartedConversation) return;
 
     const firstUserMessage = messages.find((message) => message.role === 'user');
     const title = firstUserMessage?.content.slice(0, 72) || 'Analisi compliance';
-    const conversation: SavedConversation = {
-      id: crypto.randomUUID(),
-      title,
-      createdAt: new Date().toISOString(),
-      messages,
-    };
+    setSaveLoading(true);
+    try {
+      const savedSession = await checkComplianceConversationService.saveConversation({
+        title,
+        vera_session_id: sessionId,
+        conversation_id: storedSessionId ?? undefined,
+        messages: mapMessagesToStoredPayload(messages),
+      });
 
-    persistSavedConversations([conversation, ...savedConversations]);
-    setIsHistoryOpen(true);
+      setStoredSessionId(savedSession.id);
+      await loadSavedConversations();
+      setIsHistoryOpen(true);
+    } catch (error) {
+      console.error('Errore nel salvataggio della conversazione Check Compliance:', error);
+    } finally {
+      setSaveLoading(false);
+    }
   };
 
-  const handleLoadConversation = (conversation: SavedConversation) => {
-    setMessages(conversation.messages);
-    setQuestion('');
-    setSelectedFiles([]);
-    setIsHistoryOpen(false);
+  const handleLoadConversation = async (conversation: SavedConversation) => {
+    try {
+      const session = await checkComplianceConversationService.getConversation(conversation.id);
+      const restoredMessages: LocalChatMessage[] = session.messages
+        .filter((message) => message.role === 'user' || message.role === 'assistant')
+        .map((message) => ({
+          id: crypto.randomUUID(),
+          role: message.role as 'user' | 'assistant',
+          content: message.content,
+          files: message.files,
+        }));
+
+      setMessages(restoredMessages.length > 0 ? [initialMessages[0], ...restoredMessages] : initialMessages);
+      setSessionId(session.vera_session_id || conversation.sessionId || crypto.randomUUID());
+      setStoredSessionId(session.id);
+      setQuestion('');
+      setSelectedFiles([]);
+      setIsHistoryOpen(false);
+    } catch (error) {
+      console.error('Errore nel caricamento della conversazione Check Compliance:', error);
+    }
+  };
+
+  const handleDeleteConversation = async (conversation: SavedConversation) => {
+    try {
+      await checkComplianceConversationService.deleteConversation(conversation.id);
+      setSavedConversations((current) =>
+        current.filter((item) => item.id !== conversation.id)
+      );
+      if (storedSessionId === conversation.id) {
+        handleNewAnalysis();
+      }
+    } catch (error) {
+      console.error('Errore durante eliminazione della conversazione Check Compliance:', error);
+    }
+  };
+
+  const handleConfirmDeleteConversation = async () => {
+    if (!conversationToDelete) return;
+    await handleDeleteConversation(conversationToDelete);
+    setConversationToDelete(null);
+  };
+
+  const updateStoredConversation = async (nextMessages: LocalChatMessage[]) => {
+    if (!storedSessionId) return;
+
+    const firstUserMessage = nextMessages.find((message) => message.role === 'user');
+    const title = firstUserMessage?.content.slice(0, 72) || 'Analisi compliance';
+    try {
+      await checkComplianceConversationService.saveConversation({
+        title,
+        vera_session_id: sessionId,
+        conversation_id: storedSessionId,
+        messages: mapMessagesToStoredPayload(nextMessages),
+      });
+      await loadSavedConversations();
+    } catch (error) {
+      console.error('Errore nell aggiornamento automatico della conversazione:', error);
+    }
   };
 
   const handleSubmit = async () => {
     if (!canSend || isSubmitting) return;
 
+    const previousMessages = messages;
     const filesSnapshot = selectedFiles.map((file) => ({
       name: file.name,
       size: file.size,
@@ -279,24 +382,46 @@ const CheckComplianceChat: React.FC = () => {
         }
       );
       if (!response.answer) {
+        const fallbackAssistantMessage: LocalChatMessage = {
+          id: assistantMessageId,
+          role: 'assistant',
+          content: 'Nessuna risposta ricevuta.',
+        };
         setMessages((current) =>
           current.map((message) =>
             message.id === assistantMessageId
-              ? { ...message, content: 'Nessuna risposta ricevuta.' }
+              ? fallbackAssistantMessage
               : message
           )
         );
+        await updateStoredConversation([...previousMessages, userMessage, fallbackAssistantMessage]);
+      } else {
+        await updateStoredConversation([
+          ...previousMessages,
+          userMessage,
+          {
+            id: assistantMessageId,
+            role: 'assistant',
+            content: response.answer,
+          },
+        ]);
       }
     } catch (error) {
       const detail =
         error instanceof Error
           ? error.message
           : 'Non e stato possibile completare la richiesta. Riprova tra poco.';
+      const errorAssistantMessage: LocalChatMessage = {
+        id: assistantMessageId,
+        role: 'assistant',
+        content: detail,
+      };
       setMessages((current) =>
         current.map((message) =>
-          message.id === assistantMessageId ? { ...message, content: detail } : message
+          message.id === assistantMessageId ? errorAssistantMessage : message
         )
       );
+      await updateStoredConversation([...previousMessages, userMessage, errorAssistantMessage]);
     } finally {
       setIsSubmitting(false);
     }
@@ -316,7 +441,10 @@ const CheckComplianceChat: React.FC = () => {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => setIsHistoryOpen(true)}
+              onClick={() => {
+                setIsHistoryOpen(true);
+                void loadSavedConversations();
+              }}
               className="inline-flex w-fit items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-[#172554] shadow-sm transition-colors hover:bg-slate-50"
             >
               <History className="h-4 w-4" />
@@ -325,11 +453,11 @@ const CheckComplianceChat: React.FC = () => {
             <button
               type="button"
               onClick={handleSaveConversation}
-              disabled={!hasStartedConversation}
+              disabled={!hasStartedConversation || saveLoading}
               className="inline-flex w-fit items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-[#172554] shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
             >
               <Save className="h-4 w-4" />
-              Salva
+              {saveLoading ? 'Salvataggio...' : 'Salva'}
             </button>
             <button
               type="button"
@@ -365,25 +493,41 @@ const CheckComplianceChat: React.FC = () => {
               </div>
 
               <div className="max-h-80 space-y-2 overflow-y-auto">
-                {savedConversations.length === 0 ? (
+                {historyLoading ? (
+                  <div className="rounded-lg border border-dashed border-slate-200 px-4 py-5 text-center text-sm text-slate-500">
+                    Caricamento conversazioni...
+                  </div>
+                ) : savedConversations.length === 0 ? (
                   <div className="rounded-lg border border-dashed border-slate-200 px-4 py-5 text-center text-sm text-slate-500">
                     Nessuna conversazione salvata.
                   </div>
                 ) : (
                   savedConversations.map((conversation) => (
-                    <button
+                    <div
                       key={conversation.id}
-                      type="button"
-                      onClick={() => handleLoadConversation(conversation)}
-                      className="w-full rounded-lg border border-slate-200 px-3 py-3 text-left transition-colors hover:border-[#1F3A8B] hover:bg-slate-50"
+                      className="flex items-start gap-2 rounded-lg border border-slate-200 px-3 py-3 transition-colors hover:border-[#1F3A8B] hover:bg-slate-50"
                     >
-                      <div className="truncate text-sm font-semibold text-slate-800">
-                        {conversation.title}
-                      </div>
-                      <div className="mt-1 text-xs text-slate-400">
-                        {new Date(conversation.createdAt).toLocaleString('it-IT')}
-                      </div>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => handleLoadConversation(conversation)}
+                        className="min-w-0 flex-1 text-left"
+                      >
+                        <div className="truncate text-sm font-semibold text-slate-800">
+                          {conversation.title}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-400">
+                          {new Date(conversation.updatedAt).toLocaleString('it-IT')}
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConversationToDelete(conversation)}
+                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                        title="Elimina conversazione"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
                   ))
                 )}
               </div>
@@ -501,11 +645,12 @@ const CheckComplianceChat: React.FC = () => {
               </button>
 
               <textarea
+                ref={textareaRef}
                 value={question}
                 onChange={(event) => setQuestion(event.target.value)}
                 placeholder="Scrivi la richiesta di analisi compliance..."
                 rows={1}
-                className="max-h-32 min-h-11 flex-1 resize-none rounded-lg border border-slate-200 px-4 py-3 text-[15px] leading-6 text-slate-800 outline-none transition-colors focus:border-[#1F3A8B]"
+                className="max-h-40 min-h-11 flex-1 resize-none overflow-y-auto rounded-lg border border-slate-200 px-4 py-3 text-[15px] leading-6 text-slate-800 outline-none transition-colors focus:border-[#1F3A8B]"
               />
 
               <button
@@ -521,6 +666,39 @@ const CheckComplianceChat: React.FC = () => {
           </div>
         </section>
       </div>
+
+      {conversationToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+            <div className="mb-5">
+              <h2 className="text-lg font-bold text-slate-900">Eliminare conversazione?</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-500">
+                La conversazione salvata verra eliminata definitivamente dalla lista.
+              </p>
+              <p className="mt-3 truncate rounded-lg bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">
+                {conversationToDelete.title}
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setConversationToDelete(null)}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50"
+              >
+                Annulla
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteConversation}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700"
+              >
+                Elimina
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
