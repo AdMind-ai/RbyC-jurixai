@@ -1,6 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import {
   Bot,
+  FileText,
   History,
   Paperclip,
   Plus,
@@ -9,7 +12,10 @@ import {
   User,
   X,
 } from 'lucide-react';
-import { checkComplianceChatService } from '../services/checkComplianceChatService';
+import {
+  CheckComplianceChatDocumentReference,
+  checkComplianceChatService,
+} from '../services/checkComplianceChatService';
 
 type LocalChatMessage = {
   id: string;
@@ -30,6 +36,14 @@ type SavedConversation = {
 
 const SAVED_CONVERSATIONS_KEY = 'check-compliance-saved-conversations';
 
+const formatFileSize = (bytes: number) => {
+  if (!bytes) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const value = bytes / Math.pow(1024, index);
+  return `${value.toFixed(value >= 10 || index === 0 ? 0 : 1)} ${units[index]}`;
+};
+
 const initialMessages: LocalChatMessage[] = [
   {
     id: 'welcome',
@@ -39,17 +53,107 @@ const initialMessages: LocalChatMessage[] = [
   },
 ];
 
+const MarkdownMessage: React.FC<{ content: string; isUser: boolean }> = ({ content, isUser }) => {
+  if (!content) {
+    return <div className="text-[15px] leading-7">Scrivendo...</div>;
+  }
+
+  const linkClassName = isUser
+    ? 'font-semibold text-white underline decoration-white/50 underline-offset-2'
+    : 'font-semibold text-[#1F3A8B] underline decoration-[#1F3A8B]/30 underline-offset-2';
+  const codeClassName = isUser
+    ? 'rounded bg-white/15 px-1.5 py-0.5 font-mono text-[13px] text-white'
+    : 'rounded bg-slate-200 px-1.5 py-0.5 font-mono text-[13px] text-slate-900';
+
+  return (
+    <div className="max-w-none text-[15px] leading-7">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          p: ({ children }) => <p className="my-2 first:mt-0 last:mb-0">{children}</p>,
+          strong: ({ children }) => <strong className="font-bold">{children}</strong>,
+          em: ({ children }) => <em className="italic">{children}</em>,
+          ul: ({ children }) => <ul className="my-2 list-disc space-y-1 pl-5">{children}</ul>,
+          ol: ({ children }) => <ol className="my-2 list-decimal space-y-1 pl-5">{children}</ol>,
+          li: ({ children }) => <li className="pl-1">{children}</li>,
+          a: ({ children, href }) => (
+            <a
+              href={href}
+              target="_blank"
+              rel="noreferrer"
+              className={linkClassName}
+            >
+              {children}
+            </a>
+          ),
+          code: ({ children }) => <code className={codeClassName}>{children}</code>,
+          pre: ({ children }) => (
+            <pre
+              className={`my-3 overflow-x-auto rounded-lg p-3 text-sm ${
+                isUser
+                  ? 'bg-white/15 text-white'
+                  : 'border border-slate-200 bg-white text-slate-900'
+              }`}
+            >
+              {children}
+            </pre>
+          ),
+          blockquote: ({ children }) => (
+            <blockquote
+              className={`my-3 border-l-4 pl-3 ${
+                isUser ? 'border-white/40 text-blue-50' : 'border-slate-300 text-slate-700'
+              }`}
+            >
+              {children}
+            </blockquote>
+          ),
+          table: ({ children }) => (
+            <div className="my-3 overflow-x-auto">
+              <table
+                className={`min-w-full border-collapse text-left text-sm ${
+                  isUser ? 'border-white/20' : 'border-slate-200'
+                }`}
+              >
+                {children}
+              </table>
+            </div>
+          ),
+          th: ({ children }) => (
+            <th
+              className={`border px-3 py-2 font-bold ${
+                isUser ? 'border-white/20 bg-white/10' : 'border-slate-200 bg-slate-100'
+              }`}
+            >
+              {children}
+            </th>
+          ),
+          td: ({ children }) => (
+            <td className={`border px-3 py-2 ${isUser ? 'border-white/20' : 'border-slate-200'}`}>
+              {children}
+            </td>
+          ),
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
+  );
+};
+
 const CheckComplianceChat: React.FC = () => {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const [messages, setMessages] = useState<LocalChatMessage[]>(initialMessages);
   const [question, setQuestion] = useState('');
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [savedConversations, setSavedConversations] = useState<SavedConversation[]>([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [sessionId, setSessionId] = useState(() => crypto.randomUUID());
 
   const canSend = useMemo(() => {
-    return question.trim().length > 0;
-  }, [question]);
+    return question.trim().length > 0 || selectedFiles.length > 0;
+  }, [question, selectedFiles]);
 
   const hasStartedConversation = messages.length > 1;
 
@@ -76,9 +180,23 @@ const CheckComplianceChat: React.FC = () => {
     localStorage.setItem(SAVED_CONVERSATIONS_KEY, JSON.stringify(items));
   };
 
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    setSelectedFiles((current) => [...current, ...files]);
+    event.target.value = '';
+  };
+
+  const handleRemoveFile = (indexToRemove: number) => {
+    setSelectedFiles((current) =>
+      current.filter((_, index) => index !== indexToRemove)
+    );
+  };
+
   const handleNewAnalysis = () => {
     setMessages(initialMessages);
     setQuestion('');
+    setSelectedFiles([]);
+    setSessionId(crypto.randomUUID());
   };
 
   const handleSaveConversation = () => {
@@ -100,20 +218,28 @@ const CheckComplianceChat: React.FC = () => {
   const handleLoadConversation = (conversation: SavedConversation) => {
     setMessages(conversation.messages);
     setQuestion('');
+    setSelectedFiles([]);
     setIsHistoryOpen(false);
   };
 
   const handleSubmit = async () => {
     if (!canSend || isSubmitting) return;
 
+    const filesSnapshot = selectedFiles.map((file) => ({
+      name: file.name,
+      size: file.size,
+    }));
+    const userQuestion = question.trim() || 'Analizza i documenti allegati.';
+
     const userMessage: LocalChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
-      content: question.trim(),
+      content: userQuestion,
+      files: filesSnapshot,
     };
 
-    const userQuestion = userMessage.content;
     const assistantMessageId = crypto.randomUUID();
+    const filesToUpload = [...selectedFiles];
 
     setMessages((current) => [
       ...current,
@@ -125,11 +251,23 @@ const CheckComplianceChat: React.FC = () => {
       },
     ]);
     setQuestion('');
+    setSelectedFiles([]);
     setIsSubmitting(true);
 
     try {
+      let documentReferences: CheckComplianceChatDocumentReference[] = [];
+      if (filesToUpload.length > 0) {
+        const uploadResponse = await checkComplianceChatService.uploadAttachments(
+          filesToUpload,
+          sessionId
+        );
+        documentReferences = uploadResponse.documents;
+      }
+
       const response = await checkComplianceChatService.streamMessage(
         userQuestion,
+        sessionId,
+        documentReferences,
         (delta) => {
           setMessages((current) =>
             current.map((message) =>
@@ -283,9 +421,26 @@ const CheckComplianceChat: React.FC = () => {
                         : 'border border-slate-200 bg-slate-50 text-slate-800'
                     }`}
                   >
-                    <p className="whitespace-pre-wrap text-[15px] leading-7">
-                      {message.content || 'Scrivendo...'}
-                    </p>
+                    <MarkdownMessage content={message.content} isUser={isUser} />
+
+                    {message.files && message.files.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        {message.files.map((file) => (
+                          <div
+                            key={`${message.id}-${file.name}-${file.size}`}
+                            className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs ${
+                              isUser
+                                ? 'bg-white/10 text-blue-50'
+                                : 'border border-slate-200 bg-white text-slate-600'
+                            }`}
+                          >
+                            <FileText className="h-4 w-4 shrink-0" />
+                            <span className="min-w-0 flex-1 truncate">{file.name}</span>
+                            <span className="shrink-0 opacity-80">{formatFileSize(file.size)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {isUser && (
@@ -304,12 +459,43 @@ const CheckComplianceChat: React.FC = () => {
               messages.length === 1 ? '' : 'border-t border-slate-200'
             }`}
           >
+            {selectedFiles.length > 0 && (
+              <div className="mb-3 flex max-h-28 flex-wrap gap-2 overflow-y-auto">
+                {selectedFiles.map((file, index) => (
+                  <div
+                    key={`${file.name}-${file.size}-${index}`}
+                    className="inline-flex max-w-full items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600"
+                  >
+                    <FileText className="h-4 w-4 shrink-0 text-[#1F3A8B]" />
+                    <span className="truncate">{file.name}</span>
+                    <span className="shrink-0 text-slate-400">{formatFileSize(file.size)}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveFile(index)}
+                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-red-50 hover:text-red-600"
+                      title="Rimuovi file"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="flex items-end gap-3">
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                onChange={handleFileChange}
+                className="hidden"
+              />
               <button
                 type="button"
-                disabled
-                className="inline-flex h-11 w-11 shrink-0 cursor-not-allowed items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-300"
-                title="Allegati disponibili nella prossima fase"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isSubmitting}
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-300"
+                title="Allega documenti"
               >
                 <Paperclip className="h-5 w-5" />
               </button>
