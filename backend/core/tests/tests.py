@@ -3,6 +3,7 @@ from django.test import override_settings
 from django.test import TestCase
 from django.utils import timezone
 from datetime import datetime
+import json
 from unittest.mock import Mock, patch
 
 from rest_framework.test import APIClient
@@ -196,6 +197,53 @@ class CheckComplianceDocumentViewTests(TestCase):
 		self.assertEqual(response.status_code, 400)
 		self.assertIn("outside the allowed prefixes", response.data["detail"])
 
+	@override_settings(COMPLIANCE_DOCUMENTS_BUCKET_NAME="test-compliance-bucket")
+	@patch("core.views.check_compliance_documents_view._s3_client")
+	def test_download_returns_presigned_url_for_document(self, mock_s3_client):
+		mock_s3 = Mock()
+		mock_s3.generate_presigned_url.return_value = "https://signed-url.test/document"
+		mock_s3_client.return_value = mock_s3
+
+		response = self.client.post(
+			"/api/check-compliance/documents/download/",
+			{"key": "documents/regulatory/eba/test.pdf"},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data["url"], "https://signed-url.test/document")
+		mock_s3.generate_presigned_url.assert_called_once()
+
+	@override_settings(COMPLIANCE_DOCUMENTS_BUCKET_NAME="test-compliance-bucket")
+	@patch("core.views.check_compliance_documents_view._s3_client")
+	def test_permanent_delete_deletes_allowed_document_key(self, mock_s3_client):
+		mock_s3 = Mock()
+		mock_s3_client.return_value = mock_s3
+
+		response = self.client.post(
+			"/api/check-compliance/documents/permanent-delete/",
+			{"key": "documents/regulatory/eba/test.pdf"},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data["status"], "permanently_deleted")
+		mock_s3.delete_object.assert_called_once_with(
+			Bucket="test-compliance-bucket",
+			Key="documents/regulatory/eba/test.pdf",
+		)
+
+	@override_settings(COMPLIANCE_DOCUMENTS_BUCKET_NAME="test-compliance-bucket")
+	def test_permanent_delete_rejects_key_outside_allowed_prefixes(self):
+		response = self.client.post(
+			"/api/check-compliance/documents/permanent-delete/",
+			{"key": "raw/client-excels/source.xlsx"},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, 400)
+		self.assertIn("outside the allowed prefixes", response.data["detail"])
+
 
 class CheckComplianceChatViewTests(TestCase):
 	def setUp(self):
@@ -241,6 +289,67 @@ class CheckComplianceChatViewTests(TestCase):
 			session_key=f"vera:org:client:matter:{self.user.pk}",
 		)
 
+	@override_settings(
+		VERA_API_BASE_URL="https://vera.example.test/v1",
+		VERA_API_SERVER_KEY="test-key",
+		VERA_API_MODEL="vera-compliance",
+		VERA_DEFAULT_ORGANIZATION_ID="org",
+		VERA_DEFAULT_CLIENT_ID="client",
+	)
+	@patch("core.views.check_compliance_chat_view.VeraComplianceService")
+	def test_chat_uses_session_id_as_provisional_matter_id(self, mock_service_class):
+		mock_service = Mock()
+		mock_service.send_message.return_value = "OK"
+		mock_service_class.return_value = mock_service
+
+		response = self.client.post(
+			"/api/check-compliance/chat/",
+			{
+				"message": "Teste",
+				"session_id": "session-123",
+			},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(
+			response.data["sessionKey"],
+			f"vera:org:client:check-compliance-session-123:{self.user.pk}",
+		)
+
+	@override_settings(
+		VERA_API_BASE_URL="https://vera.example.test/v1",
+		VERA_API_SERVER_KEY="test-key",
+		VERA_API_MODEL="vera-compliance",
+		VERA_DEFAULT_ORGANIZATION_ID="org",
+		VERA_DEFAULT_CLIENT_ID="client",
+		VERA_DEFAULT_MATTER_ID="matter",
+	)
+	@patch("core.views.check_compliance_chat_view.VeraComplianceService")
+	def test_chat_sends_document_references_as_text_payload(self, mock_service_class):
+		mock_service = Mock()
+		mock_service.send_message.return_value = "OK"
+		mock_service_class.return_value = mock_service
+		document = {
+			"bucket": "rbyc-compliance-chat",
+			"s3_key": "documents/chat-uploads/1/session/file.pdf",
+			"filename": "file.pdf",
+			"content_type": "application/pdf",
+			"size": 10,
+		}
+
+		response = self.client.post(
+			"/api/check-compliance/chat/",
+			{"message": "Analizza", "documents": [document]},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, 200)
+		request_payload = mock_service.send_message.call_args.kwargs["messages"][0]["content"]
+		parsed_payload = json.loads(request_payload)
+		self.assertEqual(parsed_payload["question"], "Analizza")
+		self.assertEqual(parsed_payload["documents"], [document])
+
 	@override_settings(VERA_API_BASE_URL="", VERA_API_SERVER_KEY="")
 	def test_chat_returns_configuration_error_when_vera_is_not_configured(self):
 		response = self.client.post(
@@ -279,6 +388,46 @@ class CheckComplianceChatViewTests(TestCase):
 		self.assertIn('"delta": "API"', body)
 		self.assertIn('"delta": "_OK"', body)
 		self.assertIn('"answer": "API_OK"', body)
+
+	@override_settings(
+		COMPLIANCE_CHAT_BUCKET_NAME="test-chat-bucket",
+		COMPLIANCE_CHAT_UPLOAD_PREFIX="documents/chat-uploads/",
+	)
+	@patch("core.views.check_compliance_chat_view._s3_client")
+	def test_chat_attachment_upload_returns_s3_references(self, mock_s3_client):
+		from django.core.files.uploadedfile import SimpleUploadedFile
+
+		mock_s3 = Mock()
+		mock_s3.put_object.return_value = {"VersionId": "v1"}
+		mock_s3_client.return_value = mock_s3
+		file_obj = SimpleUploadedFile(
+			"contract.pdf",
+			b"content",
+			content_type="application/pdf",
+		)
+
+		response = self.client.post(
+			"/api/check-compliance/chat/attachments/",
+			{
+				"session_id": "session-1",
+				"file": file_obj,
+			},
+			format="multipart",
+		)
+
+		self.assertEqual(response.status_code, 201)
+		self.assertEqual(response.data["sessionId"], "session-1")
+		document = response.data["documents"][0]
+		self.assertEqual(document["bucket"], "test-chat-bucket")
+		self.assertEqual(document["filename"], "contract.pdf")
+		self.assertEqual(document["content_type"], "application/pdf")
+		self.assertEqual(document["version_id"], "v1")
+		self.assertTrue(
+			document["s3_key"].startswith(
+				f"documents/chat-uploads/{self.user.pk}/session-1/"
+			)
+		)
+		mock_s3.put_object.assert_called_once()
 
 
 class UsageReportServiceMonthTests(TestCase):
