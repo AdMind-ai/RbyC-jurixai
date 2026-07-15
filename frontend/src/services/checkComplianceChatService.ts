@@ -6,22 +6,38 @@ export interface CheckComplianceChatResponse {
   sessionKey: string;
 }
 
+export interface CheckComplianceChatDocumentReference {
+  bucket: string;
+  s3_key: string;
+  filename: string;
+  content_type: string;
+  size?: number;
+  version_id?: string;
+}
+
+export interface CheckComplianceChatAttachmentUploadResponse {
+  sessionId: string;
+  documents: CheckComplianceChatDocumentReference[];
+}
+
 export const checkComplianceChatService = {
-  async sendMessage(message: string) {
+  async sendMessage(message: string, sessionId?: string) {
     const { data } = await api.post<CheckComplianceChatResponse>(
       '/check-compliance/chat/',
-      { message }
+      { message, session_id: sessionId }
     );
     return data;
   },
 
   async streamMessage(
     message: string,
+    sessionId: string,
+    documents: CheckComplianceChatDocumentReference[],
     onDelta: (delta: string) => void
   ): Promise<CheckComplianceChatResponse> {
     const response = await fetchWithAuth('/check-compliance/chat/', {
       method: 'POST',
-      body: JSON.stringify({ message, stream: true }),
+      body: JSON.stringify({ message, session_id: sessionId, documents, stream: true }),
     });
 
     if (!response?.ok) {
@@ -80,5 +96,20 @@ export const checkComplianceChatService = {
     }
 
     return { answer, sessionKey };
+  },
+
+  async uploadAttachments(files: File[], sessionId: string) {
+    const formData = new FormData();
+    formData.append('session_id', sessionId);
+    files.forEach((file) => {
+      formData.append('file', file);
+    });
+
+    const { data } = await api.post<CheckComplianceChatAttachmentUploadResponse>(
+      '/check-compliance/chat/attachments/',
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return data;
   },
 };
