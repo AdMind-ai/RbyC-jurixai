@@ -10,8 +10,6 @@ from rest_framework.views import APIView
 
 
 DOCUMENTS_PREFIX = "documents/"
-TRASH_PREFIX = "trash/"
-TRASH_DOCUMENTS_PREFIX = "trash/documents/"
 
 ALLOWED_EXTENSIONS = {
     ".csv",
@@ -134,12 +132,7 @@ class CheckComplianceDocumentListView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        include_trash = str(request.query_params.get("trash", "false")).lower() in {
-            "1",
-            "true",
-            "yes",
-        }
-        prefix = TRASH_DOCUMENTS_PREFIX if include_trash else DOCUMENTS_PREFIX
+        prefix = DOCUMENTS_PREFIX
         s3 = _s3_client()
 
         try:
@@ -162,7 +155,6 @@ class CheckComplianceDocumentListView(APIView):
             {
                 "bucket": bucket,
                 "prefix": prefix,
-                "trash": include_trash,
                 "documents": documents,
             }
         )
@@ -238,7 +230,7 @@ class CheckComplianceDocumentDeleteView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        return _move_document_to_trash(request)
+        return _permanently_delete_document(request)
 
 
 class CheckComplianceDocumentDownloadView(APIView):
@@ -255,7 +247,7 @@ class CheckComplianceDocumentDownloadView(APIView):
         try:
             key = _validate_key(
                 request.data.get("key"),
-                [DOCUMENTS_PREFIX, TRASH_DOCUMENTS_PREFIX],
+                [DOCUMENTS_PREFIX],
             )
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
@@ -286,41 +278,20 @@ class CheckComplianceDocumentPermanentDeleteView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        bucket = _bucket_name()
-        if not bucket:
-            return Response(
-                {"detail": "Compliance documents bucket is not configured."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-
-        try:
-            key = _validate_key(
-                request.data.get("key"),
-                [DOCUMENTS_PREFIX, TRASH_DOCUMENTS_PREFIX],
-            )
-        except ValueError as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-
-        s3 = _s3_client()
-        try:
-            s3.delete_object(Bucket=bucket, Key=key)
-        except ClientError as exc:
-            return Response(
-                {"detail": "Error permanently deleting compliance document.", "error": str(exc)},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
-
-        return Response({"key": key, "status": "permanently_deleted"})
+        return _permanently_delete_document(request)
 
 
 class CheckComplianceDocumentRestoreView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        return _restore_document_from_trash(request)
+        return Response(
+            {"detail": "Compliance documents trash flow is disabled."},
+            status=status.HTTP_410_GONE,
+        )
 
 
-def _move_document_to_trash(request):
+def _permanently_delete_document(request):
     bucket = _bucket_name()
     if not bucket:
         return Response(
@@ -329,68 +300,17 @@ def _move_document_to_trash(request):
         )
 
     try:
-        source_key = _validate_key(request.data.get("key"), [DOCUMENTS_PREFIX])
+        key = _validate_key(request.data.get("key"), [DOCUMENTS_PREFIX])
     except ValueError as exc:
         return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-    destination_key = f"{TRASH_PREFIX}{source_key}"
     s3 = _s3_client()
     try:
-        s3.copy_object(
-            Bucket=bucket,
-            CopySource={"Bucket": bucket, "Key": source_key},
-            Key=destination_key,
-            MetadataDirective="COPY",
-        )
-        s3.delete_object(Bucket=bucket, Key=source_key)
+        s3.delete_object(Bucket=bucket, Key=key)
     except ClientError as exc:
         return Response(
-            {"detail": "Error moving document to trash.", "error": str(exc)},
+            {"detail": "Error permanently deleting compliance document.", "error": str(exc)},
             status=status.HTTP_502_BAD_GATEWAY,
         )
 
-    return Response(
-        {
-            "key": source_key,
-            "trashKey": destination_key,
-            "status": "moved_to_trash",
-        }
-    )
-
-
-def _restore_document_from_trash(request):
-    bucket = _bucket_name()
-    if not bucket:
-        return Response(
-            {"detail": "Compliance documents bucket is not configured."},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
-
-    try:
-        trash_key = _validate_key(request.data.get("key"), [TRASH_DOCUMENTS_PREFIX])
-    except ValueError as exc:
-        return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-
-    destination_key = trash_key[len(TRASH_PREFIX) :]
-    s3 = _s3_client()
-    try:
-        s3.copy_object(
-            Bucket=bucket,
-            CopySource={"Bucket": bucket, "Key": trash_key},
-            Key=destination_key,
-            MetadataDirective="COPY",
-        )
-        s3.delete_object(Bucket=bucket, Key=trash_key)
-    except ClientError as exc:
-        return Response(
-            {"detail": "Error restoring compliance document.", "error": str(exc)},
-            status=status.HTTP_502_BAD_GATEWAY,
-        )
-
-    return Response(
-        {
-            "key": destination_key,
-            "trashKey": trash_key,
-            "status": "restored",
-        }
-    )
+    return Response({"key": key, "status": "permanently_deleted"})

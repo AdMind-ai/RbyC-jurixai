@@ -34,7 +34,7 @@ A Vera nao recebe arquivos binarios diretamente pela API. Quando o usuario anexa
   - Faz upload de documentos para `documents/`.
   - Permite download por URL assinada.
   - Permite exclusao definitiva mediante confirmacao.
-  - Permite visualizar e restaurar documentos no `trash/`.
+  - Monta os filtros de cartella automaticamente a partir das pastas retornadas pelo S3.
 
 - `frontend/src/services/checkComplianceChatService.ts`
   - Chama a API de chat.
@@ -61,8 +61,8 @@ A Vera nao recebe arquivos binarios diretamente pela API. Quando o usuario anexa
 
 - `backend/core/services/vera_compliance_service.py`
   - Cliente da Vera API.
-  - Usa API compativel com OpenAI SDK apontando para `VERA_API_BASE_URL`.
-  - Suporta chamada normal e streaming.
+  - Usa a API assincrona de Runs da Vera (`/v1/runs`).
+  - Cria runs, acompanha eventos SSE e faz polling no fluxo nao-stream.
 
 - `backend/core/models/check_compliance_chat_models.py`
   - Models dedicados para Check Compliance:
@@ -90,7 +90,6 @@ Prefixos relevantes:
 
 ```text
 documents/
-trash/documents/
 ```
 
 Observacoes:
@@ -143,11 +142,14 @@ VERA_API_MODEL=vera-compliance
 VERA_API_TIMEOUT_SECONDS=900
 VERA_API_MAX_RETRIES=2
 VERA_API_RETRY_BACKOFF_SECONDS=2
-VERA_API_STREAM_KEEPALIVE_SECONDS=15
+VERA_API_STREAM_KEEPALIVE_SECONDS=60
+VERA_RUN_POLL_INTERVAL_SECONDS=2
 VERA_DEFAULT_ORGANIZATION_ID=<opcional>
 VERA_DEFAULT_CLIENT_ID=<opcional>
 VERA_DEFAULT_MATTER_ID=<opcional>
 ```
+
+Observacao: `VERA_API_MODEL` permanece por compatibilidade de configuracao, mas o fluxo atual da chat usa `/v1/runs`, onde o modelo e definido pelo proprio servico Vera.
 
 ### S3 base normativa
 
@@ -181,10 +183,15 @@ Atencao: `AWS_S3_REGION_NAME` e usado no fluxo de uploads da chat. O gerenciamen
 ### 1. Usuario envia mensagem sem anexos
 
 1. Frontend chama `POST /api/check-compliance/chat/`.
-2. Backend monta a `X-Hermes-Session-Key`.
-3. Backend chama Vera.
-4. Resposta retorna por streaming SSE.
-5. Frontend renderiza o texto em Markdown.
+2. Backend monta a chave de sessao Vera no formato `vera:<organization_id>:<client_id>:<matter_id>:<user_id>`.
+3. Backend cria um run na Vera via `POST /v1/runs`, enviando:
+   - `input`: mensagem do usuario;
+   - `session_id`: chave de sessao Vera;
+   - `conversation_history`, se houver mensagens anteriores no payload interno.
+4. Backend acompanha o run via `GET /v1/runs/{run_id}/events`.
+5. Eventos `message.delta` da Vera sao repassados ao frontend como `answer_delta`.
+6. Evento `run.completed` e repassado ao frontend como `answer_completed`.
+7. Frontend renderiza o texto em Markdown.
 
 Para evitar timeout por conexao ociosa durante analises longas, o backend envia eventos de keepalive enquanto aguarda novos tokens da Vera:
 
@@ -194,6 +201,8 @@ data: {"type": "answer_keepalive", "message": "Vera sta ancora analizzando la ri
 ```
 
 O keepalive e gerado pelo proprio backend. A Vera nao precisa emitir nenhum marcador especial de progresso.
+
+Se o endpoint nao-stream for usado, o backend tambem cria um run e consulta `GET /v1/runs/{run_id}` a cada `VERA_RUN_POLL_INTERVAL_SECONDS` ate chegar a um estado final.
 
 ### 2. Usuario envia mensagem com anexos
 
@@ -246,6 +255,8 @@ check-compliance-{session_id}
 ```
 
 Isso permite isolar e retomar contexto entre mensagens.
+
+No fluxo atual de `/v1/runs`, essa mesma chave e enviada no campo `session_id` do run. O header antigo foi mantido apenas como referencia historica do contrato inicial.
 
 Quando uma conversa e salva, o `sessionId` e persistido como:
 
@@ -300,17 +311,15 @@ POST /api/check-compliance/documents/upload/
 POST /api/check-compliance/documents/download/
 POST /api/check-compliance/documents/delete/
 POST /api/check-compliance/documents/permanent-delete/
-POST /api/check-compliance/documents/restore/
 ```
 
 Comportamento importante:
 
 - listagem padrao considera `documents/`;
-- lixeira usa `trash/documents/`;
 - upload precisa estar dentro de `documents/`;
 - download retorna URL assinada com validade de 300 segundos;
 - exclusao definitiva remove o objeto do S3;
-- mover para trash copia o objeto para `trash/` e remove o original.
+- a tela monta os filtros de cartella com base nas pastas dos documentos encontrados em `documents/`, incluindo novas pastas criadas automaticamente pela Vera.
 
 ## Renderizacao da resposta
 

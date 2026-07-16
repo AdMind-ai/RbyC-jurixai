@@ -12,29 +12,13 @@ export interface ComplianceDocument {
 export interface ComplianceDocumentListResponse {
   bucket: string;
   prefix: string;
-  trash: boolean;
   documents: ComplianceDocument[];
 }
 
-export const complianceDocumentFolders = [
-  'documents/regulatory/banca-ditalia/',
-  'documents/regulatory/consob/',
-  'documents/regulatory/eur-lex/',
-  'documents/regulatory/normattiva-gazzetta/',
-  'documents/regulatory/esma/',
-  'documents/regulatory/eba/',
-  'documents/regulatory/ivass/',
-  'documents/regulatory/assogestioni/',
-  'documents/regulatory/fonte-da-definire/',
-] as const;
-
-export type ComplianceDocumentFolder = typeof complianceDocumentFolders[number];
-
 export const checkComplianceDocumentsService = {
-  async listDocuments(trash = false) {
+  async listDocuments() {
     const { data } = await api.get<ComplianceDocumentListResponse>(
-      '/check-compliance/documents/',
-      { params: { trash } }
+      '/check-compliance/documents/'
     );
     return data;
   },
@@ -52,11 +36,6 @@ export const checkComplianceDocumentsService = {
     return data;
   },
 
-  async moveToTrash(key: string) {
-    const { data } = await api.post('/check-compliance/documents/delete/', { key });
-    return data;
-  },
-
   async getDownloadUrl(key: string) {
     const { data } = await api.post<{ url: string; expiresIn: number }>(
       '/check-compliance/documents/download/',
@@ -67,11 +46,6 @@ export const checkComplianceDocumentsService = {
 
   async permanentlyDeleteDocument(key: string) {
     const { data } = await api.post('/check-compliance/documents/permanent-delete/', { key });
-    return data;
-  },
-
-  async restoreDocument(key: string) {
-    const { data } = await api.post('/check-compliance/documents/restore/', { key });
     return data;
   },
 };
