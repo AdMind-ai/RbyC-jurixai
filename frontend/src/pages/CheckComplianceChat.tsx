@@ -26,6 +26,7 @@ type LocalChatMessage = {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  responseBlocks?: string[];
   isStreaming?: boolean;
   files?: {
     name: string;
@@ -48,6 +49,8 @@ const formatFileSize = (bytes: number) => {
   return `${value.toFixed(value >= 10 || index === 0 ? 0 : 1)} ${units[index]}`;
 };
 
+const STREAM_RESPONSE_BLOCK_GAP_MS = 15000;
+
 const initialMessages: LocalChatMessage[] = [
   {
     id: 'welcome',
@@ -63,6 +66,9 @@ const mapMessagesToStoredPayload = (items: LocalChatMessage[]): CheckComplianceS
     .map((message) => ({
       role: message.role,
       content: message.content,
+      ...(message.responseBlocks && message.responseBlocks.length > 0
+        ? { response_blocks: message.responseBlocks }
+        : {}),
       ...(message.files && message.files.length > 0 ? { files: message.files } : {}),
     }));
 
@@ -84,7 +90,29 @@ const TypingIndicator: React.FC = () => (
   </div>
 );
 
-const MarkdownMessage: React.FC<{ content: string; isUser: boolean; isStreaming?: boolean }> = ({
+const reconcileResponseBlocks = (blocks: string[] | undefined, answer: string) => {
+  if (!answer) return blocks;
+  if (!blocks || blocks.length === 0) return [answer];
+
+  const joinedBlocks = blocks.join('');
+  if (joinedBlocks === answer) return blocks;
+  if (answer.startsWith(joinedBlocks)) {
+    const remainingAnswer = answer.slice(joinedBlocks.length);
+    if (!remainingAnswer) return blocks;
+    return [
+      ...blocks.slice(0, -1),
+      `${blocks[blocks.length - 1]}${remainingAnswer}`,
+    ];
+  }
+
+  return [answer];
+};
+
+const MarkdownMessage: React.FC<{
+  content: string;
+  isUser: boolean;
+  isStreaming?: boolean;
+}> = ({
   content,
   isUser,
   isStreaming,
@@ -184,6 +212,7 @@ const CheckComplianceChat: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const lastAssistantDeltaAtRef = useRef<number | null>(null);
   const [messages, setMessages] = useState<LocalChatMessage[]>(initialMessages);
   const [question, setQuestion] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -284,6 +313,7 @@ const CheckComplianceChat: React.FC = () => {
           id: crypto.randomUUID(),
           role: message.role as 'user' | 'assistant',
           content: message.content,
+          responseBlocks: message.response_blocks,
           files: message.files,
         }));
 
@@ -355,6 +385,7 @@ const CheckComplianceChat: React.FC = () => {
 
     const assistantMessageId = crypto.randomUUID();
     const filesToUpload = [...selectedFiles];
+    lastAssistantDeltaAtRef.current = null;
 
     setMessages((current) => [
       ...current,
@@ -385,11 +416,33 @@ const CheckComplianceChat: React.FC = () => {
         sessionId,
         documentReferences,
         (delta) => {
+          const now = Date.now();
+          const lastDeltaAt = lastAssistantDeltaAtRef.current;
+          const shouldStartNewBlock =
+            lastDeltaAt !== null && now - lastDeltaAt >= STREAM_RESPONSE_BLOCK_GAP_MS;
+          lastAssistantDeltaAtRef.current = now;
+
           setMessages((current) =>
             current.map((message) =>
-              message.id === assistantMessageId
-                ? { ...message, content: `${message.content}${delta}`, isStreaming: true }
-                : message
+              {
+                if (message.id !== assistantMessageId) return message;
+
+                const blocks = message.responseBlocks || [];
+                const nextBlocks =
+                  blocks.length === 0 || shouldStartNewBlock
+                    ? [...blocks, delta]
+                    : [
+                        ...blocks.slice(0, -1),
+                        `${blocks[blocks.length - 1]}${delta}`,
+                      ];
+
+                return {
+                  ...message,
+                  content: `${message.content}${delta}`,
+                  responseBlocks: nextBlocks,
+                  isStreaming: true,
+                };
+              }
             )
           );
         },
@@ -432,7 +485,12 @@ const CheckComplianceChat: React.FC = () => {
         setMessages((current) =>
           current.map((message) =>
             message.id === assistantMessageId
-              ? { ...message, content: response.answer, isStreaming: false }
+              ? {
+                  ...message,
+                  content: response.answer,
+                  responseBlocks: reconcileResponseBlocks(message.responseBlocks, response.answer),
+                  isStreaming: false,
+                }
               : message
           )
         );
@@ -571,6 +629,39 @@ const CheckComplianceChat: React.FC = () => {
           >
             {messages.map((message) => {
               const isUser = message.role === 'user';
+              const assistantBlocks =
+                !isUser && message.responseBlocks && message.responseBlocks.length > 0
+                  ? message.responseBlocks
+                  : null;
+
+              if (assistantBlocks) {
+                return (
+                  <React.Fragment key={message.id}>
+                    {assistantBlocks.map((block, blockIndex) => {
+                      const isLastBlock = blockIndex === assistantBlocks.length - 1;
+                      return (
+                        <div
+                          key={`${message.id}-${blockIndex}`}
+                          className="flex justify-start gap-3"
+                        >
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#1F3A8B]/10 text-[#1F3A8B]">
+                            <Bot className="h-5 w-5" />
+                          </div>
+
+                          <div className="max-w-[78%] rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800">
+                            <MarkdownMessage
+                              content={block}
+                              isUser={false}
+                              isStreaming={message.isStreaming && isLastBlock}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </React.Fragment>
+                );
+              }
+
               return (
                 <div
                   key={message.id}
