@@ -86,6 +86,11 @@ class CheckComplianceChatDocumentReferenceSerializer(serializers.Serializer):
 class CheckComplianceStoredMessageSerializer(serializers.Serializer):
     role = serializers.ChoiceField(choices=["user", "assistant"])
     content = serializers.CharField(required=False, allow_blank=True)
+    response_blocks = serializers.ListField(
+        child=serializers.CharField(allow_blank=True),
+        required=False,
+        allow_empty=True,
+    )
     files = serializers.ListField(
         child=serializers.DictField(),
         required=False,
@@ -215,6 +220,7 @@ def _message_payload(message):
         "id": str(message.id),
         "role": message.role,
         "content": message.content,
+        "response_blocks": provider_payload.get("response_blocks") or [],
         "files": provider_payload.get("files") or [],
         "documents": provider_payload.get("documents") or [],
         "created_at": message.created_at,
@@ -226,11 +232,13 @@ def _replace_conversation_messages(conversation, messages):
     for item in messages:
         files = item.get("files") or []
         documents = item.get("documents") or []
+        response_blocks = item.get("response_blocks") or []
         message = CheckComplianceMessage.objects.create(
             conversation=conversation,
             role=item["role"],
             content=item.get("content", ""),
             provider_payload={
+                "response_blocks": response_blocks,
                 "files": files,
                 "documents": documents,
             },
