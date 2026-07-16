@@ -1,5 +1,8 @@
 import json
+import logging
 import os
+import queue
+import threading
 from pathlib import PurePosixPath
 from uuid import uuid4
 
@@ -27,6 +30,7 @@ from core.services.vera_compliance_service import (
 
 
 CHAT_UPLOADS_PREFIX = "documents/chat-uploads/"
+logger = logging.getLogger(__name__)
 
 ALLOWED_CHAT_DOCUMENT_EXTENSIONS = {
     ".csv",
@@ -383,8 +387,32 @@ class CheckComplianceChatView(APIView):
     def _stream_response(self, message, session_key):
         def event_stream():
             full_answer = ""
+            stream_queue = queue.Queue()
+            keepalive_seconds = getattr(settings, "VERA_API_STREAM_KEEPALIVE_SECONDS", 15)
+
+            def run_vera_stream():
+                try:
+                    service = VeraComplianceService()
+                    for delta in service.stream_message(
+                        messages=[
+                            {
+                                "role": "user",
+                                "content": message,
+                            }
+                        ],
+                        session_key=session_key,
+                    ):
+                        stream_queue.put(("delta", delta))
+                    stream_queue.put(("done", None))
+                except VeraComplianceConfigurationError:
+                    stream_queue.put(("configuration_error", None))
+                except VeraComplianceServiceError:
+                    stream_queue.put(("service_error", None))
+
+            worker = threading.Thread(target=run_vera_stream, daemon=True)
+            worker.start()
+
             try:
-                service = VeraComplianceService()
                 yield _encode_sse_event(
                     "answer_started",
                     {
@@ -393,47 +421,69 @@ class CheckComplianceChatView(APIView):
                     },
                 )
 
-                for delta in service.stream_message(
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": message,
-                        }
-                    ],
-                    session_key=session_key,
-                ):
-                    full_answer += delta
-                    yield _encode_sse_event(
-                        "answer_delta",
-                        {
-                            "type": "answer_delta",
-                            "delta": delta,
-                            "session_key": session_key,
-                        },
-                    )
+                while True:
+                    try:
+                        event_type, payload = stream_queue.get(timeout=keepalive_seconds)
+                    except queue.Empty:
+                        yield _encode_sse_event(
+                            "answer_keepalive",
+                            {
+                                "type": "answer_keepalive",
+                                "message": "Vera sta ancora analizzando la richiesta.",
+                                "session_key": session_key,
+                            },
+                        )
+                        continue
 
-                yield _encode_sse_event(
-                    "answer_completed",
-                    {
-                        "type": "answer_completed",
-                        "answer": full_answer,
-                        "session_key": session_key,
-                    },
-                )
-            except VeraComplianceConfigurationError:
+                    if event_type == "delta":
+                        full_answer += payload
+                        yield _encode_sse_event(
+                            "answer_delta",
+                            {
+                                "type": "answer_delta",
+                                "delta": payload,
+                                "session_key": session_key,
+                            },
+                        )
+                        continue
+
+                    if event_type == "done":
+                        yield _encode_sse_event(
+                            "answer_completed",
+                            {
+                                "type": "answer_completed",
+                                "answer": full_answer,
+                                "session_key": session_key,
+                            },
+                        )
+                        return
+
+                    if event_type == "configuration_error":
+                        yield _encode_sse_event(
+                            "error",
+                            {
+                                "type": "error",
+                                "message": "Vera API is not configured.",
+                            },
+                        )
+                        return
+
+                    if event_type == "service_error":
+                        yield _encode_sse_event(
+                            "error",
+                            {
+                                "type": "error",
+                                "message": "Error calling Vera compliance service.",
+                            },
+                        )
+                        return
+            except Exception:
+                logger.exception("Unexpected error during Vera compliance streaming.")
                 yield _encode_sse_event(
                     "error",
                     {
                         "type": "error",
-                        "message": "Vera API is not configured.",
-                    },
-                )
-            except VeraComplianceServiceError:
-                yield _encode_sse_event(
-                    "error",
-                    {
-                        "type": "error",
-                        "message": "Error calling Vera compliance service.",
+                        "message": "Unexpected error during Vera compliance streaming.",
                     },
                 )
 
