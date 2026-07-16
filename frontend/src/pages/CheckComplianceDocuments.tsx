@@ -1,6 +1,5 @@
 import React, { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArchiveRestore,
   AlertTriangle,
   Download,
   File as FileIcon,
@@ -24,11 +23,9 @@ import {
 import {
   checkComplianceDocumentsService,
   ComplianceDocument,
-  ComplianceDocumentFolder,
-  complianceDocumentFolders,
 } from '../services/checkComplianceDocumentsService';
 
-const folderLabels: Record<ComplianceDocumentFolder, string> = {
+const folderLabels: Record<string, string> = {
   'documents/regulatory/banca-ditalia/': "Banca d'Italia",
   'documents/regulatory/consob/': 'Consob',
   'documents/regulatory/eur-lex/': 'EUR-Lex',
@@ -119,12 +116,12 @@ const FileTypeBadge: React.FC<{ name: string; compact?: boolean }> = ({ name, co
 };
 
 const normalizeFolder = (folder: string) => {
-  return folder.replace(/^trash\//, '').replace(/\/?$/, '/');
+  return folder.replace(/\/?$/, '/');
 };
 
 const getFolderLabel = (folder: string) => {
   const normalized = normalizeFolder(folder);
-  const knownLabel = folderLabels[normalized as ComplianceDocumentFolder];
+  const knownLabel = folderLabels[normalized];
   if (knownLabel) return knownLabel;
 
   const parts = normalized.split('/').filter(Boolean);
@@ -144,9 +141,7 @@ const slugifyFolderName = (value: string) => {
 const CheckComplianceDocuments: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [documents, setDocuments] = useState<ComplianceDocument[]>([]);
-  const [trashDocuments, setTrashDocuments] = useState<ComplianceDocument[]>([]);
-  const [activeView, setActiveView] = useState<'documents' | 'trash'>('documents');
-  const [selectedFolder, setSelectedFolder] = useState<string>(complianceDocumentFolders[0]);
+  const [selectedFolder, setSelectedFolder] = useState<string>('documents/regulatory/');
   const [folderFilter, setFolderFilter] = useState<string>('all');
   const [useCustomFolder, setUseCustomFolder] = useState(false);
   const [customFolderName, setCustomFolderName] = useState('');
@@ -165,12 +160,8 @@ const CheckComplianceDocuments: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [active, trash] = await Promise.all([
-        checkComplianceDocumentsService.listDocuments(false),
-        checkComplianceDocumentsService.listDocuments(true),
-      ]);
+      const active = await checkComplianceDocumentsService.listDocuments();
       setDocuments(active.documents);
-      setTrashDocuments(trash.documents);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Errore nel caricamento dei documenti.';
       setError(message);
@@ -184,33 +175,41 @@ const CheckComplianceDocuments: React.FC = () => {
   }, [loadDocuments]);
 
   const visibleDocuments = useMemo(() => {
-    const source = activeView === 'documents' ? documents : trashDocuments;
     const normalizedQuery = query.trim().toLowerCase();
-    return source.filter((document) => {
+    return documents.filter((document) => {
       const folderMatches =
         folderFilter === 'all'
-        || document.key.startsWith(folderFilter)
-        || document.key.startsWith(`trash/${folderFilter}`);
+        || document.key.startsWith(folderFilter);
       const queryMatches =
         !normalizedQuery
         || `${document.name} ${document.key} ${document.folder}`.toLowerCase().includes(normalizedQuery);
 
       return folderMatches && queryMatches;
     });
-  }, [activeView, documents, trashDocuments, folderFilter, query]);
+  }, [documents, folderFilter, query]);
 
   const availableFolders = useMemo(() => {
-    const folders = new Set<string>(complianceDocumentFolders);
-    [...documents, ...trashDocuments].forEach((document) => {
+    const folders = new Set<string>();
+    documents.forEach((document) => {
       if (document.folder) {
         folders.add(normalizeFolder(document.folder));
       }
     });
 
+    if (folders.size === 0) {
+      folders.add('documents/regulatory/');
+    }
+
     return Array.from(folders).sort((a, b) =>
       getFolderLabel(a).localeCompare(getFolderLabel(b))
     );
-  }, [documents, trashDocuments]);
+  }, [documents]);
+
+  useEffect(() => {
+    if (!availableFolders.includes(selectedFolder)) {
+      setSelectedFolder(availableFolders[0] || 'documents/regulatory/');
+    }
+  }, [availableFolders, selectedFolder]);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     setSelectedFiles(Array.from(event.target.files ?? []));
@@ -297,20 +296,6 @@ const CheckComplianceDocuments: React.FC = () => {
     }
   };
 
-  const handleRestore = async (document: ComplianceDocument) => {
-    setActionLoading(document.key);
-    setError(null);
-    try {
-      await checkComplianceDocumentsService.restoreDocument(document.key);
-      await loadDocuments();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Errore durante il ripristino del documento.';
-      setError(message);
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
   return (
     <div className="h-full w-full overflow-y-auto bg-slate-50 p-8 lg:p-12">
       <div className="mx-auto max-w-7xl space-y-8">
@@ -344,26 +329,9 @@ const CheckComplianceDocuments: React.FC = () => {
           <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <div className="mb-5 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div className="flex gap-2">
-                <button
-                  onClick={() => setActiveView('documents')}
-                  className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
-                    activeView === 'documents'
-                      ? 'bg-[#1F3A8B] text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
+                <div className="rounded-lg bg-[#1F3A8B] px-4 py-2 text-sm font-semibold text-white">
                   Documenti ({documents.length})
-                </button>
-                <button
-                  onClick={() => setActiveView('trash')}
-                  className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
-                    activeView === 'trash'
-                      ? 'bg-[#1F3A8B] text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  Cestino ({trashDocuments.length})
-                </button>
+                </div>
               </div>
 
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
@@ -478,20 +446,6 @@ const CheckComplianceDocuments: React.FC = () => {
                                     <Download className="h-4 w-4" />
                                     Scarica
                                   </button>
-
-                                  {activeView === 'trash' && (
-                                    <button
-                                      onClick={() => {
-                                        setOpenActionKey(null);
-                                        handleRestore(document);
-                                      }}
-                                      disabled={actionLoading === document.key}
-                                      className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium text-[#1F3A8B] transition-colors hover:bg-blue-50 disabled:opacity-50"
-                                    >
-                                      <ArchiveRestore className="h-4 w-4" />
-                                      Ripristina
-                                    </button>
-                                  )}
 
                                   <button
                                     onClick={() => openDeleteModal(document)}
@@ -686,7 +640,7 @@ const CheckComplianceDocuments: React.FC = () => {
                 )}
                 {deleteConfirmationStep === 2 && (
                   <p className="mt-2 text-sm leading-6 text-slate-500">
-                    Conferma ancora: il documento non verra spostato nel cestino e non potra essere recuperato dalla schermata.
+                    Conferma ancora: il documento verra rimosso definitivamente e non potra essere recuperato dalla schermata.
                   </p>
                 )}
                 {deleteConfirmationStep === 3 && (

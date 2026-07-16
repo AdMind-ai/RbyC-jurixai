@@ -10,6 +10,7 @@ export interface CheckComplianceStoredMessage {
   id?: string;
   role: 'user' | 'assistant';
   content: string;
+  response_blocks?: string[];
   files?: CheckComplianceStoredFile[];
   documents?: CheckComplianceChatDocumentReference[];
   created_at?: string;
