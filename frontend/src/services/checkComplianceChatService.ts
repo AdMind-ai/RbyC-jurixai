@@ -33,7 +33,8 @@ export const checkComplianceChatService = {
     message: string,
     sessionId: string,
     documents: CheckComplianceChatDocumentReference[],
-    onDelta: (delta: string) => void
+    onDelta: (delta: string) => void,
+    onKeepalive?: (message: string) => void
   ): Promise<CheckComplianceChatResponse> {
     const response = await fetchWithAuth('/check-compliance/chat/', {
       method: 'POST',
@@ -82,6 +83,13 @@ export const checkComplianceChatService = {
           answer += delta;
           sessionKey = payload.session_key || sessionKey;
           onDelta(delta);
+        }
+
+        if (payload.type === 'answer_keepalive') {
+          sessionKey = payload.session_key || sessionKey;
+          if (payload.message) {
+            onKeepalive?.(payload.message);
+          }
         }
 
         if (payload.type === 'answer_completed') {
