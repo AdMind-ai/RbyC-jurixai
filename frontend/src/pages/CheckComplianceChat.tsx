@@ -26,7 +26,7 @@ type LocalChatMessage = {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  status?: string;
+  isStreaming?: boolean;
   files?: {
     name: string;
     size: number;
@@ -73,22 +73,24 @@ const mapSessionSummary = (session: CheckComplianceConversationSummary): SavedCo
   sessionId: session.vera_session_id,
 });
 
-const MarkdownMessage: React.FC<{ content: string; isUser: boolean; status?: string }> = ({
+const TypingIndicator: React.FC = () => (
+  <div className="flex items-center gap-2 text-[15px] leading-7 text-slate-500">
+    <span>Scrivendo</span>
+    <span className="flex items-center gap-1 pt-1">
+      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.2s]" />
+      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.1s]" />
+      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400" />
+    </span>
+  </div>
+);
+
+const MarkdownMessage: React.FC<{ content: string; isUser: boolean; isStreaming?: boolean }> = ({
   content,
   isUser,
-  status,
+  isStreaming,
 }) => {
   if (!content) {
-    return (
-      <div className="flex items-center gap-2 text-[15px] leading-7 text-slate-500">
-        <span>{status || 'Scrivendo'}</span>
-        <span className="flex items-center gap-1 pt-1">
-          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.2s]" />
-          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.1s]" />
-          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400" />
-        </span>
-      </div>
-    );
+    return <TypingIndicator />;
   }
 
   const linkClassName = isUser
@@ -169,6 +171,11 @@ const MarkdownMessage: React.FC<{ content: string; isUser: boolean; status?: str
       >
         {content}
       </ReactMarkdown>
+      {isStreaming && (
+        <div className="mt-3">
+          <TypingIndicator />
+        </div>
+      )}
     </div>
   );
 };
@@ -356,6 +363,7 @@ const CheckComplianceChat: React.FC = () => {
         id: assistantMessageId,
         role: 'assistant',
         content: '',
+        isStreaming: true,
       },
     ]);
     setQuestion('');
@@ -380,16 +388,16 @@ const CheckComplianceChat: React.FC = () => {
           setMessages((current) =>
             current.map((message) =>
               message.id === assistantMessageId
-                ? { ...message, content: `${message.content}${delta}`, status: undefined }
+                ? { ...message, content: `${message.content}${delta}`, isStreaming: true }
                 : message
             )
           );
         },
-        (keepaliveMessage) => {
+        () => {
           setMessages((current) =>
             current.map((message) =>
-              message.id === assistantMessageId && !message.content
-                ? { ...message, status: keepaliveMessage }
+              message.id === assistantMessageId
+                ? { ...message, isStreaming: true }
                 : message
             )
           );
@@ -400,6 +408,7 @@ const CheckComplianceChat: React.FC = () => {
           id: assistantMessageId,
           role: 'assistant',
           content: 'Nessuna risposta ricevuta.',
+          isStreaming: false,
         };
         setMessages((current) =>
           current.map((message) =>
@@ -417,8 +426,16 @@ const CheckComplianceChat: React.FC = () => {
             id: assistantMessageId,
             role: 'assistant',
             content: response.answer,
+            isStreaming: false,
           },
         ]);
+        setMessages((current) =>
+          current.map((message) =>
+            message.id === assistantMessageId
+              ? { ...message, content: response.answer, isStreaming: false }
+              : message
+          )
+        );
       }
     } catch (error) {
       const detail =
@@ -429,6 +446,7 @@ const CheckComplianceChat: React.FC = () => {
         id: assistantMessageId,
         role: 'assistant',
         content: detail,
+        isStreaming: false,
       };
       setMessages((current) =>
         current.map((message) =>
@@ -582,7 +600,7 @@ const CheckComplianceChat: React.FC = () => {
                     <MarkdownMessage
                       content={message.content}
                       isUser={isUser}
-                      status={message.status}
+                      isStreaming={message.isStreaming}
                     />
 
                     {message.files && message.files.length > 0 && (
