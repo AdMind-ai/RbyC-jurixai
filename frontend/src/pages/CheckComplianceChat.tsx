@@ -49,7 +49,7 @@ const formatFileSize = (bytes: number) => {
   return `${value.toFixed(value >= 10 || index === 0 ? 0 : 1)} ${units[index]}`;
 };
 
-const STREAM_RESPONSE_BLOCK_GAP_MS = 15000;
+const STREAM_RESPONSE_BLOCK_GAP_MS = 8000;
 
 const initialMessages: LocalChatMessage[] = [
   {
