@@ -26,6 +26,7 @@ type LocalChatMessage = {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  status?: string;
   files?: {
     name: string;
     size: number;
@@ -72,11 +73,15 @@ const mapSessionSummary = (session: CheckComplianceConversationSummary): SavedCo
   sessionId: session.vera_session_id,
 });
 
-const MarkdownMessage: React.FC<{ content: string; isUser: boolean }> = ({ content, isUser }) => {
+const MarkdownMessage: React.FC<{ content: string; isUser: boolean; status?: string }> = ({
+  content,
+  isUser,
+  status,
+}) => {
   if (!content) {
     return (
       <div className="flex items-center gap-2 text-[15px] leading-7 text-slate-500">
-        <span>Scrivendo</span>
+        <span>{status || 'Scrivendo'}</span>
         <span className="flex items-center gap-1 pt-1">
           <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.2s]" />
           <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.1s]" />
@@ -375,7 +380,16 @@ const CheckComplianceChat: React.FC = () => {
           setMessages((current) =>
             current.map((message) =>
               message.id === assistantMessageId
-                ? { ...message, content: `${message.content}${delta}` }
+                ? { ...message, content: `${message.content}${delta}`, status: undefined }
+                : message
+            )
+          );
+        },
+        (keepaliveMessage) => {
+          setMessages((current) =>
+            current.map((message) =>
+              message.id === assistantMessageId && !message.content
+                ? { ...message, status: keepaliveMessage }
                 : message
             )
           );
@@ -565,7 +579,11 @@ const CheckComplianceChat: React.FC = () => {
                         : 'border border-slate-200 bg-slate-50 text-slate-800'
                     }`}
                   >
-                    <MarkdownMessage content={message.content} isUser={isUser} />
+                    <MarkdownMessage
+                      content={message.content}
+                      isUser={isUser}
+                      status={message.status}
+                    />
 
                     {message.files && message.files.length > 0 && (
                       <div className="mt-3 space-y-2">

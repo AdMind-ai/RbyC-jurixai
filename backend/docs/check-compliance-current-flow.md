@@ -140,6 +140,10 @@ Observacoes:
 VERA_API_BASE_URL=https://vera-api.admind.ai/v1
 VERA_API_SERVER_KEY=<secret>
 VERA_API_MODEL=vera-compliance
+VERA_API_TIMEOUT_SECONDS=900
+VERA_API_MAX_RETRIES=2
+VERA_API_RETRY_BACKOFF_SECONDS=2
+VERA_API_STREAM_KEEPALIVE_SECONDS=15
 VERA_DEFAULT_ORGANIZATION_ID=<opcional>
 VERA_DEFAULT_CLIENT_ID=<opcional>
 VERA_DEFAULT_MATTER_ID=<opcional>
@@ -181,6 +185,15 @@ Atencao: `AWS_S3_REGION_NAME` e usado no fluxo de uploads da chat. O gerenciamen
 3. Backend chama Vera.
 4. Resposta retorna por streaming SSE.
 5. Frontend renderiza o texto em Markdown.
+
+Para evitar timeout por conexao ociosa durante analises longas, o backend envia eventos de keepalive enquanto aguarda novos tokens da Vera:
+
+```text
+event: answer_keepalive
+data: {"type": "answer_keepalive", "message": "Vera sta ancora analizzando la richiesta."}
+```
+
+O keepalive e gerado pelo proprio backend. A Vera nao precisa emitir nenhum marcador especial de progresso.
 
 ### 2. Usuario envia mensagem com anexos
 
@@ -315,6 +328,14 @@ O frontend renderiza:
 - emojis.
 
 Durante o streaming, enquanto a resposta ainda esta vazia, a interface mostra `Scrivendo` com indicador animado.
+
+Eventos SSE usados no fluxo:
+
+- `answer_started`: inicio da resposta;
+- `answer_keepalive`: mantem a conexao ativa durante espera longa;
+- `answer_delta`: texto incremental da resposta final;
+- `answer_completed`: resposta final acumulada;
+- `error`: erro de configuracao ou chamada Vera.
 
 ## Permissoes AWS esperadas
 
