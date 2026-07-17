@@ -14,6 +14,7 @@ import {
   BarChart3,
   User,
   Newspaper,
+  ClipboardList,
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
@@ -25,6 +26,7 @@ const routeMap = {
   compliance: '/compliance/chat',
   'compliance-chat': '/compliance/chat',
   'compliance-documents': '/compliance/documents',
+  'compliance-logs': '/compliance/logs',
   'chat-general': '/chat-general',
   newsletter: '/newsletter',
   accessi: '/accessi',
@@ -38,6 +40,7 @@ type SvgIconComponent = React.ComponentType<React.SVGProps<SVGSVGElement> & { si
 const complianceTabs: { key: RouteKey; label: string; Icon: SvgIconComponent }[] = [
   { key: 'compliance-chat', label: 'Agente Vera', Icon: MessageSquareText },
   { key: 'compliance-documents', label: 'Documenti', Icon: FolderOpen },
+  { key: 'compliance-logs', label: 'Log', Icon: ClipboardList },
 ];
 
 type SidebarProps = {
