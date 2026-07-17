@@ -18,6 +18,7 @@ const DocSearch: React.FC = () => {
     openDeleteModal,
     setOpenDeleteModal,
     handleSaveClick,
+    handleDeleteClick,
     handleSaveChat,
     handleDeleteChat,
     handleChatSelect,
@@ -52,6 +53,16 @@ const DocSearch: React.FC = () => {
               <option key={chat.id} value={chat.name}>{chat.name}</option>
             ))}
           </select>
+
+          {selectedChat && (
+            <button
+              onClick={() => handleDeleteClick(selectedChat)}
+              className="text-slate-400 hover:text-red-500 transition-colors p-1"
+              title="Elimina ricerca selezionata"
+            >
+              <X size={16} />
+            </button>
+          )}
 
           {messages.length > 0 && (
             <div className="flex items-center gap-2">

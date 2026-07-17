@@ -47,7 +47,7 @@ const initialMessages: LocalChatMessage[] = [
     id: 'welcome',
     role: 'assistant',
     content:
-      'Carica uno o piu documenti e descrivi l analisi di compliance che vuoi effettuare.',
+      "Carica uno o più documenti e descrivi l'analisi di compliance che vuoi effettuare.",
   },
 ];
 
@@ -200,6 +200,7 @@ const CheckComplianceChat: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const lastAssistantDeltaAtRef = useRef<number | null>(null);
+  const assistantResponseBlocksRef = useRef<string[]>([]);
   const [messages, setMessages] = useState<LocalChatMessage[]>(initialMessages);
   const [question, setQuestion] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -373,6 +374,7 @@ const CheckComplianceChat: React.FC = () => {
     const assistantMessageId = crypto.randomUUID();
     const filesToUpload = [...selectedFiles];
     lastAssistantDeltaAtRef.current = null;
+    assistantResponseBlocksRef.current = [];
 
     setMessages((current) => [
       ...current,
@@ -408,20 +410,20 @@ const CheckComplianceChat: React.FC = () => {
           const shouldStartNewBlock =
             lastDeltaAt !== null && now - lastDeltaAt >= STREAM_RESPONSE_BLOCK_GAP_MS;
           lastAssistantDeltaAtRef.current = now;
+          const currentBlocks = assistantResponseBlocksRef.current;
+          const nextBlocks =
+            currentBlocks.length === 0 || shouldStartNewBlock
+              ? [...currentBlocks, delta]
+              : [
+                  ...currentBlocks.slice(0, -1),
+                  `${currentBlocks[currentBlocks.length - 1]}${delta}`,
+                ];
+          assistantResponseBlocksRef.current = nextBlocks;
 
           setMessages((current) =>
             current.map((message) =>
               {
                 if (message.id !== assistantMessageId) return message;
-
-                const blocks = message.responseBlocks || [];
-                const nextBlocks =
-                  blocks.length === 0 || shouldStartNewBlock
-                    ? [...blocks, delta]
-                    : [
-                        ...blocks.slice(0, -1),
-                        `${blocks[blocks.length - 1]}${delta}`,
-                      ];
 
                 return {
                   ...message,
@@ -459,6 +461,10 @@ const CheckComplianceChat: React.FC = () => {
         );
         await updateStoredConversation([...previousMessages, userMessage, fallbackAssistantMessage]);
       } else {
+        const finalResponseBlocks = reconcileResponseBlocks(
+          assistantResponseBlocksRef.current,
+          response.answer
+        );
         await updateStoredConversation([
           ...previousMessages,
           userMessage,
@@ -466,6 +472,7 @@ const CheckComplianceChat: React.FC = () => {
             id: assistantMessageId,
             role: 'assistant',
             content: response.answer,
+            responseBlocks: finalResponseBlocks,
             isStreaming: false,
           },
         ]);
@@ -475,7 +482,7 @@ const CheckComplianceChat: React.FC = () => {
               ? {
                   ...message,
                   content: response.answer,
-                  responseBlocks: reconcileResponseBlocks(message.responseBlocks, response.answer),
+                  responseBlocks: finalResponseBlocks,
                   isStreaming: false,
                 }
               : message
@@ -665,20 +672,20 @@ const CheckComplianceChat: React.FC = () => {
                         isUser={true}
                         isStreaming={message.isStreaming}
                       />
+                      {message.files && message.files.length > 0 && (
+                        <div className="mt-3 flex flex-wrap justify-end gap-1.5">
+                          {message.files.map((file) => (
+                            <div
+                              key={`${message.id}-${file.name}-${file.size}`}
+                              className="flex items-center gap-1.5 rounded-lg bg-white/15 px-2 py-1 text-xs font-medium text-white/80"
+                            >
+                              <FileText className="h-3 w-3" />
+                              <span className="max-w-[120px] truncate">{file.name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    {message.files && message.files.length > 0 && (
-                      <div className="flex flex-wrap justify-end gap-1.5 mt-0.5">
-                        {message.files.map((file) => (
-                          <div
-                            key={`${message.id}-${file.name}-${file.size}`}
-                            className="flex items-center gap-1.5 rounded-lg bg-white/15 px-2 py-1 text-xs text-white/80 font-medium"
-                          >
-                            <FileText className="h-3 w-3" />
-                            <span className="max-w-[120px] truncate">{file.name}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 ) : (
                   <div className="flex max-w-[80%] items-end gap-2.5">

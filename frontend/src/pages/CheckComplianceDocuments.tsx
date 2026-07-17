@@ -140,9 +140,11 @@ const slugifyFolderName = (value: string) => {
 
 const CheckComplianceDocuments: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const folderMenuRef = useRef<HTMLDivElement | null>(null);
   const [documents, setDocuments] = useState<ComplianceDocument[]>([]);
   const [selectedFolder, setSelectedFolder] = useState<string>('documents/regulatory/');
   const [folderFilter, setFolderFilter] = useState<string>('all');
+  const [isFolderFilterOpen, setIsFolderFilterOpen] = useState(false);
   const [useCustomFolder, setUseCustomFolder] = useState(false);
   const [customFolderName, setCustomFolderName] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -173,6 +175,22 @@ const CheckComplianceDocuments: React.FC = () => {
   useEffect(() => {
     loadDocuments();
   }, [loadDocuments]);
+
+  useEffect(() => {
+    if (!isFolderFilterOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (
+        folderMenuRef.current
+        && !folderMenuRef.current.contains(event.target as Node)
+      ) {
+        setIsFolderFilterOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [isFolderFilterOpen]);
 
   const visibleDocuments = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -327,40 +345,77 @@ const CheckComplianceDocuments: React.FC = () => {
 
         <div className="grid grid-cols-1 gap-4">
           <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="mb-5 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-              <div className="flex gap-2">
+            <div className="mb-5 flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex min-w-0 shrink-0 gap-3 lg:items-center">
                 <div className="rounded-lg bg-[#1F3A8B] px-4 py-2 text-sm font-semibold text-white">
                   Documenti ({documents.length})
                 </div>
-              </div>
 
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-                <label className="sr-only" htmlFor="folder-filter">
+                <label className="sr-only" htmlFor="folder-filter-button">
                   Filtra per cartella
                 </label>
-                <select
-                  id="folder-filter"
-                  value={folderFilter}
-                  onChange={(event) => setFolderFilter(event.target.value)}
-                  className="min-w-[230px] rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 outline-none transition-colors focus:border-[#1F3A8B]"
-                >
-                  <option value="all">Tutte le cartelle</option>
-                  {availableFolders.map((folder) => (
-                    <option key={folder} value={folder}>
-                      {getFolderLabel(folder)}
-                    </option>
-                  ))}
-                </select>
+                <div ref={folderMenuRef} className="relative w-[300px] max-w-[calc(100vw-2rem)] sm:w-[340px]">
+                  <button
+                    id="folder-filter-button"
+                    type="button"
+                    onClick={() => setIsFolderFilterOpen((current) => !current)}
+                    className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm font-medium text-slate-700 outline-none transition-colors hover:bg-slate-50 focus:border-[#1F3A8B]"
+                    title={folderFilter === 'all' ? 'Tutte le cartelle' : getFolderLabel(folderFilter)}
+                  >
+                    <span className="min-w-0 flex-1 truncate">
+                      {folderFilter === 'all' ? 'Tutte le cartelle' : getFolderLabel(folderFilter)}
+                    </span>
+                    <span className="shrink-0 text-slate-400">⌄</span>
+                  </button>
 
-                <div className="relative min-w-[260px]">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <input
-                    value={query}
-                    onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Cerca per nome o cartella"
-                    className="w-full rounded-lg border border-slate-200 py-2 pl-9 pr-3 text-sm outline-none transition-colors focus:border-[#1F3A8B]"
-                  />
+                  {isFolderFilterOpen && (
+                    <div className="absolute left-0 top-[calc(100%+6px)] z-40 max-h-72 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFolderFilter('all');
+                          setIsFolderFilterOpen(false);
+                        }}
+                        className={`flex w-full px-3 py-2 text-left text-sm transition-colors hover:bg-slate-50 ${
+                          folderFilter === 'all'
+                            ? 'font-semibold text-[#1F3A8B]'
+                            : 'font-medium text-slate-700'
+                        }`}
+                        title="Tutte le cartelle"
+                      >
+                        <span className="truncate">Tutte le cartelle</span>
+                      </button>
+                      {availableFolders.map((folder) => (
+                        <button
+                          key={folder}
+                          type="button"
+                          onClick={() => {
+                            setFolderFilter(folder);
+                            setIsFolderFilterOpen(false);
+                          }}
+                          className={`flex w-full px-3 py-2 text-left text-sm transition-colors hover:bg-slate-50 ${
+                            folderFilter === folder
+                              ? 'font-semibold text-[#1F3A8B]'
+                              : 'font-medium text-slate-700'
+                          }`}
+                          title={getFolderLabel(folder)}
+                        >
+                          <span className="truncate">{getFolderLabel(folder)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
+              </div>
+
+              <div className="relative min-w-0 lg:w-[360px] lg:shrink-0">
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Cerca per nome o cartella"
+                  className="w-full rounded-lg border border-slate-200 py-2 pl-3 pr-11 text-sm outline-none transition-colors focus:border-[#1F3A8B]"
+                />
+                <Search className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               </div>
             </div>
 

@@ -137,7 +137,11 @@ def _s3_client():
         "s3",
         aws_access_key_id=getattr(settings, "AWS_ACCESS_KEY_ID", None),
         aws_secret_access_key=getattr(settings, "AWS_SECRET_ACCESS_KEY", None),
-        region_name=getattr(settings, "AWS_S3_REGION_NAME", None),
+        region_name=(
+            getattr(settings, "COMPLIANCE_CHAT_BUCKET_REGION", None)
+            or getattr(settings, "COMPLIANCE_DOCUMENTS_BUCKET_REGION", None)
+            or getattr(settings, "AWS_S3_REGION_NAME", None)
+        ),
     )
 
 
