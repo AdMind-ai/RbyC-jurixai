@@ -12,6 +12,8 @@ const AppContent: React.FC = () => {
       <div className={token ? `flex-1 flex flex-col ${sidebarCollapsed ? 'ml-20' : 'ml-64'} h-screen` : "flex-1 flex flex-col h-screen"}>
         {/* Main Content Area - Full Height, No Header */}
         <main className="flex-1 overflow-y-auto relative w-full h-full">
+          {/* Top accent stripe */}
+          {token && <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-[#1e3a8a] to-[#15803d] z-10 pointer-events-none" />}
           <AppRoutes />
         </main>
       </div>

@@ -53,6 +53,10 @@ externalPort = 80
 localPort = 8000
 externalPort = 8000
 
+[[ports]]
+localPort = 23636
+externalPort = 3001
+
 [userenv]
 
 [userenv.shared]
@@ -120,5 +124,5 @@ VERA_API_MAX_RETRIES = "2"
 VERA_API_MODEL = "vera-compliance"
 VERA_API_SERVER_KEY = ""
 VERA_API_TIMEOUT_SECONDS = "900"
-VITE_API_BASE_URL_LOCAL = "http://localhost:8000"
+VITE_API_BASE_URL_LOCAL = "/api"
 VITE_API_BASE_URL_PROD = "https://31c7b6de-6188-4f11-8d83-ce92de68f0b9-00-2s2w3kv0up7z5.kirk.replit.dev"

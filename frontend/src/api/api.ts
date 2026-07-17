@@ -1,10 +1,9 @@
 // api.ts atualizado completamente
 import axios from "axios";
 
-const isDevelopment = import.meta.env.MODE === 'development';
-const baseURL = isDevelopment ? 
-    import.meta.env.VITE_API_BASE_URL_LOCAL : 
-    import.meta.env.VITE_API_BASE_URL_PROD;
+// In development Vite proxies /api → localhost:8000, so we always use /api as baseURL.
+// In production the same relative path works behind the same-origin reverse proxy.
+const baseURL = "/api";
 
 
 export const api = axios.create({
