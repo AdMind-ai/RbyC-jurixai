@@ -260,7 +260,8 @@ const Newsletter: React.FC = () => {
         userMsg.content;
 
       // 2. Non-streaming call — più robusto per risposte lunghe
-      const data = await checkComplianceChatService.sendMessage(enrichedMessage, sessionId);
+      const veraTag = draftType === 'newsletter' ? '[NEWSLETTER]' : '[PILL FORMATIVO]';
+      const data = await checkComplianceChatService.sendMessage(enrichedMessage, sessionId, veraTag);
 
       // Handle both camelCase and snake_case from backend
       const answer: string = (data as any).answer ?? '';

@@ -21,10 +21,10 @@ export interface CheckComplianceChatAttachmentUploadResponse {
 }
 
 export const checkComplianceChatService = {
-  async sendMessage(message: string, sessionId?: string) {
+  async sendMessage(message: string, sessionId?: string, tag?: string) {
     const { data } = await api.post<CheckComplianceChatResponse>(
       '/check-compliance/chat/',
-      { message, session_id: sessionId }
+      { message, session_id: sessionId, ...(tag ? { tag } : {}) }
     );
     return data;
   },
@@ -34,11 +34,12 @@ export const checkComplianceChatService = {
     sessionId: string,
     documents: CheckComplianceChatDocumentReference[],
     onDelta: (delta: string) => void,
-    onKeepalive?: (message: string) => void
+    onKeepalive?: (message: string) => void,
+    tag?: string,
   ): Promise<CheckComplianceChatResponse> {
     const response = await fetchWithAuth('/check-compliance/chat/', {
       method: 'POST',
-      body: JSON.stringify({ message, session_id: sessionId, documents, stream: true }),
+      body: JSON.stringify({ message, session_id: sessionId, documents, stream: true, ...(tag ? { tag } : {}) }),
     });
 
     if (!response?.ok) {
