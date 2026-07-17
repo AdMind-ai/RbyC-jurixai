@@ -646,8 +646,8 @@ const CheckComplianceChat: React.FC = () => {
                     return (
                       <div key={`${message.id}-${blockIndex}`} className="flex justify-start">
                         <div className="flex max-w-[80%] items-end gap-2.5">
-                          <div className="flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-full bg-[#1e3a8a] mb-1">
-                            <Bot className="h-[14px] w-[14px] text-white" />
+                          <div className="flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-full mb-1 text-white font-semibold text-[11px] tracking-wide" style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #1b9162 100%)' }}>
+                            V
                           </div>
                           <div className="chat-bubble-ai px-5 py-3.5">
                             <MarkdownMessage
@@ -691,8 +691,8 @@ const CheckComplianceChat: React.FC = () => {
                   </div>
                 ) : (
                   <div className="flex max-w-[80%] items-end gap-2.5">
-                    <div className="flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-full bg-[#1e3a8a] mb-1">
-                      <Bot className="h-[14px] w-[14px] text-white" />
+                    <div className="flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-full mb-1 text-white font-semibold text-[11px] tracking-wide" style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #1b9162 100%)' }}>
+                      V
                     </div>
                     <div className="chat-bubble-ai px-5 py-3.5">
                       <MarkdownMessage
