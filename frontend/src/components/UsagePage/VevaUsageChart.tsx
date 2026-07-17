@@ -99,6 +99,7 @@ const VevaUsageChart: React.FC = () => {
   useEffect(() => { fetchData(days); }, [days]);
 
   const totalCost = points.reduce((s, r) => s + (r.cost ?? 0), 0);
+  const totalCostLabel = fmtEur(totalCost);
   const hasData   = points.some(r => r.cost != null && r.cost > 0);
   const hasCost   = points.some(r => r.cost != null);
 
@@ -149,7 +150,7 @@ const VevaUsageChart: React.FC = () => {
       {/* KPI unico */}
       <div className="flex items-end gap-1.5 pb-4 border-b border-slate-100">
         <span className="text-2xl font-semibold text-slate-800">
-          {hasCost ? `€${totalCost.toFixed(4)}` : '—'}
+          {hasCost ? totalCostLabel : '—'}
         </span>
         <span className="text-[12px] text-slate-400 pb-1">ultimi {days} giorni</span>
       </div>

@@ -18,7 +18,6 @@ const DocSearch: React.FC = () => {
     openDeleteModal,
     setOpenDeleteModal,
     handleSaveClick,
-    handleDeleteClick,
     handleSaveChat,
     handleDeleteChat,
     handleChatSelect,

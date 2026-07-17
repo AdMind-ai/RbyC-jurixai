@@ -177,7 +177,7 @@ const ConsumptionTable: React.FC<ConsumptionTableProps> = ({ report }) => {
                                       <div className="px-4 py-4 text-left">
                                         <p className="text-base font-bold text-[#172554]">{integrationCount}</p>
                                         <p className="text-[11px] text-gray-400 font-normal leading-tight truncate">
-                                          {METRIC_LABELS[id] || 'UnitÃ '}
+                                          {METRIC_LABELS[id] || 'Unità'}
                                         </p>
                                       </div>
                                       <div className="px-4 py-4"></div>

@@ -18,7 +18,7 @@ interface Message {
 
 const providerToModel: Record<StoredChatProvider, ModelId> = {
   gpt: ModelId.GPT_5_4,
-  perplexity: ModelId.PERPLEXITY,
+  perplexity: ModelId.GPT_5_4,
 };
 
 const flattenStoredContent = (content: unknown): string => {
@@ -192,7 +192,7 @@ const Chat: React.FC = () => {
     const provider = selectedChat.provider;
     const targetModel = providerToModel[provider];
     const conversationId = selectedChat.thread_id ?? conversationRefs[targetModel] ?? null;
-    const requiresConversationId = provider === 'gpt' || provider === 'perplexity';
+    const requiresConversationId = provider === 'gpt';
 
     if (requiresConversationId && !conversationId) {
       return;

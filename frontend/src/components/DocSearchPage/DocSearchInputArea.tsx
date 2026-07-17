@@ -10,7 +10,6 @@ interface DocSearchInputAreaProps {
 
 const DocSearchInputArea: React.FC<DocSearchInputAreaProps> = ({
   onSendMessage,
-  isEmptyMessages,
   isTyping,
   setIsTyping
 }) => {

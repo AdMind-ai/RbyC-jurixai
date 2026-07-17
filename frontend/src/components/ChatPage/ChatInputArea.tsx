@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { fetchWithAuth } from '../../api/fetchWithAuth';
 import { Paperclip, Send, X } from 'lucide-react';
 import { ModelId } from '../../types/types'
-import { perplexityService } from '../../services/perplexityService';
 import { StoredChatSelection } from '../../types/chat';
 
 interface ChatInputAreaProps {
@@ -36,13 +35,10 @@ interface Message {
 const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   onSend,
   selectedChat,
-  selectedModel,
   setSearchWebEnabled,
   setIsOverview,
   setIsTyping,
   conversationId,
-  messages,
-  onConversationIdChange,
   onConversationUpdated,
 }) => {
   const [input, setInput] = useState('');
@@ -50,15 +46,6 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const modelMessaging = {
-    [ModelId.GPT_5_4]: {
-      accept: ".pdf,.txt,.jpg,.png"
-    },
-    [ModelId.PERPLEXITY]: {
-      accept: ".pdf,.txt,.doc,.docx,.rtf"
-    }
-  };
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -130,39 +117,6 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     setIsTyping(false);
   };
 
-  const sendMessageWithPerplexity = async (
-    prompt: string,
-    filesToUpload: File[],
-    historyOverride?: Message[],
-    conversationRef?: string | null
-  ) => {
-    const historySource = historyOverride ?? messages;
-    const historyForPerplexity = historySource.map(message => ({
-      role: message.sender,
-      content: message.content
-    }));
-
-    const { conversationId: updatedConversationId } = await perplexityService.generatePerplexityResponse({
-      prompt,
-      files: filesToUpload,
-      conversation: historyForPerplexity,
-      conversationId: conversationRef,
-      onChunk: (chunk) => {
-        if (chunk) {
-          onSend(chunk, 'ai', true);
-        }
-      }
-    });
-
-    const normalizedConversationId = updatedConversationId || conversationRef || null;
-    if (onConversationIdChange && normalizedConversationId !== conversationRef) {
-      onConversationIdChange(ModelId.PERPLEXITY, normalizedConversationId);
-    }
-
-    onConversationUpdated?.();
-    setIsTyping(false);
-  };
-
   const handleSubmit = async () => {
     if (!input.trim() && files.length === 0) {
       return;
@@ -171,7 +125,6 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     const userMessage = input;
     const filesToUpload = [...files];
     const conversationRef = selectedChat?.thread_id ?? conversationId ?? null;
-    const historyWithUser: Message[] = [...messages, { sender: 'user', content: userMessage }];
 
     setIsOverview(false);
     setIsTyping(true);
@@ -182,17 +135,13 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     setFiles([]);
 
     try {
-      if (selectedModel === ModelId.PERPLEXITY) {
-        await sendMessageWithPerplexity(userMessage, filesToUpload, historyWithUser, conversationRef);
-      } else {
-        const formData = new FormData();
-        formData.append('content', userMessage);
-        filesToUpload.forEach(file => formData.append('file', file));
-        if (conversationRef) {
-          formData.append('conversation_id', conversationRef);
-        }
-        await sendMessageWithGPT(formData);
+      const formData = new FormData();
+      formData.append('content', userMessage);
+      filesToUpload.forEach(file => formData.append('file', file));
+      if (conversationRef) {
+        formData.append('conversation_id', conversationRef);
       }
+      await sendMessageWithGPT(formData);
     } catch (error) {
       console.error('Error sending message:', error);
       setIsTyping(false);
@@ -228,7 +177,7 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
             ref={fileInputRef}
             className="hidden"
             onChange={handleFileChange}
-            accept={modelMessaging[selectedModel]?.accept || ".pdf,.txt,.jpg,.png"}
+            accept=".pdf,.txt,.jpg,.png"
           />
           <button
             type="button"

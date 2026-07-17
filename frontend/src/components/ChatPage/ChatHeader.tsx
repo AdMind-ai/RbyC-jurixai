@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { toast } from 'react-toastify'
-import { Globe, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { ModelId } from '../../types/types'
 import {
   chatSessionService,
@@ -112,7 +112,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
   const handleSaveChat = async (chatName: string) => {
     const provider = modelToProvider[selectedModel];
     const activeConversationId = selectedChat?.thread_id ?? conversationId ?? null;
-    const requiresConversationId = provider === 'gpt' || provider === 'perplexity';
+    const requiresConversationId = provider === 'gpt';
 
     if (requiresConversationId && !activeConversationId) {
       toast.error('Thread non inizializzata!');
@@ -205,7 +205,11 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
       <div className="flex bg-slate-100 rounded-xl p-1">
         <button
           onClick={() => setSelectedModel(ModelId.GPT_5_4)}
-          className="px-4 py-1.5 rounded-lg text-sm bg-white shadow-sm text-[#1e3a8a] font-medium"
+          className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+            selectedModel === ModelId.GPT_5_4
+              ? 'bg-white shadow-sm text-[#1e3a8a]'
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
         >
           GPT-5.6 - Terra
         </button>

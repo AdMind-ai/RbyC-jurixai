@@ -12,7 +12,6 @@ import {
   UserPlus,
   LogOut,
   BarChart3,
-  User,
   Newspaper,
   ClipboardList,
 } from 'lucide-react';

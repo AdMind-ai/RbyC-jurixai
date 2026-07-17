@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
-  Bot,
   Copy,
   Download,
   Paperclip,
@@ -284,7 +283,7 @@ const Newsletter: React.FC = () => {
 
   const handleNewSession = () => {
     setMessages([WELCOME]);
-    setSessionId(null);
+    setSessionId(crypto.randomUUID());
     setPreviewContent(null);
     setInput('');
     setAttachedFiles([]);
