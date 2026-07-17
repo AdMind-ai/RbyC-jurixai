@@ -124,6 +124,8 @@ class CheckComplianceChatInputSerializer(serializers.Serializer):
         required=False,
         allow_empty=True,
     )
+    # Tag de contexto repassada à Vera API (ex: [CHAT], [NEWSLETTER], [PILL FORMATIVO])
+    tag = serializers.CharField(required=False, allow_blank=True, default="")
 
 
 def _encode_sse_event(event_name, payload):
@@ -353,6 +355,10 @@ class CheckComplianceChatView(APIView):
         session_context = serializer.validated_data.get("session_context") or {}
         session_id = serializer.validated_data.get("session_id")
         documents = serializer.validated_data.get("documents") or []
+        # Tag: usa a enviada pelo frontend ou, para a rota de chat, força [CHAT]
+        incoming_tag = (serializer.validated_data.get("tag") or "").strip()
+        vera_tag = incoming_tag if incoming_tag else "[CHAT]"
+
         session_key = build_vera_session_key(
             request.user,
             _session_context_with_chat_session(session_context, session_id),
@@ -360,7 +366,7 @@ class CheckComplianceChatView(APIView):
         vera_content = _build_vera_content(message, documents)
 
         if stream:
-            return self._stream_response(vera_content, session_key)
+            return self._stream_response(vera_content, session_key, tag=vera_tag)
 
         try:
             service = VeraComplianceService()
@@ -372,6 +378,7 @@ class CheckComplianceChatView(APIView):
                     }
                 ],
                 session_key=session_key,
+                tag=vera_tag,
             )
         except VeraComplianceConfigurationError:
             return Response(
@@ -392,7 +399,7 @@ class CheckComplianceChatView(APIView):
             status=status.HTTP_200_OK,
         )
 
-    def _stream_response(self, message, session_key):
+    def _stream_response(self, message, session_key, tag=None):
         def event_stream():
             full_answer = ""
             stream_queue = queue.Queue()
@@ -409,6 +416,7 @@ class CheckComplianceChatView(APIView):
                             }
                         ],
                         session_key=session_key,
+                        tag=tag,
                     ):
                         stream_queue.put(("delta", delta))
                     stream_queue.put(("done", None))
