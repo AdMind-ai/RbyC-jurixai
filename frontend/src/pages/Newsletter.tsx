@@ -379,16 +379,18 @@ const Newsletter: React.FC = () => {
               className={`flex gap-2.5 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
             >
               {/* Avatar */}
-              <div className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${
-                msg.role === 'user'
-                  ? 'bg-slate-200'
-                  : 'bg-[#1e3a8a]'
-              }`}>
-                {msg.role === 'user'
-                  ? <User size={13} className="text-slate-500" />
-                  : <Bot size={13} className="text-white" />
-                }
-              </div>
+              {msg.role === 'user' ? (
+                <div className="shrink-0 w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center">
+                  <User size={13} className="text-slate-500" />
+                </div>
+              ) : (
+                <div
+                  className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-white font-semibold text-[11px] tracking-wide"
+                  style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #1b9162 100%)' }}
+                >
+                  V
+                </div>
+              )}
 
               <div className={`flex flex-col gap-1 max-w-[82%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                 {/* File chips */}
