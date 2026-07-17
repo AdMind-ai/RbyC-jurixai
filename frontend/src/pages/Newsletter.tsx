@@ -14,7 +14,10 @@ import {
   FileText,
   Sparkles,
 } from 'lucide-react';
-import { checkComplianceChatService } from '../services/checkComplianceChatService';
+import {
+  checkComplianceChatService,
+  CheckComplianceChatDocumentReference,
+} from '../services/checkComplianceChatService';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -176,7 +179,7 @@ const Newsletter: React.FC = () => {
   const [draftType, setDraftType] = useState<DraftType>('newsletter');
   const [previewContent, setPreviewContent] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string>(() => crypto.randomUUID());
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -221,6 +224,11 @@ const Newsletter: React.FC = () => {
     if (!input.trim() && attachedFiles.length === 0) return;
     if (isTyping) return;
 
+    const filesToUpload: File[] = attachedFiles.map((f) => {
+      const bytes = Uint8Array.from(atob(f.data), (c) => c.charCodeAt(0));
+      return new File([bytes], f.name, { type: f.type });
+    });
+
     const userMsg: ChatMessage = {
       id: uid(),
       role: 'user',
@@ -237,30 +245,42 @@ const Newsletter: React.FC = () => {
     setMessages((prev) => [...prev, { id: aiId, role: 'assistant', content: '', isStreaming: true }]);
 
     try {
-      const docs = attachedFiles.map((f) => ({
-        name: f.name,
-        content: f.data,
-        content_type: f.type,
-      }));
+      // 1. Upload attachments if any
+      let documentReferences: CheckComplianceChatDocumentReference[] = [];
+      if (filesToUpload.length > 0) {
+        const uploadResponse = await checkComplianceChatService.uploadAttachments(filesToUpload, sessionId);
+        documentReferences = uploadResponse.documents;
+      }
 
-      // Enrich the prompt with newsletter context
+      // 2. Enrich prompt with newsletter context
       const enrichedMessage = `[Richiesta: ${draftType === 'newsletter' ? 'Newsletter normativa' : 'PILL formativo'}]\n${userMsg.content}`;
 
-      const { session_id: newSessionId } = await checkComplianceChatService.sendMessage({
-        message: enrichedMessage,
-        session_id: sessionId || undefined,
-        documents: docs,
-        onChunk: (chunk: string) => {
+      // 3. Stream response
+      const response = await checkComplianceChatService.streamMessage(
+        enrichedMessage,
+        sessionId,
+        documentReferences,
+        (delta) => {
           setMessages((prev) =>
             prev.map((m) =>
-              m.id === aiId ? { ...m, content: m.content + chunk } : m
+              m.id === aiId ? { ...m, content: m.content + delta, isStreaming: true } : m
             )
           );
         },
-      });
+      );
 
-      if (newSessionId && !sessionId) setSessionId(newSessionId);
-      setMessages((prev) => prev.map((m) => m.id === aiId ? { ...m, isStreaming: false } : m));
+      // 4. Finalise message
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === aiId
+            ? { ...m, content: response.answer || m.content, isStreaming: false }
+            : m
+        )
+      );
+
+      // 5. Persist session key for follow-up turns
+      if (response.sessionKey) setSessionId(response.sessionKey);
+
     } catch (err) {
       console.error('Newsletter chat error:', err);
       setMessages((prev) =>
