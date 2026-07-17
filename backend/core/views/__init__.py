@@ -42,6 +42,7 @@ from .stored_chat_session_view import (
 )
 from .usage_view import UsageManualRecordView, UsageMonthListView, UsageReportView
 from .compliance_log_view import ComplianceLogListView, ComplianceLogDetailView
+from .vera_usage_view import VeraUsageIngestView, VeraUsageDailyView, VeraUsageRawListView
 
 __all__ = [
     'DeeplTranslateFileView',
@@ -92,4 +93,7 @@ __all__ = [
     'UsageManualRecordView',
     'ComplianceLogListView',
     'ComplianceLogDetailView',
+    'VeraUsageIngestView',
+    'VeraUsageDailyView',
+    'VeraUsageRawListView',
 ]

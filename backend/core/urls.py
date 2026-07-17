@@ -84,6 +84,11 @@ urlpatterns = [
     path('check-compliance/logs/<uuid:pk>/', ComplianceLogDetailView.as_view(),
          name='check-compliance-log-detail'),
 
+    # Vera usage tracking
+    path('vera/usage/', VeraUsageIngestView.as_view(), name='vera-usage-ingest'),
+    path('vera/usage/daily/', VeraUsageDailyView.as_view(), name='vera-usage-daily'),
+    path('vera/usage/raw/', VeraUsageRawListView.as_view(), name='vera-usage-raw'),
+
     # Deadlines
     path('deadlines/', DeadlineListCreateView.as_view(), name='deadline-list-create'),
     path('deadlines/<int:pk>/', DeadlineUpdateView.as_view(), name='deadline-update'),
