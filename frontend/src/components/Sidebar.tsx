@@ -127,7 +127,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapseChange }) => {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-5 flex flex-col gap-0.5">
+      <nav className="flex-1 overflow-y-auto py-5 flex flex-col gap-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
 
         {/* Home */}
         <button
