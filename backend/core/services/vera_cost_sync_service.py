@@ -13,7 +13,8 @@ OpenAI (custos Vera):
                                (deixar vazio para pegar todos os projetos da org)
 
 Anthropic (custos Vera):
-  VERA_ANTHROPIC_API_KEY     — API Key com permissão de leitura de usage
+  VERA_ANTHROPIC_API_KEY     — Admin API key da Anthropic (formato sk-ant-admin...)
+                               Obtida em console.anthropic.com → Settings → Admin API keys
   VERA_ANTHROPIC_WORKSPACE_ID — Workspace ID (opcional, filtra por workspace)
 
 Se uma key não estiver configurada, o provider correspondente é ignorado
@@ -34,7 +35,9 @@ from core.models.vera_usage_model import VeraUsageRecord
 logger = logging.getLogger(__name__)
 
 OPENAI_COSTS_URL  = "https://api.openai.com/v1/organization/costs"
-ANTHROPIC_USAGE_URL = "https://api.anthropic.com/v1/usage"
+# Anthropic Admin API — requer Admin key (sk-ant-admin...)
+# Docs: https://docs.anthropic.com/en/api/admin-api
+ANTHROPIC_COST_URL = "https://api.anthropic.com/v1/organizations/cost_report"
 ANTHROPIC_API_VERSION = "2023-06-01"
 
 
@@ -174,21 +177,34 @@ class VeraCostSyncService:
             logger.warning("VERA_ANTHROPIC_API_KEY não configurada — Anthropic ignorado.")
             return {"status": "not_configured"}
 
+        # A Anthropic Cost Report API requer uma Admin API key (sk-ant-admin...)
+        # obtida em console.anthropic.com → Settings → Admin API keys
+        if not api_key.startswith("sk-ant-admin"):
+            logger.warning(
+                "VERA_ANTHROPIC_API_KEY não parece ser uma Admin key (esperado sk-ant-admin...). "
+                "A Cost Report API requer uma Admin key — Anthropic ignorado."
+            )
+            return {"status": "not_admin_key"}
+
+        # Endpoint: GET /v1/organizations/cost_report
+        # Params: starting_at, ending_at (ISO 8601 datetime), bucket_width=1d
         headers = {
             "x-api-key": api_key,
             "anthropic-version": ANTHROPIC_API_VERSION,
             "content-type": "application/json",
         }
         params = {
-            "start_date": target_date.isoformat(),
-            "end_date":   (target_date + timedelta(days=1)).isoformat(),
+            "starting_at": f"{target_date.isoformat()}T00:00:00Z",
+            "ending_at":   f"{(target_date + timedelta(days=1)).isoformat()}T00:00:00Z",
+            "bucket_width": "1d",
+            "limit": 10,
         }
         if workspace_id:
             params["workspace_id"] = workspace_id
 
         try:
             resp = requests.get(
-                ANTHROPIC_USAGE_URL,
+                ANTHROPIC_COST_URL,
                 headers=headers,
                 params=params,
                 timeout=30,
@@ -199,35 +215,35 @@ class VeraCostSyncService:
             logger.exception("Erro ao buscar custos Anthropic para Vera (%s): %s", target_date, exc)
             return {"status": "error", "error": str(exc)}
 
-        # Payload esperado: {"data": [{"model": "...", "input_tokens": N, "output_tokens": N, "cost": {"amount": X, "currency": "USD"}}]}
-        # (estrutura baseada na Anthropic Admin API; ajustar se a resposta real for diferente)
+        # Resposta: {"data": [{"starting_at": "...", "results": [{"model_id": "...",
+        #           "input_tokens": N, "output_tokens": N, "cost": {"amount": "X", "currency": "USD"}}]}]}
         usd_to_eur = Decimal(str(getattr(settings, "BILLING_USD_TO_EUR_RATE", "1")))
         saved = []
 
-        entries = payload.get("data") or payload.get("usage") or []
-        for entry in entries:
-            model         = entry.get("model") or entry.get("model_id") or ""
-            input_tokens  = int(entry.get("input_tokens", 0))
-            output_tokens = int(entry.get("output_tokens", 0))
-            total_tokens  = input_tokens + output_tokens
+        for bucket in payload.get("data") or []:
+            for entry in bucket.get("results") or []:
+                model         = entry.get("model_id") or entry.get("model") or ""
+                input_tokens  = int(entry.get("input_tokens", 0))
+                output_tokens = int(entry.get("output_tokens", 0))
+                total_tokens  = input_tokens + output_tokens
 
-            cost_obj = entry.get("cost") or {}
-            raw_cost = cost_obj.get("amount") or entry.get("cost_usd") or entry.get("total_cost") or 0
-            currency = (cost_obj.get("currency") or "USD").upper()
-            cost_raw = Decimal(str(raw_cost)).quantize(Decimal("0.000001"), ROUND_HALF_UP)
-            cost_eur = (cost_raw * usd_to_eur).quantize(Decimal("0.000001"), ROUND_HALF_UP) if currency == "USD" else cost_raw
+                cost_obj = entry.get("cost") or {}
+                raw_cost = cost_obj.get("amount") or entry.get("cost_usd") or 0
+                currency = (cost_obj.get("currency") or "USD").upper()
+                cost_raw = Decimal(str(raw_cost)).quantize(Decimal("0.000001"), ROUND_HALF_UP)
+                cost_eur = (cost_raw * usd_to_eur).quantize(Decimal("0.000001"), ROUND_HALF_UP) if currency == "USD" else cost_raw
 
-            cls._upsert_record(
-                target_date=target_date,
-                provider="anthropic",
-                model=model,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                total_tokens=total_tokens,
-                cost_eur=cost_eur,
-                raw_payload=entry,
-            )
-            saved.append({"model": model, "cost_eur": float(cost_eur), "tokens": total_tokens})
+                cls._upsert_record(
+                    target_date=target_date,
+                    provider="anthropic",
+                    model=model,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    total_tokens=total_tokens,
+                    cost_eur=cost_eur,
+                    raw_payload=entry,
+                )
+                saved.append({"model": model, "cost_eur": float(cost_eur), "tokens": total_tokens})
 
         logger.info("Anthropic Vera sync %s: %d modelos gravados", target_date, len(saved))
         return {"status": "ok", "models": saved}
