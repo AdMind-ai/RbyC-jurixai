@@ -99,8 +99,8 @@ const Login: React.FC = () => {
     <div style={styles.container}>
       <div style={styles.loginContainer}>
         <img
-          src={`/logo.png`} 
-          alt="Login Logo"
+          src="/logo-light.svg"
+          alt="Refink"
           style={styles.loginLogo}
         />
         <form style={styles.form} onSubmit={handleSubmit}>
