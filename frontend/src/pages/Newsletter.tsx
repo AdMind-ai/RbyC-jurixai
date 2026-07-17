@@ -233,11 +233,6 @@ const Newsletter: React.FC = () => {
     if (!input.trim() && attachedFiles.length === 0) return;
     if (isTyping) return;
 
-    const filesToUpload: File[] = attachedFiles.map((f) => {
-      const bytes = Uint8Array.from(atob(f.data), (c) => c.charCodeAt(0));
-      return new File([bytes], f.name, { type: f.type });
-    });
-
     const userMsg: ChatMessage = {
       id: uid(),
       role: 'user',
@@ -254,49 +249,32 @@ const Newsletter: React.FC = () => {
     setMessages((prev) => [...prev, { id: aiId, role: 'assistant', content: '', isStreaming: true }]);
 
     try {
-      // 1. Upload attachments if any
-      let documentReferences: CheckComplianceChatDocumentReference[] = [];
-      if (filesToUpload.length > 0) {
-        const uploadResponse = await checkComplianceChatService.uploadAttachments(filesToUpload, sessionId);
-        documentReferences = uploadResponse.documents;
-      }
-
-      // 2. Enrich prompt with newsletter context + bozza tag instruction
+      // 1. Enrich prompt with newsletter context + bozza tag instruction
       const typeLabel = draftType === 'newsletter' ? 'Newsletter normativa' : 'PILL formativo';
       const enrichedMessage =
         `[Richiesta: ${typeLabel}]\n` +
         `ISTRUZIONE DI FORMATO: quando generi la bozza definitiva del documento, ` +
         `inseriscila SEMPRE all'interno dei tag <bozza> e </bozza>. ` +
         `Tutto ciò che è conversazionale (domande, chiarimenti, intro, conclusioni) ` +
-        `va FUORI dai tag. Esempio: "Ecco la bozza: <bozza>...testo documento...</bozza> ` +
-        `Fammi sapere se vuoi modifiche."\n\n` +
+        `va FUORI dai tag. Esempio: "Ecco la bozza: <bozza>...testo...</bozza> Fammi sapere se vuoi modifiche."\n\n` +
         userMsg.content;
 
-      // 3. Stream response
-      const response = await checkComplianceChatService.streamMessage(
-        enrichedMessage,
-        sessionId,
-        documentReferences,
-        (delta) => {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === aiId ? { ...m, content: m.content + delta, isStreaming: true } : m
-            )
-          );
-        },
-      );
+      // 2. Non-streaming call — più robusto per risposte lunghe
+      const data = await checkComplianceChatService.sendMessage(enrichedMessage, sessionId);
 
-      // 4. Finalise message
+      // Handle both camelCase and snake_case from backend
+      const answer: string = (data as any).answer ?? '';
+      const returnedKey: string = (data as any).sessionKey ?? (data as any).session_key ?? '';
+
       setMessages((prev) =>
         prev.map((m) =>
           m.id === aiId
-            ? { ...m, content: response.answer || m.content, isStreaming: false }
+            ? { ...m, content: answer || 'Nessuna risposta ricevuta.', isStreaming: false }
             : m
         )
       );
 
-      // 5. Persist session key for follow-up turns
-      if (response.sessionKey) setSessionId(response.sessionKey);
+      if (returnedKey) setSessionId(returnedKey);
 
     } catch (err) {
       console.error('Newsletter chat error:', err);
