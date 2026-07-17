@@ -1,4 +1,4 @@
-modules = ["python-3.12", "nodejs-20", "web"]
+modules = ["python-3.12", "nodejs-20", "web", "postgresql-16"]
 [agent]
 expertMode = true
 
@@ -17,6 +17,10 @@ author = "agent"
 task = "workflow.run"
 args = "Start application"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Backend API"
+
 [[workflows.workflow]]
 name = "Start application"
 author = "agent"
@@ -29,6 +33,92 @@ waitForPort = 5000
 [workflows.workflow.metadata]
 outputType = "webview"
 
+[[workflows.workflow]]
+name = "Backend API"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd backend && python manage.py runserver 0.0.0.0:8000"
+waitForPort = 8000
+
+[workflows.workflow.metadata]
+outputType = "console"
+
 [[ports]]
 localPort = 5000
 externalPort = 80
+
+[[ports]]
+localPort = 8000
+externalPort = 8000
+
+[userenv]
+
+[userenv.shared]
+AWS_ACCESS_KEY_ID = ""
+AWS_S3_REGION_NAME = "eu-north-1"
+AWS_SECRET_ACCESS_KEY = ""
+AWS_STORAGE_BUCKET_NAME = "rbyc"
+BILLING_COMPANY_MARKUP_PERCENTAGE = "20"
+BILLING_IVA_PERCENTAGE = "22"
+BILLING_STRIPE_IDEMPOTENCY_PREFIX = "rbyc-v4"
+CELERY_BROKER_URL = "redis://localhost:6379/0"
+CELERY_RESULT_BACKEND = "redis://localhost:6379/0"
+CELERY_WORKER_CONCURRENCY = "2"
+CHECK_COMPLIANCE_MCP_SERVER_URL = "https://mcp-server-check-compliance-latest.onrender.com/sse"
+COMPLIANCE_CHAT_BUCKET_NAME = "rbyc-compliance-chat"
+COMPLIANCE_CHAT_UPLOAD_PREFIX = "documents/chat-uploads/"
+COMPLIANCE_DOCUMENTS_BUCKET_NAME = "rbyc-compliance-knowledge-prod"
+COMPLIANCE_DOCUMENTS_BUCKET_REGION = "eu-central-1"
+COST_AGGREGATOR_API_KEY = ""
+COST_AGGREGATOR_DEFAULT_CURRENCY = "EUR"
+COST_AGGREGATOR_PROJECT_ID = "rbyc"
+COST_AGGREGATOR_PROJECT_NAME = "Rbyc"
+DB_CONN_MAX_AGE = "60"
+DB_ENGINE = "django.db.backends.postgresql"
+DB_HOST = "helium"
+DB_NAME = "heliumdb"
+DB_PASSWORD = ""
+DB_PORT = "5432"
+DB_USER = "postgres"
+DEEPL_KEY = ""
+DJANGO_ALLOWED_HOSTS = "localhost,127.0.0.1,31c7b6de-6188-4f11-8d83-ce92de68f0b9-00-2s2w3kv0up7z5.kirk.replit.dev,*.replit.dev,*.repl.co"
+DJANGO_CORS_ALLOWED_ORIGINS = "http://localhost:5000,https://31c7b6de-6188-4f11-8d83-ce92de68f0b9-00-2s2w3kv0up7z5.kirk.replit.dev"
+DJANGO_CSRF_TRUSTED_ORIGINS = "https://31c7b6de-6188-4f11-8d83-ce92de68f0b9-00-2s2w3kv0up7z5.kirk.replit.dev,https://*.replit.dev,https://*.repl.co"
+DJANGO_SETTINGS_MODULE = "backend.settings"
+DJANGO_SUPERUSER_EMAIL = "admin@admind.ai"
+DJANGO_SUPERUSER_PASSWORD = ""
+DJANGO_SUPERUSER_USERNAME = "admin"
+DOCUMENT_INDEX_API_KEY = ""
+DOCUMENT_INDEX_SYNC_MINUTES = "15"
+DOCUMENT_SEARCH_STREAM_NARRATION_MODEL = "gpt-5.4-mini"
+FILE_STORAGE_BACKEND = "filesystem"
+FRONTEND_URL = "https://31c7b6de-6188-4f11-8d83-ce92de68f0b9-00-2s2w3kv0up7z5.kirk.replit.dev"
+FUNCTIONALITY_DOCUMENTS_BUCKET_NAME = "functionality-documents"
+INTEGRATION_API_KEY = ""
+MAILAPI_API_KEY = ""
+MCP_INTERNAL_AUTH_AUDIENCE = "mcp-ricerca"
+MCP_INTERNAL_AUTH_ISSUER = "backend-integrations"
+MCP_INTERNAL_AUTH_SECRET = ""
+MCP_INTERNAL_AUTH_TTL_SECONDS = "300"
+MCP_SERVER_URL = "https://mcp-server-ricerca-rbyc-staging.onrender.com/sse"
+OPENAI_ADMIN_KEY = ""
+OPENAI_COSTS_PROJECT_ID = "proj_nWweV4FVnwXYINvUm9C8fJik"
+OPENAI_KEY = ""
+OPENAI_PROMPT_ID_CHECK_COMPLIANCE_RBYC = "pmpt_69e78bfac9a08194bf214c9128f3a0b2013df361cf9dbb01"
+OPENAI_PROMPT_ID_DRAFT_DOCUMENT = "pmpt_69e78d3affdc8197b4669643e7b9343505ba55531277b083"
+OPENAI_PROMPT_ID_RICERCA_DOCUMENTALE = "pmpt_6a03b1919ee08196af1ff0bd6b4813930bf15c3b2ed268fd"
+PERPLEXITY_API_KEY = ""
+S3_UPLOAD_API_KEY = ""
+S3_UPLOAD_JWT_SECRET = ""
+SECRET_KEY = ""
+STRIPE_SECRET_KEY = ""
+STRIPE_WEBHOOK_SECRET = "whsec_4e5f2f2f0ffc748909dbb0a0479b8dc65759edbebc9caf28f4ee6e362d4824a3"
+VERA_API_BASE_URL = "https://vera-api.admind.ai/v1"
+VERA_API_MAX_RETRIES = "2"
+VERA_API_MODEL = "vera-compliance"
+VERA_API_SERVER_KEY = ""
+VERA_API_TIMEOUT_SECONDS = "900"
+VITE_API_BASE_URL_LOCAL = "http://localhost:8000"
+VITE_API_BASE_URL_PROD = "https://31c7b6de-6188-4f11-8d83-ce92de68f0b9-00-2s2w3kv0up7z5.kirk.replit.dev"
