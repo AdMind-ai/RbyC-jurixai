@@ -3,11 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import {
   Upload,
   FileText,
-  Plus,
   X,
   Trash,
   Sparkles,
-  Building2,
   Check,
   Loader2,
   ArrowLeft,
@@ -47,7 +45,6 @@ export const DraftDocument: React.FC = () => {
   const [pdfFetchError, setPdfFetchError] = useState<string | null>(null)
 
   const [companies, setCompanies] = useState<Company[]>([])
-  const [isModalOpen, setIsModalOpen] = useState(false)
   const [newCompanyName, setNewCompanyName] = useState('')
   const [newCompanyFile, setNewCompanyFile] = useState<string | null>(null)
   const [newCompanyFileData, setNewCompanyFileData] = useState<string | null>(
@@ -358,7 +355,6 @@ export const DraftDocument: React.FC = () => {
           setNewCompanyWordFile(null)
           setNewCompanyWordFileData(null)
           setNewCompanyWordFileMime(null)
-          setIsModalOpen(false)
         } else {
           const err = await res.text()
           console.error('Failed to create company', res.status, err)

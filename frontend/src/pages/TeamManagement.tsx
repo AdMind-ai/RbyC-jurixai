@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api/api';
-import { Search, Plus, Trash2, Shield } from 'lucide-react';
+import { Search, Trash2, Shield } from 'lucide-react';
 import { AppUser } from '../types/types';
 
 // API user mapping helper

@@ -9,7 +9,6 @@ import {
   Plus,
   Save,
   Send,
-  User,
   X,
 } from 'lucide-react';
 import {
@@ -39,14 +38,6 @@ type SavedConversation = {
   title: string;
   updatedAt: string;
   sessionId: string | null;
-};
-
-const formatFileSize = (bytes: number) => {
-  if (!bytes) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  const value = bytes / Math.pow(1024, index);
-  return `${value.toFixed(value >= 10 || index === 0 ? 0 : 1)} ${units[index]}`;
 };
 
 const STREAM_RESPONSE_BLOCK_GAP_MS = 8000;

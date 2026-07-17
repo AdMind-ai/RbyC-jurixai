@@ -27,7 +27,7 @@ const TypingIndicator = () => (
   </div>
 )
 
-const ChatMessageList: React.FC<ChatMessageListProps> = ({ messages, isTyping, isOverview, page, chatColor }) => {
+const ChatMessageList: React.FC<ChatMessageListProps> = ({ messages, isTyping }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -122,7 +122,6 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({ messages, isTyping, i
                       components={{
                         code({ className, children, ...props }) {
                           const match = /language-(\w+)/.exec(className || '');
-                          const language = match ? match[1] : '';
                           return match ? (
                             <div className="relative mt-2 mb-2 bg-slate-800 rounded-lg group shadow-sm">
                               <button
