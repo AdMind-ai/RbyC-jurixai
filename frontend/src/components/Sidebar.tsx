@@ -105,24 +105,25 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapseChange }) => {
     >
       {/* Logo */}
       <div
-        className="bg-[#172554] flex flex-col justify-center cursor-pointer select-none"
+        className="bg-[#172554] flex items-center cursor-pointer select-none px-5"
         style={{ height: 72 }}
         onClick={() => setIsCollapsed(!isCollapsed)}
         title={isCollapsed ? 'Espandi sidebar' : 'Comprimi sidebar'}
       >
         {isCollapsed ? (
-          <div className="flex items-center justify-center h-full">
-            <span className="text-white font-light text-base tracking-widest">R</span>
+          <div className="flex items-center justify-center w-full">
+            {/* Green dot — from logo mark */}
+            <span
+              className="block rounded-full"
+              style={{ width: 10, height: 10, background: '#1b9162' }}
+            />
           </div>
         ) : (
-          <div className="px-6">
-            <h1 className="text-xl font-light tracking-[0.15em] text-white leading-tight">
-              REFINK
-            </h1>
-            <p className="text-[9px] tracking-wider text-blue-300/60 uppercase mt-0.5">
-              powered by CONSILIA
-            </p>
-          </div>
+          <img
+            src="/logo-dark.svg"
+            alt="Refink"
+            style={{ height: 38, width: 'auto', display: 'block' }}
+          />
         )}
       </div>
 
@@ -276,9 +277,17 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapseChange }) => {
         )}
 
         {!isCollapsed && (
-          <p className="text-[10px] text-blue-400/50 text-center py-2 mt-1">
-            Refink Suite v2.4.0
-          </p>
+          <div className="flex flex-col items-center gap-1.5 py-3 mt-1">
+            {/* Green dot accent — dal logo Refink */}
+            <div className="flex items-center gap-[5px]">
+              <span className="block rounded-full" style={{ width: 5, height: 5, background: '#365142' }} />
+              <span className="block rounded-full" style={{ width: 5, height: 5, background: '#1b9162' }} />
+              <span className="block rounded-full" style={{ width: 5, height: 5, background: '#4ade80' }} />
+            </div>
+            <p className="text-[10px] text-blue-400/50 text-center">
+              Refink Suite v2.4.0
+            </p>
+          </div>
         )}
       </div>
     </div>
