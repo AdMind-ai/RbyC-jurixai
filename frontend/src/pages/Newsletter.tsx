@@ -419,13 +419,6 @@ const Newsletter: React.FC = () => {
                           isUser={msg.role === 'user'}
                         />
                       </div>
-                      {/* Badge "bozza generata" se il messaggio contiene il tag */}
-                      {msg.role === 'assistant' && /<bozza>/i.test(msg.content) && !msg.isStreaming && (
-                        <div className="mt-2 flex items-center gap-1.5 text-[11px] text-[#1b9162] font-medium">
-                          <Check size={11} />
-                          Bozza aggiornata nel pannello →
-                        </div>
-                      )}
                     </>
                   ) : msg.isStreaming ? (
                     <TypingDots />
