@@ -44,6 +44,13 @@ const formatFileSize = (bytes: number) => {
   return `${(bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 };
 
+// Strip <bozza>…</bozza> tags for clean chat display (content goes to preview instead)
+const stripBozzaTag = (text: string) =>
+  text
+    .replace(/<bozza>[\s\S]*?<\/bozza>/gi, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
 const WELCOME: ChatMessage = {
   id: 'welcome',
   role: 'assistant',
@@ -197,13 +204,15 @@ const Newsletter: React.FC = () => {
     el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
   }, [input]);
 
-  // Keep preview in sync: use the last long AI message as draft
+  // Extract <bozza>…</bozza> from the latest AI message for the preview panel
   useEffect(() => {
     const aiMessages = messages.filter((m) => m.role === 'assistant' && m.id !== 'welcome');
     if (aiMessages.length === 0) return;
     const last = aiMessages[aiMessages.length - 1];
-    if (last.content && last.content.length > 100) {
-      setPreviewContent(last.content);
+    if (!last.content) return;
+    const match = last.content.match(/<bozza>([\s\S]*?)<\/bozza>/i);
+    if (match) {
+      setPreviewContent(match[1].trim());
     }
   }, [messages]);
 
@@ -252,8 +261,16 @@ const Newsletter: React.FC = () => {
         documentReferences = uploadResponse.documents;
       }
 
-      // 2. Enrich prompt with newsletter context
-      const enrichedMessage = `[Richiesta: ${draftType === 'newsletter' ? 'Newsletter normativa' : 'PILL formativo'}]\n${userMsg.content}`;
+      // 2. Enrich prompt with newsletter context + bozza tag instruction
+      const typeLabel = draftType === 'newsletter' ? 'Newsletter normativa' : 'PILL formativo';
+      const enrichedMessage =
+        `[Richiesta: ${typeLabel}]\n` +
+        `ISTRUZIONE DI FORMATO: quando generi la bozza definitiva del documento, ` +
+        `inseriscila SEMPRE all'interno dei tag <bozza> e </bozza>. ` +
+        `Tutto ciò che è conversazionale (domande, chiarimenti, intro, conclusioni) ` +
+        `va FUORI dai tag. Esempio: "Ecco la bozza: <bozza>...testo documento...</bozza> ` +
+        `Fammi sapere se vuoi modifiche."\n\n` +
+        userMsg.content;
 
       // 3. Stream response
       const response = await checkComplianceChatService.streamMessage(
@@ -417,9 +434,21 @@ const Newsletter: React.FC = () => {
                   {msg.id === 'welcome' ? (
                     <p className="text-sm leading-relaxed">{msg.content}</p>
                   ) : msg.content ? (
-                    <div className="text-sm leading-relaxed">
-                      <MarkdownContent content={msg.content} isUser={msg.role === 'user'} />
-                    </div>
+                    <>
+                      <div className="text-sm leading-relaxed">
+                        <MarkdownContent
+                          content={msg.role === 'assistant' ? stripBozzaTag(msg.content) : msg.content}
+                          isUser={msg.role === 'user'}
+                        />
+                      </div>
+                      {/* Badge "bozza generata" se il messaggio contiene il tag */}
+                      {msg.role === 'assistant' && /<bozza>/i.test(msg.content) && !msg.isStreaming && (
+                        <div className="mt-2 flex items-center gap-1.5 text-[11px] text-[#1b9162] font-medium">
+                          <Check size={11} />
+                          Bozza aggiornata nel pannello →
+                        </div>
+                      )}
+                    </>
                   ) : msg.isStreaming ? (
                     <TypingDots />
                   ) : null}
