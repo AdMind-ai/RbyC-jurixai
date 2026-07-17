@@ -49,7 +49,7 @@ const segreteriaTabs: { key: RouteKey; label: string; Icon: SvgIconComponent }[]
 ];
 
 const complianceTabs: { key: RouteKey; label: string; Icon: SvgIconComponent }[] = [
-  { key: 'compliance-chat', label: 'Chat', Icon: MessageSquareText },
+  { key: 'compliance-chat', label: 'Agente Vera', Icon: MessageSquareText },
   { key: 'compliance-documents', label: 'Documenti', Icon: FolderOpen },
 ];
 
