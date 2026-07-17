@@ -150,124 +150,117 @@ const UsagePage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen p-8 lg:p-12 max-w-[1200px] mx-auto space-y-10 relative font-sans">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-        <div>
-          <h1 className="text-3xl font-bold text-[#172554] tracking-tight">Consumo AI</h1>
-          <p className="text-sm text-gray-400 font-normal mt-1">
-            Monitoraggio attività — {report?.monthLabel || selectedPeriodLabel}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-4">
-          {/* Selezione Periodo */}
-          <div className="relative group h-full">
-            <select
-              value={period ?? ''}
-              onChange={(e) => setPeriod(e.target.value || null)}
-              disabled={monthsLoading || monthOptions.length === 0}
-              className="appearance-none bg-white border border-gray-200 rounded-2xl py-4 pl-6 pr-14 text-base font-normal text-[#172554] focus:outline-none focus:ring-4 focus:ring-[#1F3A8B]/5 focus:border-[#1F3A8B] cursor-pointer transition-all shadow-sm group-hover:border-gray-300 h-full disabled:bg-gray-50 disabled:text-gray-400"
-            >
-              {monthOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none group-hover:text-[#172554] transition-colors" />
-          </div>
+    <div className="page-root">
+      <div className="page-header">
+        <h1 className="page-title">Consumo AI</h1>
+        <div className="relative max-w-[200px] w-full">
+          <select
+            value={period ?? ''}
+            onChange={(e) => setPeriod(e.target.value || null)}
+            disabled={monthsLoading || monthOptions.length === 0}
+            className="apple-select"
+          >
+            {monthOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
         </div>
       </div>
 
-      <div className="bg-white border border-gray-100 rounded-2xl px-6 py-5 shadow-sm">
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.2fr] gap-6 lg:gap-8 items-start">
-          <div>
-            <div className="flex items-start justify-between gap-6">
-              <p className="text-sm font-normal text-gray-400 whitespace-nowrap">Totale periodo</p>
-              <p className="text-[26px] font-bold text-[#1F3A8B] leading-none text-right">{subtotalWithMarkupDisplay}</p>
-            </div>
-            <div className="mt-4 pt-4 border-t border-gray-100 space-y-3">
-              <div className="flex items-center justify-between gap-6">
-                <p className="text-sm font-normal text-gray-400 whitespace-nowrap">Totale con IVA</p>
-                <p className="text-sm font-bold text-[#172554] leading-none text-right">{totalWithVatDisplay}</p>
-              </div>
-              <div className="flex items-center justify-between gap-6">
-                <p className="text-sm font-normal text-gray-400 whitespace-nowrap">Addebito previsto</p>
-                <p className="text-sm font-semibold text-[#172554] leading-none text-right">{chargeDateDisplay}</p>
-              </div>
-              {billingSummaryError && (
-                <p className="text-xs text-amber-600 truncate">{billingSummaryError}</p>
-              )}
-            </div>
+      <div className="page-divider" />
+
+      <div className="page-body gap-6">
+        {/* KPI Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="apple-card">
+            <div className="text-[13px] text-slate-400">Totale mensile</div>
+            <div className="text-2xl font-semibold text-slate-800 mt-1">{subtotalWithMarkupDisplay}</div>
           </div>
+          <div className="apple-card">
+            <div className="text-[13px] text-slate-400">Totale con IVA</div>
+            <div className="text-2xl font-semibold text-slate-800 mt-1">{totalWithVatDisplay}</div>
+            {billingSummaryError && (
+              <p className="text-xs text-red-500 mt-2 truncate">{billingSummaryError}</p>
+            )}
+          </div>
+          <div className="apple-card">
+            <div className="flex items-center gap-2 text-[13px] text-slate-400">
+              Data addebito
+            </div>
+            <div className="text-2xl font-semibold text-slate-800 mt-1">{chargeDateDisplay}</div>
+          </div>
+        </div>
 
-          <div className="lg:border-l lg:border-gray-100 lg:pl-8">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-xl bg-[#1F3A8B]/10 text-[#1F3A8B] flex items-center justify-center shrink-0">
-                  <CreditCard className="w-5 h-5" />
+        {/* Metodo di pagamento */}
+        {isAdmin && (
+          <div className="apple-card flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <CreditCard className="text-slate-400 w-6 h-6" />
+              <div>
+                <div className="text-sm font-medium text-slate-800">Metodo di pagamento</div>
+                <div className="text-[13px] text-slate-500">
+                  {billingLoading ? 'Caricamento...' : cardLabel}
+                  {!billingLoading && cardExpiry !== 'La carta verra usata per la fattura mensile automatica.' && ` • ${cardExpiry}`}
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs text-gray-400 font-semibold uppercase">Metodo di pagamento</p>
-                  <p className="text-base font-bold text-[#172554] mt-1 truncate">{billingLoading ? 'Caricamento...' : cardLabel}</p>
-                  <p className="text-xs text-gray-500 mt-1">{cardExpiry}</p>
-                  {billingError && (
-                    <p className="text-xs text-red-600 mt-2">{billingError}</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-2 shrink-0 items-end">
-                {isAdmin && (
-                  <button
-                    onClick={handleSetupPaymentMethod}
-                    disabled={billingActionLoading}
-                    className="inline-flex items-center justify-center gap-2 bg-[#1F3A8B] text-white hover:bg-[#172554] disabled:bg-gray-300 px-3 py-2 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap"
-                  >
-                    <CreditCard className="w-4 h-4" />
-                    {billingStatus?.paymentMethodReady ? 'Aggiorna carta' : 'Registra carta'}
-                  </button>
+                {billingError && (
+                  <p className="text-xs text-red-500 mt-1">{billingError}</p>
                 )}
               </div>
             </div>
+            <button
+              onClick={handleSetupPaymentMethod}
+              disabled={billingActionLoading}
+              className="btn-secondary whitespace-nowrap"
+            >
+              {billingStatus?.paymentMethodReady ? 'Aggiorna carta' : 'Aggiungi carta'}
+            </button>
           </div>
+        )}
+
+        {/* Tabella consumo */}
+        <div className="space-y-4">
+          {monthsError && (
+            <div className="p-4 bg-red-50 text-red-700 rounded-xl text-sm border border-red-100">
+              Errore nel caricamento dei periodi: {monthsError}
+            </div>
+          )}
+
+          {monthsLoading && (
+            <div className="p-4 bg-slate-50 text-slate-500 rounded-xl text-sm border border-slate-100">
+              Caricamento periodi disponibili...
+            </div>
+          )}
+
+          {!monthsLoading && !monthsError && monthOptions.length === 0 && (
+            <div className="p-4 bg-slate-50 text-slate-500 rounded-xl text-sm border border-slate-100">
+              Nessun consumo registrato finora. Torna quando avrai almeno un evento di utilizzo.
+            </div>
+          )}
+
+          {error && (
+            <div className="p-4 bg-red-50 text-red-700 rounded-xl text-sm border border-red-100">
+              Errore nel caricamento del report: {error.message}
+            </div>
+          )}
+
+          {reportLoading && !report && period && (
+            <div className="p-4 bg-slate-50 text-slate-500 rounded-xl text-sm border border-slate-100">
+              Caricamento dati per {selectedPeriodLabel}...
+            </div>
+          )}
+
+          {report && (
+            <div className="apple-card p-0 overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 text-sm font-semibold text-slate-700">
+                Dettaglio consumi
+              </div>
+              <ConsumptionTable report={report} />
+            </div>
+          )}
         </div>
-      </div>
-
-      {/* Sezione Tabella */}
-      <div className="space-y-6">
-        {monthsError && (
-          <div className="rounded-2xl border border-red-100 bg-red-50 text-red-700 px-5 py-4 text-sm">
-            Errore nel caricamento dei periodi: {monthsError}
-          </div>
-        )}
-
-        {monthsLoading && (
-          <div className="rounded-2xl border border-dashed border-[#1F3A8B]/20 bg-white px-5 py-4 text-sm text-[#1F3A8B]">
-            Caricamento periodi disponibili...
-          </div>
-        )}
-
-        {!monthsLoading && !monthsError && monthOptions.length === 0 && (
-          <div className="rounded-2xl border border-gray-100 bg-white px-5 py-4 text-sm text-gray-500">
-            Nessun consumo registrato finora. Torna quando avrai almeno un evento di utilizzo.
-          </div>
-        )}
-
-        {error && (
-          <div className="rounded-2xl border border-red-100 bg-red-50 text-red-700 px-5 py-4 text-sm">
-            Errore nel caricamento del report: {error.message}
-          </div>
-        )}
-
-        {reportLoading && !report && period && (
-          <div className="rounded-2xl border border-dashed border-[#1F3A8B]/20 bg-white px-5 py-4 text-sm text-[#1F3A8B]">
-            Caricamento dati per {selectedPeriodLabel}...
-          </div>
-        )}
-
-        {report && <ConsumptionTable report={report} />}
       </div>
     </div>
   );

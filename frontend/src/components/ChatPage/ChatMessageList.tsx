@@ -1,11 +1,9 @@
 import React, { useEffect, useRef } from 'react'
-import { Paperclip } from 'lucide-react'
+import { Paperclip, Bot } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
 import { toast } from 'react-toastify'
-import { DotTyping } from '../DotTyping'
-import { Box, Paper, Typography } from '@mui/material'
 
 interface Message {
   sender: 'user' | 'ai'
@@ -21,6 +19,13 @@ interface ChatMessageListProps {
   chatColor?: string;
 }
 
+const TypingIndicator = () => (
+  <div className="flex space-x-1.5 items-center px-1">
+    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+  </div>
+)
 
 const ChatMessageList: React.FC<ChatMessageListProps> = ({ messages, isTyping, isOverview, page, chatColor }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -29,33 +34,18 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({ messages, isTyping, i
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isTyping])
 
-  // const parseThinkTag = (content: string) => {
-  //   const regexThink = /<think>([\s\S]*?)<\/think>/i
-  //   const match = content.match(regexThink)
-    
-  //   let thinkText = null
-  //   if (match) {
-  //     thinkText = match[1].trim()
-  //     content = content.replace(regexThink, '').trim()
-  //   }
-
-  //   return { thinkText, content }
-  // }
-
   const parseThinkTag = (content: string) => {
     const thinkTagOpen = content.lastIndexOf('<think>');
     const thinkTagClose = content.lastIndexOf('</think>');
     
-    // Caso 1: tag think foi aberta e já fechada corretamente posteriormente
     if (thinkTagOpen !== -1 && thinkTagClose > thinkTagOpen) {
       const beforeThink = content.slice(0, thinkTagOpen);
       const afterThink = content.slice(thinkTagClose + '</think>'.length);
-      content = beforeThink + afterThink;  // eliminado think
+      content = beforeThink + afterThink;
     }
     
-    // Caso 2: tag think foi aberta e ainda não foi fechada (streaming)
     if (thinkTagOpen !== -1 && thinkTagClose <= thinkTagOpen) {
-      content = content.slice(0, thinkTagOpen); // elimina o conteúdo think aberto
+      content = content.slice(0, thinkTagOpen);
     }
   
     return content.trim(); 
@@ -65,10 +55,6 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({ messages, isTyping, i
     navigator.clipboard.writeText(text)
     toast.success('Codice copiato!')
   }
-
-  // const fixExcessiveLineBreaks = (content: string) => {
-  //   return content.replace(/(<br\s*\/?>\s*){1,}/gi, '<br><br>');
-  // };
 
   const citeLinks = (text: string, citations: string[] = []) => {
     return text.replace(/\[(\d+)\]/g, (match, num) => {
@@ -86,288 +72,110 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({ messages, isTyping, i
     return thinkTagOpen !== -1 && (thinkTagClose === -1 || thinkTagClose < thinkTagOpen);
   };
 
+  if (messages.length === 0 && !isTyping) {
+    return (
+      <div className="flex-1 overflow-y-auto px-6 py-4 bg-[#f8fafc] flex flex-col items-center justify-center">
+        <Bot size={40} className="text-slate-300 mb-4" />
+        <p className="text-slate-400 text-sm">Inizia una conversazione</p>
+      </div>
+    );
+  }
+
   return (
-    <Box 
-      sx={{ 
-        position: page == 'check-compliance' ? 'relative' : 'absolute', 
-        top: 0, bottom: 0, left: 0, right: 0, 
-        overflowY: 'auto', 
-        px: page == 'check-compliance' ? '1.1vw' : '5vw', 
-        pb: page == 'check-compliance' ? '2vh' : '20vh'
-      }}
-    >
+    <div className="flex-1 overflow-y-auto px-6 py-4 bg-[#f8fafc] space-y-6">
+      {messages.map((msg, idx) => {
+        const isThinking = handleThink(msg.content);
+        const parsedContent = parseThinkTag(msg.content);
+        const contentWithCitations = msg.sender === 'ai' 
+          ? citeLinks(parsedContent, msg.citations) 
+          : parsedContent;
+        
+        const isUser = msg.sender === 'user';
 
-      {isOverview ? 
-        (<React.Fragment>
+        return (
+          <div key={idx} className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'}`}>
+            {!isUser && (
+              <div className="w-7 h-7 shrink-0 bg-[#1e3a8a] text-white rounded-full flex items-center justify-center mr-3 mt-1 shadow-sm">
+                <Bot size={16} />
+              </div>
+            )}
+            <div className={`flex flex-col ${isUser ? 'items-end max-w-[70%]' : 'items-start max-w-[80%]'}`}>
+              <div className={`${isUser ? 'chat-bubble-user' : 'chat-bubble-ai'} ${!isUser && isThinking ? 'py-4 px-5' : ''}`}>
+                
+                {isUser && Array.isArray(msg.citations) && msg.citations.length > 0 && (
+                  <div className="mb-3 flex flex-wrap gap-2 justify-end">
+                    {msg.citations.map((fileName, fileIdx) => (
+                      <div key={fileIdx} className="bg-white/20 text-xs flex items-center gap-1 px-2 py-1 rounded border border-white/30 text-white">
+                        <Paperclip size={10} /> {fileName}
+                      </div>
+                    ))}
+                  </div>
+                )}
 
-          {messages.map((msg, idx) => {
-            // const { thinkText, content: originalContent  } = parseThinkTag(msg.content)
-            // const content = fixExcessiveLineBreaks(originalContent);
-            // const contentWithCitations = citeLinks(originalContent, citations);
-            console.log('Overview-----> ', isOverview, isTyping, messages.length , ' - ', msg.content);
-            const isThinking = handleThink(msg.content);
-            const parsedContent = parseThinkTag(msg.content);
-            const contentWithCitations = msg.sender === 'ai' 
-              ? citeLinks(parsedContent, msg.citations) 
-              : parsedContent;
-            return (
-              <Box key={idx} display="flex" justifyContent={msg.sender === 'user' ? 'flex-end' : 'flex-start'} mb={0.5}>
-                <Paper 
-                  sx={{ 
-                    maxWidth: '95%',
-                    px: '1.5rem',
-                    py: '1rem',
-                    backgroundColor: msg.sender === 'user' ? '#ffffff' : '#ffffff',
-                    borderRadius: '8px',
-                    boxShadow: 'none',
-                    overflow: 'hidden',
-                    mb: '1vw',
-                  }}
-                >
-                  <Typography variant="subtitle1" sx={{ fontSize: '14px', fontWeight: 'bold', mb: 1 }}>
-                    {msg.sender === 'user' ? 'TU' : 'AI'}
-                  </Typography>
-
-                  {/* Arquivos anexados do usuário */}
-                  {msg.sender === 'user' && Array.isArray(msg.citations) && msg.citations.length > 0 && (
-                    <div className="mb-2 flex flex-wrap gap-2 justify-end">
-                      {msg.citations.map((fileName, fileIdx) => (
-                        <div key={fileIdx} className="bg-slate-50 text-xs flex items-center gap-1 px-2 py-1 rounded border border-slate-300 text-slate-600">
-                          <Paperclip size={10} /> {fileName}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Think Tag */}
-                  {/* {thinkText && (
-                    <Box sx={{ bgcolor: '#FFF3CD', borderRadius: '8px', p: 2, my: 2 }}>
-                      <Typography variant="subtitle2" sx={{ color: '#856404', fontSize: '0.9rem' }}>
-                        {thinkText}
-                      </Typography>
-                    </Box>
-                  )} */}
-
-                  {/* Markdown Content */}
-                  {isThinking ? 
-                  (<DotTyping />)
-                  :(
-                    <Typography component="div" sx={{ whiteSpace: 'pre-wrap', fontSize:'1rem', padding: 0 }}>
-                      <ReactMarkdown 
-                        remarkPlugins={[remarkGfm]} 
-                        rehypePlugins={[rehypeHighlight]}
-                      >
-                        {contentWithCitations}
-                      </ReactMarkdown>
-                    </Typography>
-                  )}
-                </Paper>
-              </Box>
-
-            )
-
-          })}
-
-        </React.Fragment>) : (<React.Fragment>
-
-          {messages.map((msg, idx) => {
-            // const { thinkText, content: originalContent  } = parseThinkTag(msg.content)
-            // const content = fixExcessiveLineBreaks(originalContent);
-            // const contentWithCitations = citeLinks(originalContent, citations);
-            console.log('Chat normal-----> ','isOverview: ', isOverview,'isTyping: ', isTyping, messages.length , ' - ', msg.content);
-            const parsedContent = parseThinkTag(msg.content);
-            const contentWithCitations = msg.sender === 'ai' 
-              ? citeLinks(parsedContent, msg.citations) 
-              : parsedContent;
-            return (
-              <Box key={idx} display="flex" justifyContent={msg.sender === 'user' ? 'flex-end' : 'flex-start'} mb={0.5}>
-                <Paper 
-                  sx={{ 
-                    maxWidth: '95%',
-                    px: '1.5rem',
-                    py: '1rem',
-                    backgroundColor: msg.sender === 'user' ? chatColor || 'white' : chatColor || 'white',
-                    borderRadius: '8px',
-                    boxShadow: 'none',
-                    overflow: 'hidden',
-                    mb: '1vw',
-                  }}
-                >
-                  <Typography variant="subtitle1" sx={{ fontSize: '14px', fontWeight: 'bold', mb: 1 }}>
-                    {msg.sender === 'user' ? 'TU' : 'AI'}
-                  </Typography>
-
-                  {/* Markdown Content */}
-                  <Typography component="div" sx={{ whiteSpace: 'pre-wrap', fontSize:'1rem', padding: 0 }}>
+                {isThinking ? (
+                  <TypingIndicator />
+                ) : (
+                  <div className="prose prose-sm max-w-none break-words">
                     <ReactMarkdown 
                       remarkPlugins={[remarkGfm]} 
                       rehypePlugins={[rehypeHighlight]}
                       components={{
-                        p: ({ children, ...props }) => (
-                          <Typography component="p" sx={{ margin: '0px 0', lineHeight: '1.5', fontSize:'1rem' }} {...props}>
-                            {children}
-                          </Typography>
-                        ),
-                        ul: ({ children, ...props }) => (
-                          <Box component="ul" sx={{ marginY: 0, py:0, pl:3, fontSize:'1rem', lineHeight: '1' }} {...props}>
-                            {children}
-                          </Box>
-                        ),
-                        ol: ({ children, ...props }) => (
-                          <Box component="ol" sx={{ marginY: 0, py:0, pl:3, fontSize:'1rem', lineHeight: '1' }} {...props}>
-                            {children}
-                          </Box>
-                        ),
-                        li: ({ children, ...props }) => (
-                          <Typography component="li" sx={{ margin: 0, py:0 , fontSize:'1rem', lineHeight: '1.2' }} {...props}>
-                            {children}
-                          </Typography>
-                        ),
-                        h1: ({ children, ...props }) => (
-                          <Typography component="h1" sx={{ margin: '4px 0', fontSize:'1.6rem', lineHeight: '1.8' }} {...props}>
-                            {children}
-                          </Typography>
-                        ),
-                        h2: ({ children, ...props }) => (
-                          <Typography component="h2" sx={{ margin: '4px 0', fontSize:'1.4rem', lineHeight: '1.6' }} {...props}>
-                            {children}
-                          </Typography>
-                        ),
-                        h3: ({ children, ...props }) => (
-                          <Typography component="h3" sx={{ margin: '4px 0', fontSize:'1.2rem', lineHeight: '1.4' }} {...props}>
-                            {children}
-                          </Typography>
-                        ), 
-                        h4: ({ children, ...props }) => (
-                          <Typography component="h4" sx={{ margin: '4px 0', fontSize:'1rem', lineHeight: '1' }} {...props}>
-                            {children}
-                          </Typography>
-                        ),
-                        table: ({ children, ...props }) => (
-                          <Box sx={{ overflowX: 'auto', my: 1 }}>
-                            <table
-                              {...props}
-                              style={{
-                                width: '100%',
-                                tableLayout: 'fixed', // Isso garante que as colunas sejam fixas e alinhadas
-                                borderCollapse: 'collapse',
-                                textAlign: 'left', // Ajuste o alinhamento se necessário
-                              }}
-                            >
-                              {children}
-                            </table>
-                          </Box>
-                        ),
-                        // Ajustando outras tags de lista, como <thead>, <tbody>, <tr>, <th>, <td>
-                        thead: ({ children, ...props }) => (
-                          <thead {...props} style={{ backgroundColor: '#f4f4f4', fontWeight: 'bold' }}>
-                            {children}
-                          </thead>
-                        ),
-                        tbody: ({ children, ...props }) => (
-                          <tbody {...props}>{children}</tbody>
-                        ),
-                        tr: ({ children, ...props }) => (
-                          <tr {...props} style={{ borderBottom: '1px solid #ddd' }}>
-                            {children}
-                          </tr>
-                        ),
-                        th: ({ children, ...props }) => (
-                          <th {...props} style={{ padding: '8px', border: '1px solid #ddd' }}>
-                            {children}
-                          </th>
-                        ),
-                        td: ({ children, ...props }) => (
-                          <td {...props} style={{ padding: '8px', border: '1px solid #ddd' }}>
-                            {children}
-                          </td>
-                        ),
-                        a: ({ href, children, ...props }) => (
-                          <a 
-                            href={href} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            style={{ 
-                              textDecoration: 'none', 
-                              color: '#ED6008',     
-                            }}
-                            {...props}
-                          >
-                            {children}
-                          </a>
-                        ),
                         code({ className, children, ...props }) {
                           const match = /language-(\w+)/.exec(className || '');
                           const language = match ? match[1] : '';
-                      
-                          return (
-                            <Box 
-                              sx={{ 
-                                bgcolor: '#282C34', 
-                                color: '#FFFFFF', 
-                                padding: 2, 
-                                borderRadius: '8px',
-                                position: 'relative',
-                                cursor: 'pointer',
-                                overflowY: 'auto', 
-                                my: 1
-                              }}
-                              onClick={() => copyToClipboard(String(children).replace(/\n$/, ''))}
-                            >
-                              <Typography variant="subtitle2" sx={{ 
-                                position: 'absolute', 
-                                top: 4, 
-                                right: 8, 
-                                color: '#ffffff88'
-                              }}>
-                                {language || 'code'} – Click per copiare
-                              </Typography>
-                              <code {...props}>
-                                {children}
-                              </code>
-                            </Box>
+                          return match ? (
+                            <div className="relative mt-2 mb-2 bg-slate-800 rounded-lg group shadow-sm">
+                              <button
+                                onClick={() => copyToClipboard(String(children).replace(/\n$/, ''))}
+                                className="absolute top-2 right-2 text-slate-400 hover:text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                Copia
+                              </button>
+                              <pre className="p-4 overflow-x-auto text-sm text-slate-50 m-0 rounded-lg">
+                                <code className={className} {...props}>
+                                  {children}
+                                </code>
+                              </pre>
+                            </div>
+                          ) : (
+                            <code className="bg-black/10 px-1 py-0.5 rounded text-sm font-mono" {...props}>
+                              {children}
+                            </code>
                           );
-                        }
+                        },
+                        p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>,
+                        a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#15803d] hover:underline font-medium">{children}</a>,
+                        ul: ({ children }) => <ul className="list-disc pl-4 mb-2 space-y-1">{children}</ul>,
+                        ol: ({ children }) => <ol className="list-decimal pl-4 mb-2 space-y-1">{children}</ol>,
+                        li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                        table: ({ children }) => <div className="overflow-x-auto mb-2"><table className="min-w-full text-left border-collapse">{children}</table></div>,
+                        th: ({ children }) => <th className="border-b border-slate-200 px-3 py-2 font-semibold bg-slate-50 text-slate-600">{children}</th>,
+                        td: ({ children }) => <td className="border-b border-slate-100 px-3 py-2">{children}</td>,
                       }}
                     >
                       {contentWithCitations}
                     </ReactMarkdown>
-                  </Typography>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+      
+      {isTyping && ( 
+        <div className="flex w-full justify-start">
+          <div className="w-7 h-7 shrink-0 bg-[#1e3a8a] text-white rounded-full flex items-center justify-center mr-3 mt-1 shadow-sm">
+            <Bot size={16} />
+          </div>
+          <div className="chat-bubble-ai py-4 px-5">
+            <TypingIndicator />
+          </div>
+        </div>
+      )}
 
-                </Paper>
-              </Box>
-
-            )
-          })}
-          
-          {isTyping && ( 
-            <Box display="flex" justifyContent="flex-start" mb={0.5}>
-              <Paper
-                sx={{
-                  maxWidth: '95%',
-                  px: '1.5rem',
-                  py: '1rem',
-                  backgroundColor: 'white',
-                  borderRadius: '8px',
-                  boxShadow: 'none',
-                  mb: '1vw',
-                }}
-              >
-                <Typography variant="subtitle1" sx={{ fontSize: '14px', fontWeight: 'bold', mb: 1 }}>
-                  AI
-                </Typography>
-                <DotTyping />
-              </Paper>
-            </Box>
-          )}
-
-        </React.Fragment>)
-      }
-
-
-
-      <div ref={messagesEndRef}></div>
-    </Box>
+      <div ref={messagesEndRef} className="h-4"></div>
+    </div>
   )
 }
 

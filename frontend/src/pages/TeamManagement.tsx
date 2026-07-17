@@ -152,252 +152,246 @@ const TeamManagement: React.FC = () => {
     };
 
     return (
-        <div className="w-full h-full p-8 flex flex-col animate-fade-in relative max-w-6xl mx-auto">
-            <div className="flex justify-between items-center mb-4">
-                <h2 className="text-3xl font-bold text-slate-800">Membri e accesso</h2>
+        <div className="page-root">
+            <div className="page-header">
+                <h2 className="page-title">Gestione Accessi</h2>
                 {isAdmin ? (
                     <button
                         onClick={() => setIsModalOpen(true)}
-                        className="border border-green-600 text-green-700 hover:bg-green-50 px-6 py-2.5 rounded-lg font-medium flex items-center gap-2 transition-colors bg-white shadow-sm text-sm"
+                        className="btn-primary"
                     >
-                        <Plus size={20} /> Aggiungi membro
+                        Nuovo utente
                     </button>
                 ) : (
-                    <div className="text-sm text-slate-500 italic">Solo amministratori possono aggiungere membri</div>
+                    <div className="text-[13px] text-slate-400">Solo amministratori possono aggiungere membri</div>
                 )}
             </div>
+            
+            <div className="page-divider" />
 
-            {/* Search Bar */}
-            <div className="bg-white rounded-lg border border-slate-300 shadow-sm p-1 flex items-center mb-4">
-                <div className="p-2 text-slate-400">
-                    <Search size={18} />
+            <div className="page-body">
+                {/* Search Bar */}
+                <div className="relative max-w-sm mb-4">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                    <input
+                        type="text"
+                        placeholder="Ricerca per nome o email..."
+                        className="apple-input pl-9"
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
+                    />
                 </div>
-                <input
-                    type="text"
-                    placeholder="Ricerca per nome o email..."
-                    className="flex-1 p-1 outline-none text-slate-700 placeholder:text-slate-400 text-sm"
-                    value={searchTerm}
-                    onChange={e => setSearchTerm(e.target.value)}
-                />
-            </div>
 
-            {/* Table */}
-            <div className="bg-white rounded-lg shadow-sm border border-slate-300 overflow-hidden flex-1">
-                <table className="w-full text-left border-collapse">
-                    <thead className="bg-slate-50/50 border-b border-slate-200">
-                        <tr>
-                            <th className="p-4 font-medium text-slate-500 text-sm">Nome</th>
-                            <th className="p-4 font-medium text-slate-500 text-sm">Ruolo</th>
-                            <th className="p-4 font-medium text-slate-500 text-sm">Username</th>
-                            <th className="p-4 font-medium text-slate-500 text-sm">Email</th>
-                            <th className="p-4 font-medium text-slate-500 text-sm">Creato il</th>
-                            <th className="p-4 font-medium text-slate-500 text-sm">Ultima modifica</th>
-                            <th className="p-4"></th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200">
-                        {paginatedUsers.map(user => (
-                            <tr key={user.id} className="hover:bg-slate-50 transition-colors group">
-                                <td className="p-5 flex items-center gap-4">
-                                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-xs" style={{ backgroundColor: user.avatarColor }}>
-                                        {user.name.charAt(0).toUpperCase()}
-                                    </div>
-                                    <span className="font-medium text-slate-800 text-sm">{user.name}</span>
-                                </td>
-                                <td className="p-4">
-                                    <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded font-bold text-[10px] uppercase tracking-wide border border-green-200">
-                                        {user.role}
-                                    </span>
-                                </td>
-                                <td className="p-3 text-slate-600 text-sm">{user.username}</td>
-                                <td className="p-3 text-slate-600 text-sm">{user.email}</td>
-                                <td className="p-3 text-slate-600 tabular-nums text-xs">{user.createdDate}</td>
-                                <td className="p-3 text-slate-600 tabular-nums text-xs">{user.lastModified}</td>
-                                <td className="p-3 text-right flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    {isAdmin && (
-                                        <button className="text-slate-400 hover:text-blue-600 text-xs font-medium" onClick={() => { setPasswordUser(user); setIsPasswordModalOpen(true); }}>Reimposta password</button>
-                                    )}
-                                    {isAdmin && user.role !== 'Admin' && (
-                                        <button onClick={() => { setDeleteUser(user); setIsDeleteModalOpen(true); }} className="text-slate-400 hover:text-red-500">
-                                            <Trash2 size={16} />
-                                        </button>
-                                    )}
-                                    {/* Delete Confirmation Modal */}
-                                    {isDeleteModalOpen && deleteUser && (
-                                        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
-                                            <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-sm transform transition-all scale-100 border border-slate-200">
-                                                <h3 className="text-xl font-bold text-center text-slate-800 mb-6 flex items-center justify-center gap-2">
-                                                    <span className="text-red-500">&#9888;</span> Conferma richiesta <span className="text-red-500">&#9888;</span>
-                                                </h3>
-                                                <div className="text-center text-slate-700 mb-4 text-base">
-                                                    Vuoi davvero eliminare l’utente <strong>{deleteUser.name}</strong>?<br />
-                                                    Una volta eliminato, non sarà possibile recuperarlo.
-                                                </div>
-                                                <div className="flex gap-2 mt-6">
-                                                    <button
-                                                        onClick={handleDelete}
-                                                        className="flex-1 py-2 bg-red-500 text-white font-bold rounded-md hover:bg-red-600 transition-colors text-sm"
-                                                    >
-                                                        Elimina utente
-                                                    </button>
-                                                    <button
-                                                        onClick={() => { setIsDeleteModalOpen(false); setDeleteUser(null); }}
-                                                        className="flex-1 py-2 text-[#1e3a8a] font-bold hover:bg-blue-50 rounded-md transition-colors text-sm"
-                                                    >
-                                                        Annulla
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Password Reset Modal */}
-                                    {isPasswordModalOpen && passwordUser && (
-                                        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
-                                            <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-sm transform transition-all scale-100 border border-slate-200">
-                                                <h3 className="text-xl font-bold text-center text-slate-800 mb-4">Reimposta password per <span className="text-slate-600">{passwordUser.name}</span></h3>
-                                                <div className="space-y-3">
-                                                    <input
-                                                        type="password"
-                                                        placeholder="Nuova password"
-                                                        className="w-full p-2 rounded-md border border-slate-300 bg-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm"
-                                                        value={newPassword}
-                                                        onChange={e => setNewPassword(e.target.value)}
-                                                    />
-                                                    <input
-                                                        type="password"
-                                                        placeholder="Conferma password"
-                                                        className="w-full p-2 rounded-md border border-slate-300 bg-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm"
-                                                        value={confirmPassword}
-                                                        onChange={e => setConfirmPassword(e.target.value)}
-                                                    />
-                                                </div>
-                                                <div className="flex gap-2 mt-6">
-                                                    <button
-                                                        onClick={handleResetPassword}
-                                                        className="flex-1 py-2 bg-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-300 transition-colors text-sm"
-                                                    >
-                                                        Aggiorna
-                                                    </button>
-                                                    <button
-                                                        onClick={() => { setIsPasswordModalOpen(false); setPasswordUser(null); setNewPassword(''); setConfirmPassword(''); }}
-                                                        className="flex-1 py-2 text-[#1e3a8a] font-bold hover:bg-blue-50 rounded-md transition-colors text-sm"
-                                                    >
-                                                        Annulla
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-                                </td>
+                {/* Table */}
+                <div className="bg-white rounded-2xl overflow-hidden shadow-[var(--shadow-sm)]">
+                    <table className="w-full text-left border-collapse">
+                        <thead className="bg-slate-50 border-b border-slate-100">
+                            <tr>
+                                <th className="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-400">Nome</th>
+                                <th className="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-400">Email</th>
+                                <th className="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-400">Ruolo</th>
+                                <th className="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-400">Creato il</th>
+                                <th className="px-5 py-3.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-400">Ultima modifica</th>
+                                <th className="px-5 py-3.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-400">Azioni</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            {paginatedUsers.map(user => (
+                                <tr key={user.id} className="border-b border-slate-100/60 hover:bg-slate-50/50 transition-colors">
+                                    <td className="px-5 py-4 flex items-center gap-3">
+                                        <div className="w-[34px] h-[34px] bg-[#1e3a8a]/10 text-[#1e3a8a] font-semibold text-[13px] rounded-full flex items-center justify-center shrink-0">
+                                            {user.name.charAt(0).toUpperCase()}
+                                        </div>
+                                        <div>
+                                            <div className="font-medium text-slate-800 text-sm">{user.name}</div>
+                                            <div className="text-slate-500 text-[13px]">{user.username}</div>
+                                        </div>
+                                    </td>
+                                    <td className="px-5 py-4 text-sm text-slate-700">{user.email}</td>
+                                    <td className="px-5 py-4">
+                                        <span className={`badge ${user.role === 'Admin' ? 'badge-blue' : user.role === 'Editor' ? 'badge-green' : 'badge-gray'}`}>
+                                            {user.role}
+                                        </span>
+                                    </td>
+                                    <td className="px-5 py-4 text-sm text-slate-700">{user.createdDate}</td>
+                                    <td className="px-5 py-4 text-sm text-slate-700">{user.lastModified}</td>
+                                    <td className="px-5 py-4 text-right">
+                                        <div className="flex items-center justify-end gap-2">
+                                            {isAdmin && (
+                                                <button className="text-slate-300 hover:text-[#1e3a8a] transition-colors p-1" onClick={() => { setPasswordUser(user); setIsPasswordModalOpen(true); }} title="Reimposta password">
+                                                    <Shield size={16} />
+                                                </button>
+                                            )}
+                                            {isAdmin && user.role !== 'Admin' && (
+                                                <button className="text-slate-300 hover:text-red-400 transition-colors p-1" onClick={() => { setDeleteUser(user); setIsDeleteModalOpen(true); }} title="Elimina">
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            )}
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div className="flex justify-between items-center mt-4 text-sm text-slate-500">
+                    <div>
+                        {filteredUsers.length === 0 ? "Nessun membro" : `${page * rowsPerPage + 1}–${Math.min((page + 1) * rowsPerPage, filteredUsers.length)} di ${filteredUsers.length}`}
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            className="px-2 py-1 rounded hover:bg-slate-100 disabled:opacity-50 disabled:hover:bg-transparent"
+                            onClick={() => setPage(page - 1)}
+                            disabled={page === 0}
+                        >
+                            Precedente
+                        </button>
+                        <span>{page + 1} / {totalPages || 1}</span>
+                        <button
+                            className="px-2 py-1 rounded hover:bg-slate-100 disabled:opacity-50 disabled:hover:bg-transparent"
+                            onClick={() => setPage(page + 1)}
+                            disabled={page + 1 >= totalPages}
+                        >
+                            Successiva
+                        </button>
+                    </div>
+                </div>
             </div>
 
-            <div className="flex justify-between items-center gap-2 mt-2 text-xs text-slate-500">
-                <div className="flex items-center gap-2">
-                    <span>Righe per pagina: 6</span>
-                </div>
-                <div className="flex items-center gap-2">
-                    <button
-                        className="px-2 py-0.5 border rounded text-xs bg-white border-slate-300 disabled:opacity-50"
-                        onClick={() => setPage(page - 1)}
-                        disabled={page === 0}
-                    >
-                        &lt;
-                    </button>
-                    <span>{page + 1} / {totalPages || 1}</span>
-                    <button
-                        className="px-2 py-0.5 border rounded text-xs bg-white border-slate-300 disabled:opacity-50"
-                        onClick={() => setPage(page + 1)}
-                        disabled={page + 1 >= totalPages}
-                    >
-                        &gt;
-                    </button>
-                </div>
-                <span>{filteredUsers.length === 0 ? "Nessun membro" : `${page * rowsPerPage + 1}–${Math.min((page + 1) * rowsPerPage, filteredUsers.length)} di ${filteredUsers.length}`}</span>
-            </div>
-
-            {/* Modal */}
+            {/* Modal - Nuovo Utente */}
             {isModalOpen && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
-                    <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-sm transform transition-all scale-100 border border-slate-200">
-                        <h3 className="text-xl font-bold text-center text-slate-800 mb-6">Aggiungi nuovo membro</h3>
-
-                        <div className="space-y-3">
-                            <input
-                                type="text"
-                                placeholder="Username (letters, numbers and @/./+/-/_ )"
-                                className="w-full p-2 rounded-md border border-slate-300 bg-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm"
-                                value={newUser.username}
-                                onChange={e => {
-                                    const v = e.target.value;
-                                    setNewUser({ ...newUser, username: v });
-                                    if (!usernameRegex.test(v)) setUsernameError('Username non valido');
-                                    else setUsernameError(null);
-                                }}
-                            />
-                            {usernameError && <div className="text-xs text-red-500">{usernameError}</div>}
-                            <div className="grid grid-cols-2 gap-2">
+                <div className="modal-overlay">
+                    <div className="modal-box w-full max-w-md">
+                        <h3 className="text-lg font-semibold text-slate-800 mb-6">Aggiungi nuovo membro</h3>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-[13px] font-medium text-slate-700 mb-1">Username</label>
                                 <input
                                     type="text"
-                                    placeholder="Nome (first name)"
-                                    className="w-full p-2 rounded-md border border-slate-300 bg-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm"
-                                    value={newUser.first_name}
-                                    onChange={e => setNewUser({ ...newUser, first_name: e.target.value })}
+                                    className="apple-input"
+                                    placeholder="Username"
+                                    value={newUser.username}
+                                    onChange={e => {
+                                        const v = e.target.value;
+                                        setNewUser({ ...newUser, username: v });
+                                        if (!usernameRegex.test(v)) setUsernameError('Username non valido (solo lettere, numeri, @/./+/-/_)');
+                                        else setUsernameError(null);
+                                    }}
                                 />
+                                {usernameError && <div className="text-xs text-red-500 mt-1">{usernameError}</div>}
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-[13px] font-medium text-slate-700 mb-1">Nome</label>
+                                    <input
+                                        type="text"
+                                        className="apple-input"
+                                        placeholder="Nome"
+                                        value={newUser.first_name}
+                                        onChange={e => setNewUser({ ...newUser, first_name: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[13px] font-medium text-slate-700 mb-1">Cognome</label>
+                                    <input
+                                        type="text"
+                                        className="apple-input"
+                                        placeholder="Cognome"
+                                        value={newUser.last_name}
+                                        onChange={e => setNewUser({ ...newUser, last_name: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-[13px] font-medium text-slate-700 mb-1">Email</label>
                                 <input
-                                    type="text"
-                                    placeholder="Cognome (last name)"
-                                    className="w-full p-2 rounded-md border border-slate-300 bg-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm"
-                                    value={newUser.last_name}
-                                    onChange={e => setNewUser({ ...newUser, last_name: e.target.value })}
+                                    type="email"
+                                    className="apple-input"
+                                    placeholder="Email"
+                                    value={newUser.email}
+                                    onChange={e => setNewUser({ ...newUser, email: e.target.value })}
                                 />
                             </div>
-                            <input
-                                type="email"
-                                placeholder="Email"
-                                className="w-full p-2 rounded-md border border-slate-300 bg-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm"
-                                value={newUser.email}
-                                onChange={e => setNewUser({ ...newUser, email: e.target.value })}
-                            />
-                            <input
-                                type="password"
-                                placeholder="Password"
-                                className="w-full p-2 rounded-md border border-slate-300 bg-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm"
-                                value={newUser.password}
-                                onChange={e => setNewUser({ ...newUser, password: e.target.value })}
-                            />
-                            <div className="relative">
+                            <div>
+                                <label className="block text-[13px] font-medium text-slate-700 mb-1">Password</label>
+                                <input
+                                    type="password"
+                                    className="apple-input"
+                                    placeholder="Password"
+                                    value={newUser.password}
+                                    onChange={e => setNewUser({ ...newUser, password: e.target.value })}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-[13px] font-medium text-slate-700 mb-1">Ruolo</label>
                                 <select
-                                    className="w-full p-2 rounded-md border border-slate-300 bg-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all appearance-none text-sm"
+                                    className="apple-select"
                                     value={newUser.role}
                                     onChange={e => setNewUser({ ...newUser, role: e.target.value })}
                                 >
                                     {isAdmin && <option value="Admin">Admin</option>}
                                     <option value="Standard">Standard</option>
                                 </select>
-                                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                                    <Shield size={14} className="text-slate-400" />
-                                </div>
                             </div>
                         </div>
+                        <div className="flex justify-end gap-3 mt-8">
+                            <button className="btn-secondary" onClick={() => setIsModalOpen(false)}>Annulla</button>
+                            <button className="btn-primary" onClick={handleAddUser}>Aggiungi</button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
-                        <div className="flex gap-2 mt-6">
-                            <button
-                                onClick={handleAddUser}
-                                className="flex-1 py-2 bg-slate-200 text-slate-700 font-bold rounded-md hover:bg-slate-300 transition-colors text-sm"
-                            >
-                                Aggiungi
-                            </button>
-                            <button
-                                onClick={() => setIsModalOpen(false)}
-                                className="flex-1 py-2 text-[#1e3a8a] font-bold hover:bg-blue-50 rounded-md transition-colors text-sm"
-                            >
-                                Annulla
-                            </button>
+            {/* Modal - Conferma Eliminazione */}
+            {isDeleteModalOpen && deleteUser && (
+                <div className="modal-overlay">
+                    <div className="modal-box w-full max-w-sm">
+                        <h3 className="text-lg font-semibold text-slate-800 mb-2">Elimina utente</h3>
+                        <p className="text-sm text-slate-500 mb-6">
+                            Vuoi davvero eliminare l’utente <strong className="text-slate-700">{deleteUser.name}</strong>? Questa azione non può essere annullata.
+                        </p>
+                        <div className="flex justify-end gap-3">
+                            <button className="btn-secondary" onClick={() => { setIsDeleteModalOpen(false); setDeleteUser(null); }}>Annulla</button>
+                            <button className="btn-danger" onClick={handleDelete}>Elimina</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal - Reset Password */}
+            {isPasswordModalOpen && passwordUser && (
+                <div className="modal-overlay">
+                    <div className="modal-box w-full max-w-sm">
+                        <h3 className="text-lg font-semibold text-slate-800 mb-2">Reimposta password</h3>
+                        <p className="text-sm text-slate-500 mb-6">
+                            Inserisci la nuova password per <strong className="text-slate-700">{passwordUser.name}</strong>.
+                        </p>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-[13px] font-medium text-slate-700 mb-1">Nuova password</label>
+                                <input
+                                    type="password"
+                                    className="apple-input"
+                                    placeholder="Nuova password"
+                                    value={newPassword}
+                                    onChange={e => setNewPassword(e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-[13px] font-medium text-slate-700 mb-1">Conferma password</label>
+                                <input
+                                    type="password"
+                                    className="apple-input"
+                                    placeholder="Conferma password"
+                                    value={confirmPassword}
+                                    onChange={e => setConfirmPassword(e.target.value)}
+                                />
+                            </div>
+                        </div>
+                        <div className="flex justify-end gap-3 mt-8">
+                            <button className="btn-secondary" onClick={() => { setIsPasswordModalOpen(false); setPasswordUser(null); setNewPassword(''); setConfirmPassword(''); }}>Annulla</button>
+                            <button className="btn-primary" onClick={handleResetPassword}>Aggiorna</button>
                         </div>
                     </div>
                 </div>

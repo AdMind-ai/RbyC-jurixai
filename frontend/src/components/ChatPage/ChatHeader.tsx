@@ -1,9 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import SimpleDropdown from '../dropdowns/SimpleDropdown'
-import SaveCleanButtons from '../buttons/SaveCleanButtons'
 import { toast } from 'react-toastify'
 import { Globe, X } from 'lucide-react';
-import ModelSelector from './ModelSelector'
 import { ModelId } from '../../types/types'
 import {
   chatSessionService,
@@ -29,6 +26,7 @@ interface ChatHeaderProps {
   selectedModel: ModelId;
   setSelectedModel: (model: ModelId) => void;
   searchWebEnabled: boolean;
+  setSearchWebEnabled?: (enabled: boolean) => void;
   onChatSelect: (id: number | string | null, name: string | null) => void;
   selectedChat: StoredChatSelection | null;
   setSelectedChat: React.Dispatch<React.SetStateAction<StoredChatSelection | null>>;
@@ -55,6 +53,8 @@ const modelDescriptions: Record<ModelId, { name: string, desc: string, subtitle:
 const ChatHeader: React.FC<ChatHeaderProps> = ({
   selectedModel,
   setSelectedModel,
+  searchWebEnabled,
+  setSearchWebEnabled,
   onChatSelect,
   selectedChat,
   setSelectedChat,
@@ -64,18 +64,17 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
   conversationId,
   onResetConversation,
 }) => {
-    const handleCleanConversation = async () => {
-      setSelectedChat(null);
-        onChatSelect(null, null);
-      setMessages([]);
-      try {
-        await onResetConversation?.();
-      } catch (error) {
-        console.error('Erro ao reiniciar a conversa:', error);
-      }
-    };
+  const handleCleanConversation = async () => {
+    setSelectedChat(null);
+    onChatSelect(null, null);
+    setMessages([]);
+    try {
+      await onResetConversation?.();
+    } catch (error) {
+      console.error('Erro ao reiniciar a conversa:', error);
+    }
+  };
 
-  // ...existing code...
   const [chats, setChats] = useState<Chat[]>([]);
   const [openSaveModal, setOpenSaveModal] = useState(false);
   const [openDeleteModal, setOpenDeleteModal] = useState(false);
@@ -93,7 +92,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
     setOpenSaveModal(true);
   };
 
-  const handleDeleteClick = (chat: Chat | null) => {
+  const handleDeleteClick = (chat: Chat) => {
     setChatPendingDeletion(chat);
     setOpenDeleteModal(true);
   };
@@ -204,62 +203,111 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
   }, [fetchChatConversations]);
 
   return (
-    <div className="w-full h-full p-8 flex flex-col animate-fade-in relative max-w-6xl mx-auto">
-      <div className="flex justify-between items-center border-b border-slate-300 pb-3 z-10 bg-[#f8fafc] shrink-0 mt-16">
-        <div>
-          <h2 className="text-1xl font-bold text-slate-800 flex items-center gap-2">
-            Chat Assistant
-            
-          </h2>
-          <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-            <Globe size={10} /> Accesso internet attivo &bull; Ragionamento complesso
-          </p>
-        </div>
-      <ModelSelector currentModel={selectedModel} onSelectModel={setSelectedModel} />
-
-        <div className="flex items-center gap-2">
-          {saveCleanEnabled ? (
-            <SaveCleanButtons
-              showSave={!selectedChat || !selectedChat.id}
-              onSave={handleSaveClick}
-              onClean={handleCleanConversation}
-            />
-          ) : null}
-          <SimpleDropdown
-            title="Chat salvate"
-            options={chats.slice().reverse().map(chat => chat.name)}
-            onSelect={handleDropdownSelect}
-            selectedValue={selectedChat ? selectedChat.name : ''}
-            isDeleteItems
-            onDeleteItem={(name) => {
-              const chat = chats.find(c => c.name === name);
-              if (chat) handleDeleteClick(chat);
-            }}
-          />
-        </div>
+    <div className="bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between shrink-0">
+      <div className="flex items-center">
+        <h2 className="text-base font-semibold text-slate-800">Chat Assistant</h2>
       </div>
 
-      {/* Modal para salvar chat - Tailwind */}
-      {openSaveModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
-          <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-md border border-slate-200 relative">
-            <button onClick={() => { setOpenSaveModal(false); setNewChatName(''); }} className="absolute top-4 right-4 text-slate-500 hover:text-slate-800">
-              <X size={22} />
+      <div className="flex bg-slate-100 rounded-xl p-1">
+        <button
+          onClick={() => setSelectedModel(ModelId.GPT_5_4)}
+          className={`px-4 py-1.5 rounded-lg text-sm transition-all duration-200 ${
+            selectedModel === ModelId.GPT_5_4
+              ? 'bg-white shadow-sm text-[#1e3a8a] font-medium'
+              : 'text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          GPT-5.4
+        </button>
+        <button
+          onClick={() => setSelectedModel(ModelId.PERPLEXITY)}
+          className={`px-4 py-1.5 rounded-lg text-sm transition-all duration-200 ${
+            selectedModel === ModelId.PERPLEXITY
+              ? 'bg-white shadow-sm text-[#1e3a8a] font-medium'
+              : 'text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          Perplexity
+        </button>
+      </div>
+
+      <div className="flex items-center gap-4">
+        {setSearchWebEnabled && (
+          <label className="flex items-center gap-2 cursor-pointer">
+            <span className="text-sm text-slate-500">Cerca nel web</span>
+            <div className="relative inline-block w-10 h-6">
+              <input 
+                type="checkbox" 
+                className="peer sr-only" 
+                checked={searchWebEnabled}
+                onChange={(e) => setSearchWebEnabled(e.target.checked)} 
+              />
+              <div className="w-10 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#15803d]"></div>
+            </div>
+          </label>
+        )}
+
+        <div className="flex items-center gap-2">
+          <select
+            className="apple-select text-sm py-1.5 px-3 h-auto min-w-[140px]"
+            value={selectedChat ? selectedChat.name : ''}
+            onChange={(e) => {
+              const name = e.target.value;
+              if (name) handleDropdownSelect(name);
+            }}
+          >
+            <option value="" disabled>Seleziona chat...</option>
+            {chats.slice().reverse().map(chat => (
+              <option key={chat.id} value={chat.name}>{chat.name}</option>
+            ))}
+          </select>
+          {selectedChat && (
+            <button 
+              onClick={() => handleDeleteClick(selectedChat as Chat)} 
+              className="text-slate-400 hover:text-red-500 transition-colors p-1"
+              title="Elimina chat selezionata"
+            >
+              <X size={16} />
             </button>
-            <h3 className="text-2xl font-bold text-center text-slate-800 mb-6">Salva Chat</h3>
-            <div className="text-center text-slate-700 mb-4 text-base">Scegli un nome per il chat:</div>
-            <div className="flex justify-center mt-2">
+          )}
+        </div>
+
+        {saveCleanEnabled && (
+          <div className="flex items-center gap-2">
+            {!selectedChat?.id && (
+              <button onClick={handleSaveClick} className="btn-secondary py-1.5 px-3 text-sm h-auto">
+                Salva
+              </button>
+            )}
+            <button onClick={handleCleanConversation} className="btn-secondary py-1.5 px-3 text-sm h-auto">
+              Nuova
+            </button>
+          </div>
+        )}
+      </div>
+
+      {openSaveModal && (
+        <div className="modal-overlay">
+          <div className="modal-box">
+            <button onClick={() => { setOpenSaveModal(false); setNewChatName(''); }} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600">
+              <X size={20} />
+            </button>
+            <h3 className="text-xl font-semibold text-slate-800 mb-4 text-center">Salva Chat</h3>
+            <p className="text-sm text-slate-500 text-center mb-6">Scegli un nome per la chat:</p>
+            <div className="flex justify-center mb-6">
               <input
                 type="text"
                 value={newChatName}
                 onChange={(e) => setNewChatName(e.target.value)}
-                className="w-4/5 p-2 rounded border border-slate-300 text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
+                className="apple-input w-full"
+                placeholder="Nome chat..."
+                autoFocus
               />
             </div>
-            <div className="flex justify-center gap-2 mt-8">
+            <div className="flex justify-center">
               <button
+                className="btn-primary"
                 onClick={() => handleSaveChat(newChatName)}
-                className="py-2 px-8 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors"
               >
                 Salva
               </button>
@@ -268,25 +316,20 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
         </div>
       )}
 
-      {/* Modal para deletar chat - Tailwind */}
       {openDeleteModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
-          <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-md border border-slate-200 relative">
-            <button onClick={() => { setOpenDeleteModal(false); setChatPendingDeletion(null); }} className="absolute top-4 right-4 text-slate-500 hover:text-slate-800">
-              <X size={22} />
+        <div className="modal-overlay">
+          <div className="modal-box">
+            <button onClick={() => { setOpenDeleteModal(false); setChatPendingDeletion(null); }} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600">
+              <X size={20} />
             </button>
-            <h3 className="text-2xl font-bold text-center text-slate-800 mb-6">Conferma Eliminazione</h3>
-            <div className="text-center text-slate-700 mb-4 text-base">
-              Vuoi davvero eliminare il chat <strong>{chatPendingDeletion?.name}</strong>?<br />
-              Una volta eliminato, non sarà possibile recuperarlo.
-            </div>
-            <div className="flex justify-center gap-2 mt-8">
-              <button
-                onClick={handleDeleteChat}
-                className="py-2 px-8 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition-colors"
-              >
-                Elimina
-              </button>
+            <h3 className="text-xl font-semibold text-slate-800 mb-4 text-center">Conferma Eliminazione</h3>
+            <p className="text-sm text-slate-500 text-center mb-6">
+              Vuoi davvero eliminare la chat <strong>{chatPendingDeletion?.name}</strong>?<br />
+              Una volta eliminata, non sarà possibile recuperarla.
+            </p>
+            <div className="flex justify-center gap-3">
+              <button className="btn-secondary" onClick={() => { setOpenDeleteModal(false); setChatPendingDeletion(null); }}>Annulla</button>
+              <button className="btn-danger" onClick={handleDeleteChat}>Elimina</button>
             </div>
           </div>
         </div>
