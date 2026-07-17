@@ -248,43 +248,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapseChange }) => {
           <span className={`${isCollapsed ? 'hidden' : 'font-medium text-sm'}`}>Chat Assistant</span>
         </button>
 
-        {/* Dropdown Group */}
-        <div>
-          <button
-            onClick={toggleSegreteria}
-            title={isCollapsed ? 'Segreteria Societaria' : undefined}
-            className={`w-full flex items-center ${isCollapsed ? 'justify-center py-3' : 'justify-between px-4 py-3'} rounded-lg transition-all duration-200 ${location.pathname.startsWith('/seg-')
-              || location.pathname.startsWith('/segreteria')
-              ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
-              : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
-              }`}
-          >
-            <div className={`flex items-center gap-3 ${isCollapsed ? '' : ''}`}>
-              <Briefcase size={iconSize} />
-              <span className={`${isCollapsed ? 'hidden' : 'font-medium text-sm'}`}>Segreteria Societaria</span>
-            </div>
-            {!isCollapsed && (isSegreteriaOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />)}
-          </button>
-
-          {isSegreteriaOpen && (
-            <div className={`${isCollapsed ? 'mt-1 ml-0 space-y-1' : 'mt-1 ml-4 space-y-1 border-l border-blue-700 pl-2'}`}>
-              {segreteriaTabs.map(tab => (
-                <button
-                  key={tab.key}
-                  title={isCollapsed ? tab.label : undefined}
-                  onClick={() => handleNav(tab.key)}
-                  className={`w-full flex items-center gap-3 ${isCollapsed ? 'justify-center py-3' : 'px-4 py-2'} rounded-lg text-xs transition-all duration-200 ${location.pathname === routeMap[tab.key]
-                    ? 'text-[#4ade80] font-semibold bg-blue-900/50'
-                    : 'text-blue-300 hover:text-white'
-                    }`}
-                >
-                  <tab.Icon size={subIconSize} />
-                  <span className={`${isCollapsed ? 'hidden' : 'text-xs font-medium'}`}>{tab.label}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        {/* Segreteria Societaria - nascosta temporaneamente */}
       </nav>
 
       {/* Accessi & Usage Buttons */}
