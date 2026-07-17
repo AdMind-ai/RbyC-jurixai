@@ -3,6 +3,7 @@ import React, { useCallback, useContext, useEffect, useMemo, useState } from 're
 import { ChevronDown, CreditCard } from 'lucide-react';
 
 import ConsumptionTable from '../components/UsagePage/ConsumptionTable';
+import VevaUsageChart from '../components/UsagePage/VevaUsageChart';
 import { formatEuro } from '../constants/usage';
 import { AuthContext } from '../context/AuthContext';
 import { useUsageReport } from '../hooks/useUsageReport';
@@ -219,6 +220,9 @@ const UsagePage: React.FC = () => {
             </button>
           </div>
         )}
+
+        {/* Grafico consumo Vera */}
+        <VevaUsageChart />
 
         {/* Tabella consumo */}
         <div className="space-y-4">
