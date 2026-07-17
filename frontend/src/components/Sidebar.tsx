@@ -13,6 +13,7 @@ import {
   LogOut,
   BarChart3,
   User,
+  Newspaper,
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
@@ -25,6 +26,7 @@ const routeMap = {
   'compliance-chat': '/compliance/chat',
   'compliance-documents': '/compliance/documents',
   'chat-general': '/chat-general',
+  newsletter: '/newsletter',
   accessi: '/accessi',
   usage: '/usage',
 } as const;
@@ -215,6 +217,16 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapseChange }) => {
         >
           <Bot size={iconSize} />
           {!isCollapsed && <span className="text-[13px] font-medium">Chat Assistant</span>}
+        </button>
+
+        {/* Newsletter */}
+        <button
+          onClick={() => handleNav('newsletter')}
+          title={isCollapsed ? 'Newsletter' : undefined}
+          className={navItem(isActive('newsletter'), isCollapsed)}
+        >
+          <Newspaper size={iconSize} />
+          {!isCollapsed && <span className="text-[13px] font-medium">Newsletter</span>}
         </button>
 
         {/* Segreteria Societaria - nascosta temporaneamente */}
