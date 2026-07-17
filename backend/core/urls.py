@@ -79,6 +79,10 @@ urlpatterns = [
          name='openai-check-compliance-analyze'),
     path('check-compliance', CheckComplianceView.as_view(),
          name='check-compliance'),
+    path('check-compliance/logs/', ComplianceLogListView.as_view(),
+         name='check-compliance-logs'),
+    path('check-compliance/logs/<uuid:pk>/', ComplianceLogDetailView.as_view(),
+         name='check-compliance-log-detail'),
 
     # Deadlines
     path('deadlines/', DeadlineListCreateView.as_view(), name='deadline-list-create'),
