@@ -173,7 +173,7 @@ const UsagePage: React.FC = () => {
 
       <div className="page-divider" />
 
-      <div className="page-body gap-6">
+      <div className="page-body space-y-6">
         {/* KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="apple-card">
