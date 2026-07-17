@@ -229,17 +229,16 @@ const Chat: React.FC = () => {
     setShouldPersist(true);
   }, []);
 
-
   const activeConversationId = selectedChat?.thread_id ?? conversationRefs[selectedModel] ?? null;
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen w-full bg-[#f8fafc]">
-      {/* Header */}
+    <div className="page-root flex flex-col h-full bg-slate-50">
       <ChatHeader
         conversationId={activeConversationId}
         selectedModel={selectedModel}
         setSelectedModel={setSelectedModel}
         searchWebEnabled={searchWebEnabled}
+        setSearchWebEnabled={setSearchWebEnabled}
         onChatSelect={handleChatSelect}
         selectedChat={selectedChat}
         setSelectedChat={setSelectedChat}
@@ -248,32 +247,26 @@ const Chat: React.FC = () => {
         setMessages={setMessages}
         onResetConversation={handleResetConversationContext}
       />
-      <div className="flex-1 relative flex flex-col items-center justify-center h-full w-full relative">
-        <div className="w-full max-w-6xl mx-auto px-8 flex flex-col h-full">
-          <ChatMessageList
-            messages={messages}
-            isTyping={isTyping}
-            isOverview={isOverview}
-            chatColor='#F9F9FB'
-          />
-          {/* Messages Container */}
-          <div className="w-full">
-            <ChatInputArea
-                conversationId={activeConversationId}
-              onSend={handleSendMessage}
-              selectedChat={selectedChat}
-              setSelectedChat={setSelectedChat}
-              searchWebEnabled={searchWebEnabled}
-              setSearchWebEnabled={setSearchWebEnabled}
-              setIsOverview={setIsOverview}
-              setIsTyping={setIsTyping}
-              messages={messages}
-              selectedModel={selectedModel}
-                onConversationIdChange={updateConversationRef}
-                onConversationUpdated={requestAutoPersist}
-            />
-          </div>
-        </div>
+      <div className="flex-1 overflow-hidden relative flex flex-col w-full">
+        <ChatMessageList
+          messages={messages}
+          isTyping={isTyping}
+          isOverview={isOverview}
+        />
+        <ChatInputArea
+          conversationId={activeConversationId}
+          onSend={handleSendMessage}
+          selectedChat={selectedChat}
+          setSelectedChat={setSelectedChat}
+          searchWebEnabled={searchWebEnabled}
+          setSearchWebEnabled={setSearchWebEnabled}
+          setIsOverview={setIsOverview}
+          setIsTyping={setIsTyping}
+          messages={messages}
+          selectedModel={selectedModel}
+          onConversationIdChange={updateConversationRef}
+          onConversationUpdated={requestAutoPersist}
+        />
       </div>
     </div>
   );

@@ -370,498 +370,379 @@ export const DraftDocument: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col h-full bg-[#F8FAFC] text-sm">
-      {/* Header */}
-      <div className="px-7 py-8 bg-white border-b border-slate-300 flex-shrink-0">
-        <div className="max-w-7xl mx-auto w-full">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center">
-              <button
-                onClick={() => navigate('/')}
-                className="mr-6 p-2 hover:bg-slate-100 rounded-full transition-colors lg:hidden"
-              >
-                <ArrowLeft className="w-5 h-5 text-slate-600" />
-              </button>
-              <div>
-                <h2 className="text-2xl font-bold text-slate-900">
-                  Generatore Documenti
-                </h2>
-                <p className="text-slate-500 font-light mt-1 text-sm">
-                  Redazione automatica di bozze legali avanzate
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex space-x-8">
-            <button
-              onClick={() => setActiveTab('GENERATE')}
-              className={`pb-3 text-sm font-medium border-b-2 transition-all tracking-wide ${activeTab === 'GENERATE'
-                  ? 'border-slate-900 text-slate-900'
-                  : 'border-transparent text-slate-400 hover:text-slate-600'
-                }`}
-            >
-              WORKSPACE
-            </button>
-            <button
-              onClick={() => setActiveTab('ADD_COMPANY')}
-              className={`pb-3 text-sm font-medium border-b-2 transition-all tracking-wide ${activeTab === 'ADD_COMPANY'
-                  ? 'border-slate-900 text-slate-900'
-                  : 'border-transparent text-slate-400 hover:text-slate-600'
-                }`}
-            >
-              AGGIUNGI AZIENDA
-            </button>
-          </div>
+    <div className="page-root h-screen flex flex-row overflow-hidden bg-[#f8fafc]">
+      {/* Pannello Sinistro */}
+      <div className="w-[420px] shrink-0 bg-white border-r border-slate-100 flex flex-col h-full overflow-y-auto">
+        <div className="px-6 py-5 border-b border-slate-100 flex gap-6 shrink-0">
+          <button
+            onClick={() => setActiveTab('GENERATE')}
+            className={`text-[15px] pb-1 transition-all ${
+              activeTab === 'GENERATE'
+                ? 'text-[#1e3a8a] font-semibold border-b-2 border-[#1e3a8a]'
+                : 'text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            Genera documento
+          </button>
+          <button
+            onClick={() => setActiveTab('ADD_COMPANY')}
+            className={`text-[15px] pb-1 transition-all ${
+              activeTab === 'ADD_COMPANY'
+                ? 'text-[#1e3a8a] font-semibold border-b-2 border-[#1e3a8a]'
+                : 'text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            Aggiungi azienda
+          </button>
         </div>
-      </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-8">
-        <div className="max-w-7xl mx-auto h-full">
+        <div className="p-6 flex flex-col flex-1">
           {activeTab === 'GENERATE' ? (
-            <div className="flex flex-col lg:flex-row gap-8 h-full">
-              {/* Inputs Panel */}
-              <div className="w-full lg:w-[450px] flex-shrink-0 flex flex-col gap-6 overflow-y-auto h-full pr-2 pb-10">
-                <div className="bg-white rounded-sm border border-slate-300 p-8 shadow-sm flex-shrink-0">
-                  <div className="mb-6">
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
-                      Società Emittente
-                    </label>
-                    <div className="relative">
-                      <Building2 className="absolute left-3 top-3.5 w-4 h-4 text-slate-400" />
-                      <select
-                        value={selectedCompanyId}
-                        onChange={(e) => setSelectedCompanyId(e.target.value)}
-                        className="w-full pl-10 border border-slate-300 rounded-md px-3 py-2 text-sm bg-slate-50 focus:bg-white focus:ring-1 focus:ring-slate-400 focus:border-slate-400 outline-none transition-all appearance-none text-slate-700 font-medium"
-                      >
-                        <option value="">Nessuna (Bozza generica)</option>
-                        {companies.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
+            <div className="flex flex-col flex-1 h-full">
+              <div className="mb-5">
+                <label className="block text-[13px] font-medium text-slate-600 mb-1.5">
+                  Società Emittente
+                </label>
+                <select
+                  value={selectedCompanyId}
+                  onChange={(e) => setSelectedCompanyId(e.target.value)}
+                  className="apple-select w-full"
+                >
+                  <option value="">Nessuna (Bozza generica)</option>
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-                  <div className="mb-6">
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                      Tipologia Documento
-                    </label>
-                    <div className="relative">
-                      <FileText className="absolute left-3 top-3.5 w-4 h-4 text-slate-400" />
-                      <select
-                        value={docType}
-                        onChange={(e) => setDocType(e.target.value)}
-                        className="w-full pl-10 border border-slate-300 rounded-md px-3 py-2 text-sm bg-slate-50 focus:bg-white focus:ring-1 focus:ring-slate-400 focus:border-slate-400 outline-none transition-all appearance-none text-slate-700 font-medium"
-                      >
-                        <option value="">Personalizzato / Altro</option>
-                        <option value="Addendum Contrattuale">Ad dendum Contrattuale</option>
-                        <option value="Contratto di Servizi">Contratto di Servizi</option>
-                        <option value="Diffida ad Adempiere">Diffida ad Adempiere</option>
-                        <option value="Lettera di Convocazione">Lettera di Convocazione</option>
-                        <option value="Lettera di Incarico">Lettera di Incarico</option>
-                        <option value="NDA">Non-Disclosure Agreement (NDA)</option>
-                        <option value="Parere Legale">Parere Legale</option>
-                        <option value="Parere Legale">Parere Legale Pro Veritate</option>
-                        <option value="Verbale Assemblea Ordinaria">Verbale Assemblea Ordinaria</option>
-                        <option value="Verbale Consiglio di Amministrazione">Verbale CdA</option>
-                      </select>
-                    </div>
-                  </div>
+              <div className="mb-5">
+                <label className="block text-[13px] font-medium text-slate-600 mb-1.5">
+                  Tipologia Documento
+                </label>
+                <select
+                  value={docType}
+                  onChange={(e) => setDocType(e.target.value)}
+                  className="apple-select w-full"
+                >
+                  <option value="">Personalizzato / Altro</option>
+                  <option value="Addendum Contrattuale">Addendum Contrattuale</option>
+                  <option value="Contratto di Servizi">Contratto di Servizi</option>
+                  <option value="Diffida ad Adempiere">Diffida ad Adempiere</option>
+                  <option value="Lettera di Convocazione">Lettera di Convocazione</option>
+                  <option value="Lettera di Incarico">Lettera di Incarico</option>
+                  <option value="NDA">Non-Disclosure Agreement (NDA)</option>
+                  <option value="Parere Legale">Parere Legale</option>
+                  <option value="Parere Legale Pro Veritate">Parere Legale Pro Veritate</option>
+                  <option value="Verbale Assemblea Ordinaria">Verbale Assemblea Ordinaria</option>
+                  <option value="Verbale Consiglio di Amministrazione">Verbale CdA</option>
+                </select>
+              </div>
 
-                  <div className="mb-2">
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                      Contesto
-                    </label>
-                    <div
-                      onClick={() => fileInputRef.current?.click()}
-                      className="border-2 border-dashed border-slate-300 rounded-md p-5 flex items-center justify-center cursor-pointer hover:bg-slate-50 transition-colors group"
-                    >
-                      <Upload className="w-5 h-5 text-slate-400 group-hover:text-slate-600 mr-3" />
-                      <span className="text-sm text-slate-500 group-hover:text-slate-700">
-                        Carica file (PDF)
-                      </span>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        className="hidden"
-                        onChange={handleContextFileChange}
-                        accept=".pdf,application/pdf"
-                      />
-                    </div>
-                    {contextFiles.length > 0 && (
-                      <div className="mt-4 space-y-2">
-                        {contextFiles.map((f, i) => (
-                          <div
-                            key={i}
-                            className="flex items-center justify-between text-sm text-slate-700 bg-white border border-slate-300 px-3 py-2 rounded-md"
-                          >
-                            <span className="truncate font-medium">
-                              {f.name}
-                            </span>
-                            <button
-                              onClick={() =>
-                                setContextFiles((files) =>
-                                  files.filter((_, idx) => idx !== i)
-                                )
-                              }
-                            >
-                              <X className="w-5 h-5 text-slate-400 hover:text-red-600" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex-1 bg-white rounded-sm border border-slate-300 p-8 shadow-sm flex flex-col min-h-[300px] flex-shrink-0">
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
-                    Istruzioni Prompt
-                  </label>
-                  <textarea
-                    value={instructions}
-                    onChange={(e) => setInstructions(e.target.value)}
-                    placeholder="Descrivi in dettaglio il contenuto, le clausole specifiche e il tono del documento..."
-                    className="w-full flex-1 border-0 bg-transparent outline-none resize-none text-sm text-slate-800 placeholder-slate-300 font-light leading-relaxed"
+              <div className="mb-5">
+                <label className="block text-[13px] font-medium text-slate-600 mb-1.5">
+                  Contesto (PDF)
+                </label>
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:border-[#1e3a8a] cursor-pointer transition-colors"
+                >
+                  <Upload className="w-6 h-6 text-slate-400 mx-auto mb-2" />
+                  <span className="text-[13px] text-slate-500">Carica file</span>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    onChange={handleContextFileChange}
+                    accept=".pdf,application/pdf"
                   />
                 </div>
-
-                <button
-                  onClick={handleGenerate}
-                  disabled={loading || !instructions.trim()}
-                  className="w-full bg-[#0F172A] text-white font-medium py-4 rounded-sm shadow-lg hover:bg-black transition-all flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed tracking-wide text-xs flex-shrink-0"
-                >
-                  {loading ? (
-                    <Loader2 className="w-6 h-6 animate-spin" />
-                  ) : (
-                    <Sparkles className="w-6 h-6 mr-3 text-[#C5A572]" />
-                  )}
-                  {loading ? 'ELABORAZIONE IN CORSO...' : 'GENERA BOZZA'}
-                </button>
-              </div>
-
-              {/* Preview Panel */}
-              <div className="flex-1 bg-white rounded-sm border border-slate-300 p-8 shadow-sm overflow-y-auto">
-                {pdfUrl ? (
-                  <div className="relative h-full">
-                    <div className="absolute top-3 right-3 flex gap-2 z-10">
-                      {pdfUrl && (
-                        <a
-                          href={pdfUrl}
-                          download={`${docType || 'doc'}_${new Date().toISOString().slice(0, 10)}.pdf`}
-                          className="p-1.5 bg-white hover:bg-red-50 text-red-600 rounded border border-red-200 shadow-sm text-xs flex items-center gap-2"
-                        >
-                          <FileDown className="w-4 h-4" />
-                          <span className="text-xs font-bold">PDF</span>
-                        </a>
-                      )}
-                      {wordUrl && (
-                        <a
-                          href={wordUrl}
-                          download={`${docType || 'doc'}_${new Date().toISOString().slice(0, 10)}.docx`}
-                          className="p-1.5 bg-white hover:bg-blue-50 text-blue-600 rounded border border-blue-200 shadow-sm text-xs flex items-center gap-2"
-                        >
-                          <FileDown className="w-4 h-4" />
-                          <span className="text-xs font-bold">WORD</span>
-                        </a>
-                      )}
-                    </div>
-
-                    <div className="h-full">
-                      {pdfFetchError ? (
-                        <div className="h-[100vh] flex flex-col items-center justify-center">
-                          <div className="bg-red-600 text-white px-4 py-2 rounded mb-4">
-                            {pdfFetchError}
-                          </div>
-                          <div className="flex gap-3">
-                            <a
-                              href={pdfUrl as string}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="px-4 py-2 bg-white border rounded text-sm"
-                            >
-                              Apri PDF in nuova scheda
-                            </a>
-                            <button
-                              onClick={retryFetchPdf}
-                              className="px-4 py-2 bg-blue-600 text-white rounded text-sm"
-                            >
-                              Riprova
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <Worker workerUrl={pdfWorkerUrl}>
-                          <div style={{ height: '105vh  ' }}>
-                            <Viewer fileUrl={pdfData ?? (pdfUrl as string)} />
-                          </div>
-                        </Worker>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="h-full flex flex-col items-center justify-center text-center opacity-40">
-                    <FileText className="w-16 h-16 mb-6 text-slate-300" />
-                    <h3 className="text-xl text-slate-400 mb-3">
-                      Area Anteprima
-                    </h3>
-                    <p className="max-w-xs text-slate-400 font-light text-sm">
-                      Il documento generato apparirà direttamente qui come anteprima PDF.
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            // COMPANY MANAGEMENT
-            <div className="max-w-4xl mx-auto">
-              <div className="bg-white rounded-sm border border-slate-300 p-8 shadow-sm min-h-[500px]">
-                <div className="flex justify-between items-center mb-10 border-b border-slate-200 pb-8">
-                  <h3 className="text-xl font-medium text-slate-900">
-                    Società Configurate
-                  </h3>
-                  <button
-                    onClick={() => setIsModalOpen(true)}
-                    className="bg-slate-900 text-white px-6 py-2 rounded-sm text-sm font-medium hover:bg-black flex items-center transition-colors shadow-md"
-                  >
-                    <Plus className="w-5 h-5 mr-2" />
-                    Aggiungi Azienda
-                  </button>
-                </div>
-
-                {companies.length === 0 ? (
-                  <div className="text-center py-24">
-                    <Building2 className="w-20 h-20 mx-auto mb-6 text-slate-200" />
-                    <p className="text-slate-400 font-light text-xl">
-                      Nessuna anagrafica presente.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    {companies.map((company) => (
+                {contextFiles.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    {contextFiles.map((f, i) => (
                       <div
-                        key={company.id}
-                        className="relative border border-slate-300 p-8 hover:border-slate-500 transition-colors bg-slate-50 group cursor-pointer"
+                        key={i}
+                        className="flex items-center justify-between text-xs text-slate-500 bg-slate-50 px-3 py-2 rounded-lg"
                       >
+                        <span className="truncate max-w-[200px]">{f.name}</span>
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            openConfirmDelete(company.id, company.name)
-                          }}
-                          className="absolute right-3 top-3 text-slate-400 hover:text-red-600 p-1 rounded"
-                          title="Elimina azienda"
+                          onClick={() =>
+                            setContextFiles((files) => files.filter((_, idx) => idx !== i))
+                          }
+                          className="text-slate-400 hover:text-red-500"
                         >
-                          <Trash className="w-4 h-4" />
+                          <X className="w-4 h-4" />
                         </button>
-                        <div className="flex items-center mb-6">
-                          <div className="w-12 h-12 bg-white border border-slate-300 text-slate-800 flex items-center justify-center font-bold text-xl mr-5 shadow-sm">
-                            {company.name.substring(0, 1).toUpperCase()}
-                          </div>
-                          <div>
-                            <h4 className="font-semibold text-lg text-slate-900 mb-1">
-                              {company.name}
-                            </h4>
-                            <span className="text-xs text-[#C5A572] font-bold uppercase tracking-wider">
-                              Attiva
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex items-center text-sm text-slate-500 mt-4 pt-6 border-t border-slate-200">
-                          <FileText className="w-5 h-5 mr-3" />
-                          <span className="truncate">
-                            {company.documentTitle}
-                          </span>
-                        </div>
                       </div>
                     ))}
                   </div>
                 )}
+              </div>
+
+              <div className="mb-6 flex-1 flex flex-col">
+                <label className="block text-[13px] font-medium text-slate-600 mb-1.5">
+                  Istruzioni Prompt
+                </label>
+                <textarea
+                  value={instructions}
+                  onChange={(e) => setInstructions(e.target.value)}
+                  placeholder="Descrivi in dettaglio il contenuto, le clausole specifiche e il tono del documento..."
+                  rows={5}
+                  className="apple-input w-full flex-1 resize-none min-h-[120px]"
+                />
+              </div>
+
+              <div className="mt-auto space-y-3 shrink-0">
+                <button
+                  onClick={handleGenerate}
+                  disabled={loading || !instructions.trim()}
+                  className="btn-primary w-full justify-center"
+                >
+                  {loading ? (
+                    <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                  ) : (
+                    <Sparkles className="w-5 h-5 mr-2" />
+                  )}
+                  {loading ? 'Elaborazione...' : 'Genera bozza'}
+                </button>
+                {wordUrl && (
+                  <a
+                    href={wordUrl}
+                    download={`${docType || 'doc'}_${new Date().toISOString().slice(0, 10)}.docx`}
+                    className="btn-secondary w-full justify-center flex items-center"
+                  >
+                    <FileDown className="w-4 h-4 mr-2" />
+                    Scarica Word
+                  </a>
+                )}
+                {pdfUrl && (
+                  <a
+                    href={pdfUrl}
+                    download={`${docType || 'doc'}_${new Date().toISOString().slice(0, 10)}.pdf`}
+                    className="btn-secondary w-full justify-center flex items-center"
+                  >
+                    <FileDown className="w-4 h-4 mr-2" />
+                    Scarica PDF
+                  </a>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col h-full">
+              <div className="mb-8">
+                <h3 className="text-[13px] font-medium text-slate-600 mb-3 uppercase tracking-wider">
+                  Aziende salvate
+                </h3>
+                {companies.length === 0 ? (
+                  <p className="text-sm text-slate-400">Nessuna azienda.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {companies.map((company) => (
+                      <div
+                        key={company.id}
+                        className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100"
+                      >
+                        <div>
+                          <p className="text-sm font-medium text-slate-800">{company.name}</p>
+                          {company.documentTitle && (
+                            <p className="text-xs text-slate-500 truncate max-w-[200px]">
+                              {company.documentTitle}
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => openConfirmDelete(company.id, company.name)}
+                          className="p-1.5 text-red-400 hover:bg-red-50 rounded-md transition-colors"
+                        >
+                          <Trash className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-slate-100 pt-6">
+                <h3 className="text-[13px] font-medium text-slate-600 mb-4 uppercase tracking-wider">
+                  Nuova Azienda
+                </h3>
+
+                <div className="mb-4">
+                  <label className="block text-[13px] font-medium text-slate-600 mb-1.5">
+                    Nome Azienda
+                  </label>
+                  <input
+                    type="text"
+                    className="apple-input w-full"
+                    placeholder="Es. Studio Legale"
+                    value={newCompanyName}
+                    onChange={(e) => setNewCompanyName(e.target.value)}
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-[13px] font-medium text-slate-600 mb-1.5">
+                    Carta Intestata (PDF)
+                  </label>
+                  <div
+                    onClick={() => companyFileRef.current?.click()}
+                    className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl p-4 text-center hover:border-[#1e3a8a] cursor-pointer transition-colors"
+                  >
+                    {newCompanyFile ? (
+                      <div className="flex flex-col items-center">
+                        <Check className="w-5 h-5 text-green-500 mb-1" />
+                        <span className="text-xs text-slate-600 truncate max-w-full px-2">
+                          {newCompanyFile}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center">
+                        <Upload className="w-5 h-5 text-slate-400 mb-1" />
+                        <span className="text-[13px] text-slate-500">Carica PDF</span>
+                      </div>
+                    )}
+                    <input
+                      ref={companyFileRef}
+                      type="file"
+                      className="hidden"
+                      accept="application/pdf"
+                      onChange={async (e) => {
+                        if (e.target.files?.[0]) {
+                          const f = e.target.files[0]
+                          try {
+                            const fileData = await readFile(f)
+                            setNewCompanyFile(f.name)
+                            const title = f.name.replace(/\.[^/.]+$/, '')
+                            setNewCompanyDocumentTitle(title)
+                            setNewCompanyFileData(fileData.data)
+                            setNewCompanyFileMime(f.type)
+                          } catch (err) {
+                            console.error('Error reading company file', err)
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="mb-6">
+                  <label className="block text-[13px] font-medium text-slate-600 mb-1.5">
+                    Carta Intestata (Word)
+                  </label>
+                  <div
+                    onClick={() => companyWordFileRef.current?.click()}
+                    className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl p-4 text-center hover:border-[#1e3a8a] cursor-pointer transition-colors"
+                  >
+                    {newCompanyWordFile ? (
+                      <div className="flex flex-col items-center">
+                        <Check className="w-5 h-5 text-green-500 mb-1" />
+                        <span className="text-xs text-slate-600 truncate max-w-full px-2">
+                          {newCompanyWordFile}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center">
+                        <Upload className="w-5 h-5 text-slate-400 mb-1" />
+                        <span className="text-[13px] text-slate-500">Carica DOCX</span>
+                      </div>
+                    )}
+                    <input
+                      ref={companyWordFileRef}
+                      type="file"
+                      className="hidden"
+                      accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                      onChange={async (e) => {
+                        if (e.target.files?.[0]) {
+                          const f = e.target.files[0]
+                          try {
+                            const fileData = await readFile(f)
+                            setNewCompanyWordFile(f.name)
+                            const title = f.name.replace(/\.[^/.]+$/, '')
+                            setNewCompanyDocumentTitle(title)
+                            setNewCompanyWordFileData(fileData.data)
+                            setNewCompanyWordFileMime(f.type)
+                          } catch (err) {
+                            console.error('Error reading company word file', err)
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleAddCompany}
+                  disabled={!newCompanyName.trim()}
+                  className="btn-primary w-full justify-center mt-auto"
+                >
+                  Salva Azienda
+                </button>
               </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* MODAL */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900 bg-opacity-80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white shadow-2xl max-w-lg w-full p-10 animate-in fade-in zoom-in duration-200 rounded-sm h-500 overflow-y-auto max-h-full">
-            <div className="flex justify-between items-center mb-10">
-              <h3 className="text-3xl text-slate-900">
-                Nuova Anagrafica
-              </h3>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="text-gray-400 hover:text-slate-900 transition-colors"
-              >
-                <X className="w-7 h-7" />
-              </button>
-            </div>
+      {/* Pannello Destro */}
+      <div className="flex-1 bg-[#f8fafc] flex flex-col items-center justify-center h-full relative overflow-hidden">
+        <button
+          onClick={() => navigate('/')}
+          className="absolute top-5 left-5 p-2 bg-white rounded-full shadow-sm hover:bg-slate-50 transition-colors z-10"
+          title="Torna alla Home"
+        >
+          <ArrowLeft className="w-5 h-5 text-slate-600" />
+        </button>
 
-            <div className="space-y-8">
-              <div>
-                <label className="block text-sm font-bold text-slate-900 uppercase tracking-wider mb-3">
-                  Nome Azienda
-                </label>
-                <input
-                  type="text"
-                  className="w-full border-b border-slate-300 px-0 py-3 outline-none focus:border-slate-900 text-xl bg-transparent placeholder-gray-300 transition-colors"
-                  placeholder="Es. Studio Legale Associato"
-                  value={newCompanyName}
-                  onChange={(e) => setNewCompanyName(e.target.value)}
-                />
-              </div>
-
-              {/* document title is taken from uploaded file name; no manual input */}
-
-              <div>
-                <label className="block text-sm font-bold text-slate-900 uppercase tracking-wider mb-4">
-                  Carta Intestata (PDF)
-                </label>
-                <div
-                  onClick={() => companyFileRef.current?.click()}
-                  className="border-2 border-dashed border-slate-300 bg-slate-50 p-10 flex flex-col items-center justify-center cursor-pointer hover:bg-white hover:border-slate-500 transition-all text-center"
-                >
-                  {newCompanyFile ? (
-                    <>
-                      <Check className="w-10 h-10 text-emerald-600 mb-3" />
-                      <span className="text-base font-medium text-slate-900">
-                        {newCompanyFile}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="w-10 h-10 text-slate-300 mb-3" />
-                      <span className="text-base text-slate-500">
-                        Trascina o clicca per caricare (.pdf)
-                      </span>
-                    </>
-                  )}
-                  <input
-                    ref={companyFileRef}
-                    type="file"
-                    className="hidden"
-                    accept="application/pdf"
-                    onChange={async (e) => {
-                      if (e.target.files?.[0]) {
-                        const f = e.target.files[0]
-                        try {
-                          const fileData = await readFile(f)
-                          setNewCompanyFile(f.name)
-                          // set document title from filename (without extension)
-                          const title = f.name.replace(/\.[^/.]+$/, '')
-                          setNewCompanyDocumentTitle(title)
-                          setNewCompanyFileData(fileData.data)
-                          setNewCompanyFileMime(f.type)
-                        } catch (err) {
-                          console.error('Error reading company file', err)
-                        }
-                      }
-                    }}
-                  />
+        {pdfUrl ? (
+          <div className="w-full h-full bg-white flex flex-col">
+            {pdfFetchError ? (
+              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4">
+                  <X className="w-6 h-6 text-red-600" />
+                </div>
+                <p className="text-red-600 font-medium mb-4">{pdfFetchError}</p>
+                <div className="flex gap-3 justify-center">
+                  <button onClick={retryFetchPdf} className="btn-primary">
+                    Riprova
+                  </button>
+                  <a href={pdfUrl} target="_blank" rel="noreferrer" className="btn-secondary">
+                    Apri in nuova scheda
+                  </a>
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-bold text-slate-900 uppercase tracking-wider mb-4">
-                  Carta Intestata (Word)
-                </label>
-                <div
-                  onClick={() => companyWordFileRef.current?.click()}
-                  className="border-2 border-dashed border-slate-300 bg-slate-50 p-10 flex flex-col items-center justify-center cursor-pointer hover:bg-white hover:border-slate-500 transition-all text-center"
-                >
-                  {newCompanyWordFile ? (
-                    <>
-                      <Check className="w-10 h-10 text-emerald-600 mb-3" />
-                      <span className="text-base font-medium text-slate-900">
-                        {newCompanyWordFile}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="w-10 h-10 text-slate-300 mb-3" />
-                      <span className="text-base text-slate-500">
-                        Trascina o clicca per caricare (.docx)
-                      </span>
-                    </>
-                  )}
-                  <input
-                    ref={companyWordFileRef}
-                    type="file"
-                    className="hidden"
-                    accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                    onChange={async (e) => {
-                      if (e.target.files?.[0]) {
-                        const f = e.target.files[0]
-                        try {
-                          const fileData = await readFile(f)
-                          setNewCompanyWordFile(f.name)
-                          // set document title from filename (without extension)
-                          const title = f.name.replace(/\.[^/.]+$/, '')
-                          setNewCompanyDocumentTitle(title)
-                          setNewCompanyWordFileData(fileData.data)
-                          setNewCompanyWordFileMime(f.type)
-                        } catch (err) {
-                          console.error('Error reading company word file', err)
-                        }
-                      }
-                    }}
-                  />
+            ) : (
+              <Worker workerUrl={pdfWorkerUrl}>
+                <div className="flex-1 overflow-auto rounded-none">
+                  <Viewer fileUrl={pdfData ?? pdfUrl} />
                 </div>
-              </div>
-            </div>
-
-            <div className="mt-12 flex gap-5">
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="flex-1 px-6 py-4 border border-slate-300 text-slate-600 hover:bg-slate-50 font-medium tracking-wide text-sm uppercase"
-              >
-                ANNULLA
-              </button>
-              <button
-                onClick={handleAddCompany}
-                disabled={!newCompanyName.trim()}
-                className="flex-1 px-6 py-4 bg-[#0F172A] text-white hover:bg-black font-medium tracking-wide text-sm disabled:opacity-50 uppercase shadow-md"
-              >
-                SALVA
-              </button>
-            </div>
+              </Worker>
+            )}
           </div>
-        </div>
-      )}
-      {/* CONFIRM DELETE MODAL */}
-      {confirmDeleteId && (
-        <div className="fixed inset-0 bg-slate-900 bg-opacity-80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white shadow-2xl max-w-md w-full p-8 animate-in fade-in duration-200 rounded-sm">
-            <div className="flex justify-between items-start mb-4">
-              <h3 className="text-2xl font-semibold text-slate-900">
-                Conferma eliminazione
-              </h3>
-              <button
-                onClick={cancelConfirmDelete}
-                className="text-gray-400 hover:text-slate-900 transition-colors"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-            <p className="text-sm text-slate-700">
-              Sei sicuro di voler eliminare <strong>{confirmDeleteName}</strong>
-              ? Questa azione è irreversibile e rimuoverà definitivamente
-              l'anagrafica.
+        ) : (
+          <div className="flex flex-col items-center justify-center text-center px-6">
+            <FileText className="w-12 h-12 text-slate-300 mb-4" />
+            <p className="text-slate-400 text-sm font-medium">
+              Genera un documento per visualizzare l'anteprima
             </p>
-            <div className="mt-6 flex justify-end gap-4">
-              <button
-                onClick={cancelConfirmDelete}
-                className="px-4 py-2 border border-slate-300 rounded text-sm text-slate-700 hover:bg-slate-50"
-              >
+          </div>
+        )}
+      </div>
+
+      {/* MODAL ELIMINAZIONE */}
+      {confirmDeleteId && (
+        <div className="modal-overlay flex items-center justify-center z-50">
+          <div className="modal-box w-full max-w-sm">
+            <h3 className="text-lg font-semibold text-slate-900 mb-2">Conferma eliminazione</h3>
+            <p className="text-sm text-slate-600 mb-6">
+              Sei sicuro di voler eliminare <strong>{confirmDeleteName}</strong>? Questa azione è
+              irreversibile.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button onClick={cancelConfirmDelete} className="btn-secondary">
                 Annulla
               </button>
-              <button
-                onClick={performConfirmedDelete}
-                className="px-4 py-2 bg-red-600 text-white rounded text-sm hover:bg-red-700"
-              >
+              <button onClick={performConfirmedDelete} className="btn-danger">
                 Elimina
               </button>
             </div>

@@ -1,13 +1,9 @@
 import React, { useEffect, useRef } from 'react'
-import { Box, Paper, Typography } from '@mui/material'
+import { Search } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
-// import { toast } from 'react-toastify'
-import { DotTyping } from '../DotTyping'
 import SourcesPanel, { SourceItem } from './SourcesPanel'
-
-// `SourceItem` type imported from `SourcesPanel`
 
 interface Message {
   sender: 'user' | 'ai'
@@ -25,6 +21,14 @@ function removeCitations(text: string): string {
   return text.replace(/【[^【†】]*†[^【†】]*】/g, '')
 }
 
+const TypingIndicator = () => (
+  <div className="flex space-x-1.5 items-center px-1">
+    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+  </div>
+)
+
 const DocSearchMessageList: React.FC<DocSearchMessageListProps> = ({
   messages,
   isTyping,
@@ -35,306 +39,80 @@ const DocSearchMessageList: React.FC<DocSearchMessageListProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isTyping])
 
-  // const copyToClipboard = (text: string) => {
-  //   navigator.clipboard.writeText(text)
-  //   toast.success('Codice copiato!')
-  // }
+  if (messages.length === 0 && !isTyping) {
+    return (
+      <div className="flex-1 overflow-y-auto px-6 py-4 bg-[#f8fafc] flex flex-col items-center justify-center">
+        <Search size={40} className="text-slate-300 mb-4" />
+        <p className="text-slate-400 text-sm">Seleziona una categoria ed effettua una ricerca</p>
+      </div>
+    );
+  }
 
   return (
-    <Box
-      sx={{
-        position: 'absolute',
-        top: 0,
-        bottom: 0,
-        left: 0,
-        right: 0,
-        overflowY: 'auto',
-        px: '1.1vw',
-        pb: '20vh',
-      }}
-    >
-      <React.Fragment>
-        {messages.map((msg, idx) => {
-          // const { thinkText, content: originalContent  } = parseThinkTag(msg.content)
-          // const content = fixExcessiveLineBreaks(originalContent);
-          // const contentWithCitations = citeLinks(originalContent, citations);
-          const content = removeCitations(msg.content)
-          return (
-            <Box
-              key={idx}
-              display="flex"
-              justifyContent={msg.sender === 'user' ? 'flex-end' : 'flex-start'}
-              mb={0.5}
-            >
-              <Paper
-                sx={{
-                  maxWidth: '95%',
-                  px: '1.5rem',
-                  py: '1rem',
-                  // Unified background color: use same as 'TU' for all messages
-                  backgroundColor: '#F9F9FB',
-                  borderRadius: '8px',
-                  boxShadow: 'none',
-                  overflow: 'hidden',
-                  mb: '1vw',
-                }}
-              >
-                <Typography
-                  variant="subtitle1"
-                  sx={{ fontSize: '14px', fontWeight: 'bold', mb: 1 }}
-                >
-                  {msg.sender === 'user' ? 'TU' : 'AI'}
-                </Typography>
+    <div className="flex-1 overflow-y-auto px-6 py-4 bg-[#f8fafc] space-y-6">
+      {messages.map((msg, idx) => {
+        const content = removeCitations(msg.content)
+        const isUser = msg.sender === 'user';
 
-                {/* Markdown Content */}
-                <Typography
-                  component="div"
-                  sx={{ whiteSpace: 'pre-wrap', fontSize: '1rem', padding: 0 }}
-                >
+        return (
+          <div key={idx} className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'}`}>
+            {!isUser && (
+              <div className="w-7 h-7 shrink-0 bg-[#1e3a8a] text-white rounded-full flex items-center justify-center mr-3 mt-1 shadow-sm">
+                <Search size={14} />
+              </div>
+            )}
+            <div className={`flex flex-col ${isUser ? 'items-end max-w-[70%]' : 'items-start max-w-[80%]'}`}>
+              <div className={isUser ? 'chat-bubble-user' : 'chat-bubble-ai'}>
+                <div className="prose prose-sm max-w-none break-words">
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     rehypePlugins={[rehypeHighlight]}
                     components={{
-                      p: ({ children, ...props }) => (
-                        <Typography
-                          component="p"
-                          sx={{
-                            margin: '0px 0',
-                            lineHeight: '1.5',
-                            fontSize: '1rem',
-                          }}
-                          {...props}
-                        >
-                          {children}
-                        </Typography>
-                      ),
-                      ul: ({ children, ...props }) => (
-                        <Box
-                          component="ul"
-                          sx={{
-                            marginY: 0,
-                            py: 0,
-                            pl: 3,
-                            fontSize: '1rem',
-                            lineHeight: '1',
-                          }}
-                          {...props}
-                        >
-                          {children}
-                        </Box>
-                      ),
-                      ol: ({ children, ...props }) => (
-                        <Box
-                          component="ol"
-                          sx={{
-                            marginY: 0,
-                            py: 0,
-                            pl: 3,
-                            fontSize: '1rem',
-                            lineHeight: '1',
-                          }}
-                          {...props}
-                        >
-                          {children}
-                        </Box>
-                      ),
-                      li: ({ children, ...props }) => (
-                        <Typography
-                          component="li"
-                          sx={{
-                            margin: 0,
-                            py: 0,
-                            fontSize: '1rem',
-                            lineHeight: '1.2',
-                          }}
-                          {...props}
-                        >
-                          {children}
-                        </Typography>
-                      ),
-                      h1: ({ children, ...props }) => (
-                        <Typography
-                          component="h1"
-                          sx={{
-                            margin: '4px 0',
-                            fontSize: '1.6rem',
-                            lineHeight: '1.8',
-                          }}
-                          {...props}
-                        >
-                          {children}
-                        </Typography>
-                      ),
-                      h2: ({ children, ...props }) => (
-                        <Typography
-                          component="h2"
-                          sx={{
-                            margin: '4px 0',
-                            fontSize: '1.4rem',
-                            lineHeight: '1.6',
-                          }}
-                          {...props}
-                        >
-                          {children}
-                        </Typography>
-                      ),
-                      h3: ({ children, ...props }) => (
-                        <Typography
-                          component="h3"
-                          sx={{
-                            margin: '4px 0',
-                            fontSize: '1.2rem',
-                            lineHeight: '1.4',
-                          }}
-                          {...props}
-                        >
-                          {children}
-                        </Typography>
-                      ),
-                      h4: ({ children, ...props }) => (
-                        <Typography
-                          component="h4"
-                          sx={{
-                            margin: '4px 0',
-                            fontSize: '1rem',
-                            lineHeight: '1',
-                          }}
-                          {...props}
-                        >
-                          {children}
-                        </Typography>
-                      ),
-                      table: ({ children, ...props }) => (
-                        <Box sx={{ overflowX: 'auto', my: 1 }}>
-                          <table
-                            {...props}
-                            style={{
-                              width: '100%',
-                              tableLayout: 'fixed', // Isso garante que as colunas sejam fixas e alinhadas
-                              borderCollapse: 'collapse',
-                              textAlign: 'left', // Ajuste o alinhamento se necessário
-                            }}
-                          >
-                            {children}
-                          </table>
-                        </Box>
-                      ),
-                      // Ajustando outras tags de lista, como <thead>, <tbody>, <tr>, <th>, <td>
-                      thead: ({ children, ...props }) => (
-                        <thead
-                          {...props}
-                          style={{
-                            backgroundColor: '#f4f4f4',
-                            fontWeight: 'bold',
-                          }}
-                        >
-                          {children}
-                        </thead>
-                      ),
-                      tbody: ({ children, ...props }) => (
-                        <tbody {...props}>{children}</tbody>
-                      ),
-                      tr: ({ children, ...props }) => (
-                        <tr
-                          {...props}
-                          style={{ borderBottom: '1px solid #ddd' }}
-                        >
-                          {children}
-                        </tr>
-                      ),
-                      th: ({ children, ...props }) => (
-                        <th
-                          {...props}
-                          style={{ padding: '8px', border: '1px solid #ddd' }}
-                        >
-                          {children}
-                        </th>
-                      ),
-                      td: ({ children, ...props }) => (
-                        <td
-                          {...props}
-                          style={{ padding: '8px', border: '1px solid #ddd' }}
-                        >
-                          {children}
-                        </td>
-                      ),
-                      a: ({ href, children, ...props }) => (
-                        <a
-                          href={href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            textDecoration: 'none',
-                            color: '#ED6008',
-                          }}
-                          {...props}
-                        >
-                          {children}
-                        </a>
-                      )
+                      p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>,
+                      a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#15803d] hover:underline font-medium">{children}</a>,
+                      ul: ({ children }) => <ul className="list-disc pl-4 mb-2 space-y-1">{children}</ul>,
+                      ol: ({ children }) => <ol className="list-decimal pl-4 mb-2 space-y-1">{children}</ol>,
+                      li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                      table: ({ children }) => <div className="overflow-x-auto mb-2"><table className="min-w-full text-left border-collapse">{children}</table></div>,
+                      th: ({ children }) => <th className="border-b border-slate-200 px-3 py-2 font-semibold bg-slate-50 text-slate-600">{children}</th>,
+                      td: ({ children }) => <td className="border-b border-slate-100 px-3 py-2">{children}</td>,
                     }}
                   >
-                      {content}
-                    </ReactMarkdown>
+                    {content}
+                  </ReactMarkdown>
+                </div>
 
-                    {/* Render sources panel when present (outside ReactMarkdown to satisfy types) */}
-                    {msg.sources && msg.sources.length > 0 && (
-                      <SourcesPanel sources={msg.sources} />
-                    )}
+                {msg.sources && msg.sources.length > 0 && (
+                  <div className="mt-4 border-t border-slate-100 pt-3">
+                    <SourcesPanel sources={msg.sources} />
+                  </div>
+                )}
 
-                    {msg.sender === 'ai' && msg.isStreaming && (
-                      <Box
-                        sx={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 1,
-                          mt: 1,
-                          color: '#6B7280',
-                          fontSize: '0.92rem',
-                        }}
-                      >
-                        <Typography
-                          component="span"
-                          sx={{ fontSize: '0.92rem', color: '#6B7280' }}
-                        >
-                          Scrivendo
-                        </Typography>
-                        <DotTyping />
-                      </Box>
-                    )}
-                </Typography>
-              </Paper>
-            </Box>
-          )
-        })}
+                {msg.sender === 'ai' && msg.isStreaming && (
+                  <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100">
+                    <span className="text-xs text-slate-500 font-medium">Scrivendo</span>
+                    <TypingIndicator />
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })}
 
-        {isTyping && (
-          <Box display="flex" justifyContent="flex-start" mb={0.5}>
-            <Paper
-              sx={{
-                maxWidth: '95%',
-                px: '1.5rem',
-                py: '1rem',
-                backgroundColor: '#F9F9FB',
-                borderRadius: '8px',
-                boxShadow: 'none',
-                mb: '1vw',
-              }}
-            >
-              <Typography
-                variant="subtitle1"
-                sx={{ fontSize: '14px', fontWeight: 'bold', mb: 1 }}
-              >
-                AI
-              </Typography>
-              <DotTyping />
-            </Paper>
-          </Box>
-        )}
-      </React.Fragment>
+      {isTyping && (
+        <div className="flex w-full justify-start">
+          <div className="w-7 h-7 shrink-0 bg-[#1e3a8a] text-white rounded-full flex items-center justify-center mr-3 mt-1 shadow-sm">
+            <Search size={14} />
+          </div>
+          <div className="chat-bubble-ai py-4 px-5">
+            <TypingIndicator />
+          </div>
+        </div>
+      )}
 
-      <div ref={messagesEndRef}></div>
-    </Box>
+      <div ref={messagesEndRef} className="h-4"></div>
+    </div>
   )
 }
 
