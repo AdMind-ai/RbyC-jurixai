@@ -65,7 +65,6 @@ const Chat: React.FC = () => {
   const [selectedChat, setSelectedChat] = useState<StoredChatSelection | null>(null);
   const [conversationRefs, setConversationRefs] = useState<Record<ModelId, string | null>>({
     [ModelId.GPT_5_4]: null,
-    [ModelId.PERPLEXITY]: null,
   });
   const [shouldPersist, setShouldPersist] = useState(false);
 

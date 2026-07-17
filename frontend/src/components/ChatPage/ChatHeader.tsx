@@ -39,15 +39,10 @@ interface ChatHeaderProps {
 
 const modelDescriptions: Record<ModelId, { name: string, desc: string, subtitle: string }> = {
   [ModelId.GPT_5_4]: {
-    name: 'GPT-5.4',
-    desc: 'GPT-5.4 e la scelta principale per ragionamento avanzato, tool usage e automazioni multi-step.',
+    name: 'GPT-5.6 - Terra',
+    desc: 'GPT-5.6 Terra è la scelta principale per ragionamento avanzato, tool usage e automazioni multi-step.',
     subtitle: 'Accesso internet attivo - Ragionamento complesso'
   },
-  [ModelId.PERPLEXITY]: {
-    name: 'Perplexity',
-    desc: 'Perplexity combina ricerca web live e risposte sintetiche con citazioni verificabili in tempo reale.',
-    subtitle: 'Ricerca web live - Sintesi con fonti'
-  }
 }
 
 const ChatHeader: React.FC<ChatHeaderProps> = ({
@@ -84,7 +79,6 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
   const currentModelInfo = modelDescriptions[selectedModel] ?? modelDescriptions[ModelId.GPT_5_4];
   const modelToProvider: Record<ModelId, StoredChatProvider> = {
     [ModelId.GPT_5_4]: 'gpt',
-    [ModelId.PERPLEXITY]: 'perplexity',
   };
 
   const handleSaveClick = () => {
@@ -211,23 +205,9 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
       <div className="flex bg-slate-100 rounded-xl p-1">
         <button
           onClick={() => setSelectedModel(ModelId.GPT_5_4)}
-          className={`px-4 py-1.5 rounded-lg text-sm transition-all duration-200 ${
-            selectedModel === ModelId.GPT_5_4
-              ? 'bg-white shadow-sm text-[#1e3a8a] font-medium'
-              : 'text-slate-400 hover:text-slate-600'
-          }`}
+          className="px-4 py-1.5 rounded-lg text-sm bg-white shadow-sm text-[#1e3a8a] font-medium"
         >
-          GPT-5.4
-        </button>
-        <button
-          onClick={() => setSelectedModel(ModelId.PERPLEXITY)}
-          className={`px-4 py-1.5 rounded-lg text-sm transition-all duration-200 ${
-            selectedModel === ModelId.PERPLEXITY
-              ? 'bg-white shadow-sm text-[#1e3a8a] font-medium'
-              : 'text-slate-400 hover:text-slate-600'
-          }`}
-        >
-          Perplexity
+          GPT-5.6 - Terra
         </button>
       </div>
 

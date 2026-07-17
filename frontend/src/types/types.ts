@@ -15,7 +15,6 @@ export enum Role {
 }
 
 export enum ModelId {
-  PERPLEXITY = 'perplexity',
   GPT_5_4 = 'gpt-5-4'
 }
 
