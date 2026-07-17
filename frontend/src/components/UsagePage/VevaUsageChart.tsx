@@ -6,7 +6,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
 } from 'recharts';
 import { api } from '../../api/api';
@@ -16,13 +15,8 @@ import { RefreshCw, AlertCircle, Zap } from 'lucide-react';
 
 interface DailyEntry {
   date: string;
-  openai_tokens: number;
-  anthropic_tokens: number;
   openai_cost_eur: number | null;
   anthropic_cost_eur: number | null;
-  openai_requests: number;
-  anthropic_requests: number;
-  total_tokens: number;
   total_cost_eur: number | null;
 }
 
@@ -31,93 +25,69 @@ interface VeraDailyResponse {
   series: DailyEntry[];
 }
 
-type Metric = 'tokens' | 'cost' | 'requests';
+interface ChartPoint {
+  date: string;
+  /** Costo finale al cliente (raw * 1.25 margine * 1.22 IVA) */
+  cost: number | null;
+}
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Costanti ─────────────────────────────────────────────────────────────────
+
+const MARGIN = 1.25;   // 25% margine
+const VAT    = 1.22;   // 22% IVA
+
+const applyMarkup = (raw: number | null): number | null =>
+  raw == null ? null : raw * MARGIN * VAT;
+
+const fmtEur = (n: number | null) =>
+  n == null ? '—' : `€${n.toFixed(4)}`;
 
 const fmtDate = (iso: string) => {
   const [, m, d] = iso.split('-');
   return `${d}/${m}`;
 };
 
-const fmtTokens = (n: number) =>
-  n >= 1_000_000
-    ? `${(n / 1_000_000).toFixed(1)}M`
-    : n >= 1_000
-    ? `${(n / 1_000).toFixed(1)}K`
-    : String(n);
-
-const fmtCost = (n: number | null) =>
-  n == null ? '—' : `€${n.toFixed(4)}`;
-
 // ─── Custom Tooltip ───────────────────────────────────────────────────────────
 
-const CustomTooltip: React.FC<{
-  active?: boolean;
-  payload?: any[];
-  label?: string;
-  metric: Metric;
-}> = ({ active, payload, label, metric }) => {
-  if (!active || !payload || !payload.length) return null;
+const CustomTooltip: React.FC<{ active?: boolean; payload?: any[]; label?: string }> = ({
+  active, payload, label,
+}) => {
+  if (!active || !payload?.length) return null;
   const [y, m, d] = (label ?? '').split('-');
-  const dateLabel = `${d}/${m}/${y}`;
-
   return (
-    <div className="bg-white border border-slate-100 shadow-lg rounded-xl px-4 py-3 min-w-[160px]">
-      <p className="text-[11px] text-slate-400 font-medium mb-2">{dateLabel}</p>
-      {payload.map((p: any) => (
-        <div key={p.dataKey} className="flex items-center justify-between gap-4 mb-0.5">
-          <div className="flex items-center gap-1.5">
-            <span className="block w-2 h-2 rounded-full" style={{ background: p.color }} />
-            <span className="text-[12px] text-slate-600">{p.name}</span>
-          </div>
-          <span className="text-[12px] font-semibold text-slate-800">
-            {metric === 'tokens'
-              ? fmtTokens(p.value ?? 0)
-              : metric === 'cost'
-              ? fmtCost(p.value)
-              : `${p.value ?? 0} req`}
-          </span>
-        </div>
-      ))}
+    <div className="bg-white border border-slate-100 shadow-lg rounded-xl px-4 py-3 min-w-[140px]">
+      <p className="text-[11px] text-slate-400 font-medium mb-1.5">{`${d}/${m}/${y}`}</p>
+      <p className="text-sm font-semibold text-slate-800">
+        {payload[0].value != null ? `€${(payload[0].value as number).toFixed(4)}` : '—'}
+      </p>
+      <p className="text-[10px] text-slate-400 mt-0.5">IVA inclusa</p>
     </div>
   );
 };
 
-// ─── Summary KPIs ─────────────────────────────────────────────────────────────
-
-const KPI: React.FC<{ label: string; value: string; sub?: string; color: string }> = ({
-  label, value, sub, color,
-}) => (
-  <div className="flex flex-col gap-0.5">
-    <div className="flex items-center gap-1.5">
-      <span className="block w-2 h-2 rounded-full" style={{ background: color }} />
-      <span className="text-[11px] text-slate-400 uppercase tracking-wide font-medium">{label}</span>
-    </div>
-    <p className="text-lg font-semibold text-slate-800 pl-3.5">{value}</p>
-    {sub && <p className="text-[11px] text-slate-400 pl-3.5">{sub}</p>}
-  </div>
-);
-
-// ─── Main component ───────────────────────────────────────────────────────────
+// ─── Durations ────────────────────────────────────────────────────────────────
 
 const DAYS_OPTIONS = [7, 14, 30, 90];
 
+// ─── Main component ───────────────────────────────────────────────────────────
+
 const VevaUsageChart: React.FC = () => {
-  const [data, setData] = useState<DailyEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [days, setDays] = useState(30);
-  const [metric, setMetric] = useState<Metric>('tokens');
+  const [points, setPoints] = useState<ChartPoint[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState<string | null>(null);
+  const [days, setDays]         = useState(30);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchData = async (d: number, silent = false) => {
-    if (!silent) setLoading(true);
-    else setRefreshing(true);
+    silent ? setRefreshing(true) : setLoading(true);
     setError(null);
     try {
       const { data: resp } = await api.get<VeraDailyResponse>(`/vera/usage/daily/?days=${d}`);
-      setData(resp.series);
+      const pts: ChartPoint[] = resp.series.map((r) => ({
+        date: r.date,
+        cost: applyMarkup(r.total_cost_eur),
+      }));
+      setPoints(pts);
     } catch {
       setError('Impossibile caricare i dati di consumo Vera.');
     } finally {
@@ -128,27 +98,9 @@ const VevaUsageChart: React.FC = () => {
 
   useEffect(() => { fetchData(days); }, [days]);
 
-  // Summary totals
-  const totalOpenaiTokens    = data.reduce((s, r) => s + (r.openai_tokens ?? 0), 0);
-  const totalAnthropicTokens = data.reduce((s, r) => s + (r.anthropic_tokens ?? 0), 0);
-  const totalOpenaiCost      = data.reduce((s, r) => s + (r.openai_cost_eur ?? 0), 0);
-  const totalAnthropicCost   = data.reduce((s, r) => s + (r.anthropic_cost_eur ?? 0), 0);
-  const hasCost = data.some(r => r.openai_cost_eur != null || r.anthropic_cost_eur != null);
-
-  // Map metric to dataKey
-  const metricKeys: Record<Metric, { openai: string; anthropic: string }> = {
-    tokens:   { openai: 'openai_tokens',   anthropic: 'anthropic_tokens' },
-    cost:     { openai: 'openai_cost_eur', anthropic: 'anthropic_cost_eur' },
-    requests: { openai: 'openai_requests', anthropic: 'anthropic_requests' },
-  };
-  const keys = metricKeys[metric];
-
-  const yTickFmt = (v: number) =>
-    metric === 'tokens'   ? fmtTokens(v) :
-    metric === 'cost'     ? `€${v.toFixed(3)}` :
-    String(v);
-
-  const hasData = data.some(r => r.total_tokens > 0);
+  const totalCost = points.reduce((s, r) => s + (r.cost ?? 0), 0);
+  const hasData   = points.some(r => r.cost != null && r.cost > 0);
+  const hasCost   = points.some(r => r.cost != null);
 
   return (
     <div className="apple-card space-y-5">
@@ -163,29 +115,11 @@ const VevaUsageChart: React.FC = () => {
           </div>
           <div>
             <h2 className="text-sm font-semibold text-slate-800">Consumo Agente Vera</h2>
-            <p className="text-[11px] text-slate-400">Token giornalieri per provider</p>
+            <p className="text-[11px] text-slate-400">Costo giornaliero (IVA 22% inclusa)</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Metric toggle */}
-          <div className="flex bg-slate-100 rounded-xl p-1 gap-0.5">
-            {(['tokens', 'cost', 'requests'] as Metric[]).map((m) => (
-              <button
-                key={m}
-                onClick={() => setMetric(m)}
-                disabled={m === 'cost' && !hasCost}
-                className={`px-3 py-1 rounded-lg text-[11px] font-medium transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed ${
-                  metric === m
-                    ? 'bg-white shadow-sm text-[#1e3a8a]'
-                    : 'text-slate-400 hover:text-slate-600'
-                }`}
-              >
-                {m === 'tokens' ? 'Token' : m === 'cost' ? 'Costo (€)' : 'Richieste'}
-              </button>
-            ))}
-          </div>
-
+        <div className="flex items-center gap-2">
           {/* Days selector */}
           <div className="flex bg-slate-100 rounded-xl p-1 gap-0.5">
             {DAYS_OPTIONS.map((d) => (
@@ -202,7 +136,6 @@ const VevaUsageChart: React.FC = () => {
               </button>
             ))}
           </div>
-
           <button
             onClick={() => fetchData(days, true)}
             disabled={refreshing}
@@ -213,38 +146,16 @@ const VevaUsageChart: React.FC = () => {
         </div>
       </div>
 
-      {/* Summary KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pb-1 border-b border-slate-100">
-        <KPI
-          label="OpenAI token"
-          value={fmtTokens(totalOpenaiTokens)}
-          sub={`ultimi ${days} gg`}
-          color="#1e3a8a"
-        />
-        <KPI
-          label="Anthropic token"
-          value={fmtTokens(totalAnthropicTokens)}
-          sub={`ultimi ${days} gg`}
-          color="#1b9162"
-        />
-        {hasCost && (
-          <>
-            <KPI
-              label="OpenAI costo"
-              value={`€${totalOpenaiCost.toFixed(4)}`}
-              color="#1e3a8a"
-            />
-            <KPI
-              label="Anthropic costo"
-              value={`€${totalAnthropicCost.toFixed(4)}`}
-              color="#1b9162"
-            />
-          </>
-        )}
+      {/* KPI unico */}
+      <div className="flex items-end gap-1.5 pb-4 border-b border-slate-100">
+        <span className="text-2xl font-semibold text-slate-800">
+          {hasCost ? `€${totalCost.toFixed(4)}` : '—'}
+        </span>
+        <span className="text-[12px] text-slate-400 pb-1">ultimi {days} giorni</span>
       </div>
 
-      {/* Chart area */}
-      <div className="h-64">
+      {/* Chart */}
+      <div className="h-52">
         {loading ? (
           <div className="h-full flex items-center justify-center gap-2 text-slate-400">
             <RefreshCw size={16} className="animate-spin" />
@@ -261,21 +172,18 @@ const VevaUsageChart: React.FC = () => {
               <Zap size={20} className="text-slate-300" />
             </div>
             <p className="text-[13px] text-slate-500 font-medium">Nessun dato disponibile</p>
-            <p className="text-[12px] text-slate-400 max-w-[260px] leading-relaxed">
-              I dati appariranno qui non appena il backend inizierà a inviare le tracce di consumo via <code className="bg-slate-100 px-1 rounded text-[11px]">POST /api/vera/usage/</code>
+            <p className="text-[12px] text-slate-400 max-w-[280px] leading-relaxed">
+              I dati appariranno quando il backend inizierà a inviare le tracce di consumo a{' '}
+              <code className="bg-slate-100 px-1 rounded text-[11px]">POST /api/vera/usage/</code>
             </p>
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
+            <AreaChart data={points} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
               <defs>
-                <linearGradient id="gradOpenai" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#1e3a8a" stopOpacity={0.15} />
+                <linearGradient id="gradVera" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor="#1e3a8a" stopOpacity={0.18} />
                   <stop offset="95%" stopColor="#1e3a8a" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="gradAnthropic" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#1b9162" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="#1b9162" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
@@ -289,43 +197,34 @@ const VevaUsageChart: React.FC = () => {
                 interval={days <= 14 ? 0 : Math.floor(days / 10)}
               />
               <YAxis
-                tickFormatter={yTickFmt}
+                tickFormatter={(v) => `€${(v as number).toFixed(3)}`}
                 axisLine={false}
                 tickLine={false}
                 tick={{ fontSize: 10, fill: '#94A3B8', fontWeight: 500 }}
-                width={48}
+                width={54}
               />
-              <Tooltip content={<CustomTooltip metric={metric} />} />
-              <Legend
-                formatter={(v) => (
-                  <span className="text-[11px] text-slate-500 font-medium">{v}</span>
-                )}
-                wrapperStyle={{ paddingTop: 8 }}
-              />
+              <Tooltip content={<CustomTooltip />} />
               <Area
                 type="monotone"
-                dataKey={keys.openai}
-                name="OpenAI"
+                dataKey="cost"
+                name="Costo"
                 stroke="#1e3a8a"
                 strokeWidth={2}
-                fill="url(#gradOpenai)"
+                fill="url(#gradVera)"
                 dot={false}
-                activeDot={{ r: 4, strokeWidth: 0 }}
-              />
-              <Area
-                type="monotone"
-                dataKey={keys.anthropic}
-                name="Anthropic"
-                stroke="#1b9162"
-                strokeWidth={2}
-                fill="url(#gradAnthropic)"
-                dot={false}
-                activeDot={{ r: 4, strokeWidth: 0 }}
+                activeDot={{ r: 4, strokeWidth: 0, fill: '#1e3a8a' }}
+                connectNulls
               />
             </AreaChart>
           </ResponsiveContainer>
         )}
       </div>
+
+      {hasCost && (
+        <p className="text-[10px] text-slate-300 text-right">
+          Margine 25% + IVA 22% inclusi
+        </p>
+      )}
     </div>
   );
 };
