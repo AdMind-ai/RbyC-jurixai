@@ -14,10 +14,7 @@ import {
   FileText,
   Sparkles,
 } from 'lucide-react';
-import {
-  checkComplianceChatService,
-  CheckComplianceChatDocumentReference,
-} from '../services/checkComplianceChatService';
+import { newsletterChatService } from '../services/newsletterChatService';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -249,23 +246,10 @@ const Newsletter: React.FC = () => {
     setMessages((prev) => [...prev, { id: aiId, role: 'assistant', content: '', isStreaming: true }]);
 
     try {
-      // 1. Enrich prompt with newsletter context + bozza tag instruction
-      const typeLabel = draftType === 'newsletter' ? 'Newsletter normativa' : 'PILL formativo';
-      const enrichedMessage =
-        `[Richiesta: ${typeLabel}]\n` +
-        `ISTRUZIONE DI FORMATO: quando generi la bozza definitiva del documento, ` +
-        `inseriscila SEMPRE all'interno dei tag <bozza> e </bozza>. ` +
-        `Tutto ciò che è conversazionale (domande, chiarimenti, intro, conclusioni) ` +
-        `va FUORI dai tag. Esempio: "Ecco la bozza: <bozza>...testo...</bozza> Fammi sapere se vuoi modifiche."\n\n` +
-        userMsg.content;
+      const data = await newsletterChatService.sendMessage(userMsg.content, draftType, sessionId);
 
-      // 2. Non-streaming call — più robusto per risposte lunghe
-      const veraTag = draftType === 'newsletter' ? '[NEWSLETTER]' : '[PILL FORMATIVO]';
-      const data = await checkComplianceChatService.sendMessage(enrichedMessage, sessionId, veraTag);
-
-      // Handle both camelCase and snake_case from backend
-      const answer: string = (data as any).answer ?? '';
-      const returnedKey: string = (data as any).sessionKey ?? (data as any).session_key ?? '';
+      const answer: string = data.answer ?? '';
+      const returnedKey: string = data.sessionKey ?? '';
 
       setMessages((prev) =>
         prev.map((m) =>
