@@ -11,7 +11,9 @@ from django.db.models import Count, QuerySet, Sum
 from django.db.models.functions import TruncMonth
 from django.utils import timezone
 
+from billing.models import ProviderMonthlyCost
 from core.models.usage import UsageRecord, UsageTool
+from core.models.vera_usage_model import VeraUsageRecord
 from integrations.models import IntegrationUsageRecord
 
 UserModel = get_user_model()
@@ -328,6 +330,24 @@ class UsageReportService:
                 .order_by("-month")
             )
             months.extend(integration_months)
+
+            provider_cost_months = list(
+                ProviderMonthlyCost.objects.annotate(month=TruncMonth("period_month"))
+                .values("month")
+                .distinct()
+                .order_by("-month")
+            )
+            vera_cost_months = list(
+                VeraUsageRecord.objects.annotate(month=TruncMonth("date"))
+                .values("month")
+                .distinct()
+                .order_by("-month")
+            )
+            months.extend(provider_cost_months)
+            months.extend(vera_cost_months)
+
+        current_month = timezone.localdate().replace(day=1)
+        months.append({"month": current_month})
 
         results = []
         seen = set()

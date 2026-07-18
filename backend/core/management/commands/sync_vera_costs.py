@@ -95,28 +95,15 @@ class Command(BaseCommand):
             )
         )
 
-        current = start_date
-        while current <= end_date:
-            self.stdout.write(f"  → {current} ...", ending=" ")
-            result = {}
+        if provider == "all":
+            result = VeraCostSyncService.sync_range(start_date, end_date, force=True)
+        elif provider == "openai":
+            result = {"openai": VeraCostSyncService._sync_openai_range(start_date, end_date)}
+        else:
+            result = {
+                "anthropic": VeraCostSyncService._sync_anthropic_range(start_date, end_date)
+            }
 
-            if provider in ("openai", "all"):
-                result["openai"] = VeraCostSyncService._sync_openai_day(current)
-
-            if provider in ("anthropic", "all"):
-                result["anthropic"] = VeraCostSyncService._sync_anthropic_day(current)
-
-            # Resumo por linha
-            parts = []
-            for p, r in result.items():
-                status = r.get("status", "?")
-                if status == "ok":
-                    n = len(r.get("models", []))
-                    parts.append(f"{p}={n} modelos")
-                else:
-                    parts.append(f"{p}={status}")
-            self.stdout.write(self.style.SUCCESS(", ".join(parts) or "ok"))
-
-            current += timedelta(days=1)
+        self.stdout.write(json.dumps(result, indent=2, ensure_ascii=False, default=str))
 
         self.stdout.write(self.style.SUCCESS("✓ Sync concluído."))

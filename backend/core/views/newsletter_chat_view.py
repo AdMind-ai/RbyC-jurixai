@@ -37,17 +37,18 @@ class NewsletterChatInputSerializer(serializers.Serializer):
 
 def _enrich_prompt(message: str, draft_type: str) -> str:
     """
-    Arricchisce il messaggio grezzo dell'utente con le istruzioni
-    di formato specifiche per Newsletter/PILL prima di inviarlo alla Vera API.
+    Adds channel-specific instructions before sending the user message to Vera.
     """
     type_label = DRAFT_TYPE_LABEL.get(draft_type, "Newsletter normativa")
     return (
         f"[Richiesta: {type_label}]\n"
         "ISTRUZIONE DI FORMATO: quando generi la bozza definitiva del documento, "
-        "inseriscila SEMPRE all'interno dei tag <bozza> e </bozza>. "
-        "Tutto ciò che è conversazionale (domande, chiarimenti, intro, conclusioni) "
+        "inseriscila SEMPRE all'interno di un unico blocco <bozza> e </bozza>. "
+        "Tutto cio che e conversazionale (domande, chiarimenti, intro, conclusioni) "
         "va FUORI dai tag. "
-        'Esempio: "Ecco la bozza: <bozza>...testo...</bozza> Fammi sapere se vuoi modifiche."\n\n'
+        "Il blocco <bozza>...</bozza> deve essere l'ultimo elemento isolato della risposta, "
+        "senza testo dopo la chiusura di </bozza>. "
+        'Esempio: "Ecco la bozza:\\n\\n<bozza>...testo...</bozza>"\n\n'
         f"{message}"
     )
 

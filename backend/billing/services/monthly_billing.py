@@ -12,7 +12,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from billing.models import BillingAccount, BillingInvoice, BillingInvoiceStatus
-from billing.services.provider_costs import ProviderCostService
+from billing.services.ai_usage_costs import AIUsageCostService
 
 logger = logging.getLogger(__name__)
 
@@ -35,15 +35,19 @@ class MonthlyBillingService:
         created_by_user=None,
     ) -> MonthlyBillingResult:
         period_month = cls.normalize_month(month)
-        provider_total = ProviderCostService.get_total_for_month(period_month)
-        total_cost = provider_total.amount
+        ai_cost_summary = AIUsageCostService.build_monthly_summary(
+            period_month,
+            refresh_rbyc=True,
+            refresh_vera=True,
+        )
+        total_cost = ai_cost_summary.total_with_vat
 
         with transaction.atomic():
             invoice, created = BillingInvoice.objects.select_for_update().get_or_create(
                 period_month=period_month,
                 defaults={
                     "amount_eur": total_cost,
-                    "currency": provider_total.currency,
+                    "currency": ai_cost_summary.currency,
                     "created_by_task": created_by_task,
                     "created_by_user": created_by_user,
                 },
@@ -70,7 +74,7 @@ class MonthlyBillingService:
                 total_cost = invoice.amount_eur
                 provider_total_currency = invoice.currency
             else:
-                provider_total_currency = provider_total.currency
+                provider_total_currency = ai_cost_summary.currency
 
             invoice.amount_eur = total_cost
             invoice.currency = provider_total_currency

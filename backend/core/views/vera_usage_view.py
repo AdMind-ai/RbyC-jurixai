@@ -1,5 +1,6 @@
 import logging
 from datetime import date, timedelta
+from decimal import Decimal, ROUND_HALF_UP
 
 from django.db.models import Sum, Count
 from django.db.models.functions import TruncDate
@@ -17,6 +18,32 @@ logger = logging.getLogger(__name__)
 
 # Numero di giorni restituiti di default dal chart endpoint
 DEFAULT_DAYS = 30
+
+
+class IsUsageCostAdmin(permissions.BasePermission):
+    def has_permission(self, request, view):
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and (
+                getattr(request.user, "is_company_admin", False)
+                or getattr(request.user, "is_staff", False)
+                or getattr(request.user, "is_superuser", False)
+            )
+        )
+
+
+def _apply_vera_markup(value):
+    if value is None:
+        return None
+    from django.conf import settings
+
+    amount = Decimal(str(value))
+    markup = Decimal(str(getattr(settings, "AI_USAGE_VERA_MARKUP_PERCENTAGE", "25")))
+    vat = Decimal(str(getattr(settings, "AI_USAGE_IVA_PERCENTAGE", "22")))
+    final = amount * (Decimal("1") + markup / Decimal("100"))
+    final = final * (Decimal("1") + vat / Decimal("100"))
+    return float(final.quantize(Decimal("0.0001"), ROUND_HALF_UP))
 
 
 class VeraUsageIngestView(APIView):
@@ -64,7 +91,7 @@ class VeraUsageDailyView(APIView):
       ]
     }
     """
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsUsageCostAdmin]
 
     def get(self, request):
         try:
@@ -74,7 +101,6 @@ class VeraUsageDailyView(APIView):
             days = DEFAULT_DAYS
 
         since = date.today() - timedelta(days=days - 1)
-
         # Raw queryset: un record per (date, provider, model)
         qs = (
             VeraUsageRecord.objects
@@ -131,16 +157,22 @@ class VeraUsageDailyView(APIView):
                 entry["total_cost_eur"] = (oa or 0) + (an or 0)
             else:
                 entry["total_cost_eur"] = None
+            entry["total_cost_with_markup_eur"] = _apply_vera_markup(entry["total_cost_eur"])
             all_days.append(entry)
 
-        return Response({"days": days, "series": all_days})
+        return Response({
+            "days": days,
+            "series": all_days,
+            "isFresh": False,
+            "refreshError": None,
+        })
 
 
 class VeraUsageRawListView(APIView):
     """
     GET /api/vera/usage/raw/   — lista record grezzi (ultimi 500, solo admin)
     """
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsUsageCostAdmin]
 
     def get(self, request):
         if not request.user.is_staff:

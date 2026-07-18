@@ -17,6 +17,17 @@ import mimetypes
 from django.db import transaction
 
 
+CHAT_ASSISTANT_MODEL = "gpt-5.6-terra"
+
+
+def _parse_bool(value):
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
 class OpenAISendMessageView(APIView):
     serializer_class = MessageSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -32,7 +43,13 @@ class OpenAISendMessageView(APIView):
 
         content = serializer.validated_data.get('content', '')
         file = serializer.validated_data.get('file', None)
-        model = request.data.get('model', 'gpt-5.6-terra')
+        model = request.data.get('model', CHAT_ASSISTANT_MODEL)
+        web_search_enabled = _parse_bool(request.data.get('web_search_enabled'))
+
+        if model != CHAT_ASSISTANT_MODEL:
+            raise ValidationError(
+                f"Unsupported model for Chat Assistant. Use {CHAT_ASSISTANT_MODEL}."
+            )
 
         # logger.debug(
         #     f"Received data - Content: {content}, Model: {model}, User: {user}, conversation_id: {conversation_id}, file: {file}")
@@ -107,23 +124,34 @@ class OpenAISendMessageView(APIView):
         def event_stream():
             full_ai_message = ""
             try:
-                response = client.responses.create(
-                    model=model,
-                    input=[
+                response_kwargs = {
+                    "model": model,
+                    "input": [
                         {
                             "role": "user",
                             "content": user_message_content
                         },
                     ],
-                    conversation=conversation_id,
-                    store=True,
-                    stream=True,
-                    reasoning={
+                    "conversation": conversation_id,
+                    "store": True,
+                    "stream": True,
+                    "reasoning": {
                         "effort": "medium"
                     },
-                    tools=[{ "type": "web_search_preview" }],
-                    include=["reasoning.encrypted_content", "web_search_call.action.sources"],
-                    timeout=600,
+                    "timeout": 600,
+                }
+
+                if web_search_enabled:
+                    response_kwargs["tools"] = [{"type": "web_search_preview"}]
+                    response_kwargs["include"] = [
+                        "reasoning.encrypted_content",
+                        "web_search_call.action.sources",
+                    ]
+                else:
+                    response_kwargs["include"] = ["reasoning.encrypted_content"]
+
+                response = client.responses.create(
+                    **response_kwargs,
                 )
                 for event in response:
                     if getattr(event, 'type', None) == 'response.output_text.delta':
@@ -145,13 +173,15 @@ class OpenAISendMessageView(APIView):
                 UsageTrackingService.record_usage_event(
                     user=request.user,
                     tool=UsageTool.CHAT_ASSISTANT,
-                    sub_tool=UsageSubTool.GPT_5_2,
+                    sub_tool=UsageSubTool.GPT_5_6_TERRA,
                     quantity=1,
                     company=getattr(request.user, "company", None),
                     metadata={
                         "conversation_id": conversation.id,
                         "message_length": len(full_ai_message),
                         "has_file": bool(file),
+                        "model": model,
+                        "web_search_enabled": web_search_enabled,
                     },
                 )
 
