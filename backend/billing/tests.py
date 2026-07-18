@@ -8,10 +8,12 @@ from django.test import SimpleTestCase, TestCase, override_settings
 from rest_framework.test import APIClient
 
 from billing.models import ProviderCostProvider, ProviderCostSource, ProviderUsageCost
+from billing.services.ai_usage_costs import AIUsageCostService
 from billing.services.provider_costs import ProviderCostService
 from billing.services.provider_usage_costs import ProviderUsageCostService
 from billing.services.aws_costs import AwsCostExplorerService
 from billing.services.internal_costs import build_internal_costs_payload
+from core.models.vera_usage_model import VeraUsageRecord
 
 
 class ProviderUsageCostServiceTests(SimpleTestCase):
@@ -52,13 +54,13 @@ class ProviderCostServiceTests(TestCase):
     def setUp(self):
         self.period_month = date(2026, 4, 1)
 
-    def test_refresh_monthly_costs_returns_openai_and_perplexity_only(self):
+    def test_refresh_monthly_costs_returns_openai_only(self):
         with override_settings(OPENAI_ADMIN_KEY=None):
             costs = ProviderCostService.refresh_monthly_costs(self.period_month)
 
         self.assertEqual(
             [cost.provider for cost in costs],
-            [ProviderCostProvider.OPENAI, ProviderCostProvider.PERPLEXITY],
+            [ProviderCostProvider.OPENAI],
         )
 
     def test_actual_api_overrides_not_configured(self):
@@ -113,12 +115,12 @@ class ProviderCostServiceTests(TestCase):
         total = ProviderCostService.get_total_for_month(self.period_month, refresh=False)
 
         self.assertEqual(total.currency, "EUR")
-        self.assertEqual(len(total.costs), 2)
+        self.assertEqual(len(total.costs), 1)
         self.assertEqual(
             [cost.provider for cost in total.costs],
-            [ProviderCostProvider.OPENAI, ProviderCostProvider.PERPLEXITY],
+            [ProviderCostProvider.OPENAI],
         )
-        self.assertEqual(total.amount, Decimal("21.96"))
+        self.assertEqual(total.amount, Decimal("14.64"))
 
     def test_recorded_perplexity_request_cost_is_stored_separately_from_usage(self):
         usage_payload = {
@@ -145,6 +147,49 @@ class ProviderCostServiceTests(TestCase):
         self.assertEqual(cost.provider_currency, "USD")
         self.assertEqual(cost.raw_payload, usage_payload)
         self.assertEqual(cost.metadata, {"conversation_id": "abc"})
+
+
+class AIUsageCostServiceTests(TestCase):
+    def setUp(self):
+        self.period_month = date(2026, 4, 1)
+
+    @override_settings(
+        AI_USAGE_RBYC_MARKUP_PERCENTAGE="20",
+        AI_USAGE_VERA_MARKUP_PERCENTAGE="25",
+        AI_USAGE_IVA_PERCENTAGE="22",
+    )
+    def test_build_monthly_summary_applies_distinct_markups(self):
+        ProviderCostService.upsert_provider_cost(
+            provider=ProviderCostProvider.OPENAI,
+            period_month=self.period_month,
+            amount=Decimal("100.0000"),
+            currency="EUR",
+            source=ProviderCostSource.ACTUAL_API,
+        )
+        VeraUsageRecord.objects.create(
+            date=date(2026, 4, 10),
+            provider="openai",
+            model="vera-openai",
+            cost_eur=Decimal("20.000000"),
+        )
+        VeraUsageRecord.objects.create(
+            date=date(2026, 4, 11),
+            provider="anthropic",
+            model="vera-claude",
+            cost_eur=Decimal("30.000000"),
+        )
+
+        summary = AIUsageCostService.build_monthly_summary(
+            self.period_month,
+            refresh_rbyc=False,
+            refresh_vera=False,
+        )
+
+        self.assertEqual(summary.rbyc_with_markup, Decimal("120.0000"))
+        self.assertEqual(summary.vera_with_markup, Decimal("62.5000"))
+        self.assertEqual(summary.total_with_markup, Decimal("182.50"))
+        self.assertEqual(summary.total_with_vat, Decimal("222.65"))
+        self.assertEqual(summary.vera_total_with_vat, Decimal("76.25"))
 
 
 @override_settings(

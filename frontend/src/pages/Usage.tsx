@@ -25,6 +25,7 @@ const UsagePage: React.FC = () => {
   const [billingError, setBillingError] = useState<string | null>(null);
 
   const isAdmin = auth?.user?.is_admin === true;
+  const canViewFinancials = isAdmin;
 
   const loadMonths = useCallback(async () => {
     setMonthsLoading(true);
@@ -68,8 +69,13 @@ const UsagePage: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (!canViewFinancials) {
+      setBillingStatus(null);
+      setBillingLoading(false);
+      return;
+    }
     loadBillingStatus();
-  }, [loadBillingStatus]);
+  }, [canViewFinancials, loadBillingStatus]);
 
   const loadBillingSummary = useCallback(async (selectedMonth: string) => {
     setBillingSummaryLoading(true);
@@ -89,14 +95,14 @@ const UsagePage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!period) {
+    if (!period || !canViewFinancials) {
       setBillingSummary(null);
       setBillingSummaryError(null);
       setBillingSummaryLoading(false);
       return;
     }
     loadBillingSummary(period);
-  }, [period, loadBillingSummary]);
+  }, [period, canViewFinancials, loadBillingSummary]);
 
   const { data: report, loading: reportLoading, error } = useUsageReport({ month: period ?? undefined });
 
@@ -175,28 +181,31 @@ const UsagePage: React.FC = () => {
 
       <div className="page-body space-y-6">
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="apple-card">
-            <div className="text-[13px] text-slate-400">Totale mensile</div>
-            <div className="text-2xl font-semibold text-slate-800 mt-1">{subtotalWithMarkupDisplay}</div>
-          </div>
-          <div className="apple-card">
-            <div className="text-[13px] text-slate-400">Totale con IVA</div>
-            <div className="text-2xl font-semibold text-slate-800 mt-1">{totalWithVatDisplay}</div>
-            {billingSummaryError && (
-              <p className="text-xs text-red-500 mt-2 truncate">{billingSummaryError}</p>
-            )}
-          </div>
-          <div className="apple-card">
-            <div className="flex items-center gap-2 text-[13px] text-slate-400">
-              Data addebito
+        {canViewFinancials && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="apple-card">
+              <div className="text-[13px] text-slate-400">Totale mensile</div>
+              <div className="text-2xl font-semibold text-slate-800 mt-1">{subtotalWithMarkupDisplay}</div>
             </div>
-            <div className="text-2xl font-semibold text-slate-800 mt-1">{chargeDateDisplay}</div>
+            <div className="apple-card">
+              <div className="text-[13px] text-slate-400">Totale con IVA</div>
+              <div className="text-2xl font-semibold text-slate-800 mt-1">{totalWithVatDisplay}</div>
+              <p className="text-xs text-slate-400 mt-2">Addebito previsto: {chargeDateDisplay}</p>
+              {billingSummaryError && (
+                <p className="text-xs text-red-500 mt-2 truncate">{billingSummaryError}</p>
+              )}
+            </div>
+            <div className="apple-card">
+              <div className="flex items-center gap-2 text-[13px] text-slate-400">
+                Data addebito
+              </div>
+              <div className="text-2xl font-semibold text-slate-800 mt-1">{chargeDateDisplay}</div>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Metodo di pagamento */}
-        {isAdmin && (
+        {canViewFinancials && (
           <div className="apple-card flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <CreditCard className="text-slate-400 w-6 h-6" />
@@ -222,7 +231,7 @@ const UsagePage: React.FC = () => {
         )}
 
         {/* Grafico consumo Vera */}
-        <VevaUsageChart />
+        {canViewFinancials && <VevaUsageChart />}
 
         {/* Tabella consumo */}
         <div className="space-y-4">

@@ -3,15 +3,13 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone as dt_timezone
 from datetime import date
-from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Optional
 
 from django.conf import settings
 from django.db import transaction
-from django.utils import timezone
 
 from billing.models import BillingAccount, BillingInvoice, BillingInvoiceStatus
-from billing.services.provider_costs import ProviderCostService
+from billing.services.ai_usage_costs import AIUsageCostService
 
 logger = logging.getLogger(__name__)
 
@@ -39,51 +37,11 @@ class StripeBillingService:
 
     @classmethod
     def build_monthly_summary(cls, period_month: date) -> dict:
-        is_fresh = True
-        refresh_error = None
-        try:
-            provider_total = ProviderCostService.get_total_for_month(period_month, refresh=True)
-        except Exception as exc:
-            saved_total = ProviderCostService.get_total_for_month(period_month, refresh=False)
-            if not saved_total.costs:
-                raise
-            is_fresh = False
-            refresh_error = str(exc)
-            provider_total = saved_total
-
-        invoice = BillingInvoice.objects.filter(period_month=period_month).first()
-        subtotal_with_markup = Decimal("0.0000")
-        total_with_vat = Decimal("0.0000")
-        for cost in provider_total.costs:
-            subtotal_with_markup += cost.amount_with_markup
-            total_with_vat += cost.total_with_vat
-
-        subtotal_with_markup = subtotal_with_markup.quantize(Decimal("0.01"), ROUND_HALF_UP)
-        total_with_vat = total_with_vat.quantize(Decimal("0.01"), ROUND_HALF_UP)
-        return {
-            "periodMonth": period_month.strftime("%Y-%m"),
-            "amountEur": float(total_with_vat),
-            "subtotalWithMarkupEur": float(subtotal_with_markup),
-            "totalWithVatEur": float(total_with_vat),
-            "currency": provider_total.currency,
-            "chargeDate": cls._charge_date_for_period(period_month),
-            "isFresh": is_fresh,
-            "refreshError": refresh_error,
-            "invoice": cls._serialize_invoice(invoice),
-            "providerCosts": [
-                {
-                    "provider": cost.provider,
-                    "providerAmount": float(cost.provider_amount),
-                    "amountWithMarkup": float(cost.amount_with_markup),
-                    "totalWithVat": float(cost.total_with_vat),
-                    "currency": cost.currency,
-                    "source": cost.source,
-                    "fetchedAt": cost.fetched_at,
-                    "metadata": cost.metadata,
-                }
-                for cost in provider_total.costs
-            ],
-        }
+        return AIUsageCostService.serialize_for_billing(
+            period_month,
+            refresh_rbyc=False,
+            refresh_vera=False,
+        )
 
     @staticmethod
     def _charge_date_for_period(period_month: date) -> date:

@@ -8,7 +8,7 @@ interface ModelSelectorProps {
 
 const ModelSelector: React.FC<ModelSelectorProps> = ({ currentModel, onSelectModel }) => {
   const models = [
-    { id: ModelId.GPT_5_4, label: 'GPT 5.4' },
+    { id: ModelId.GPT_5_6_TERRA, label: 'GPT-5.6 - Terra' },
   ]
 
   return (

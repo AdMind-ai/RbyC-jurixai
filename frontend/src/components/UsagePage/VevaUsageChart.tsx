@@ -18,6 +18,7 @@ interface DailyEntry {
   openai_cost_eur: number | null;
   anthropic_cost_eur: number | null;
   total_cost_eur: number | null;
+  total_cost_with_markup_eur: number | null;
 }
 
 interface VeraDailyResponse {
@@ -27,20 +28,21 @@ interface VeraDailyResponse {
 
 interface ChartPoint {
   date: string;
-  /** Costo finale al cliente (raw * 1.25 margine * 1.22 IVA) */
+  /** Costo finale al cliente, calcolato dal backend con margine + IVA. */
   cost: number | null;
 }
 
 // ─── Costanti ─────────────────────────────────────────────────────────────────
 
-const MARGIN = 1.25;   // 25% margine
-const VAT    = 1.22;   // 22% IVA
-
-const applyMarkup = (raw: number | null): number | null =>
-  raw == null ? null : raw * MARGIN * VAT;
-
-const fmtEur = (n: number | null) =>
-  n == null ? '—' : `€${n.toFixed(4)}`;
+const fmtEur = (n: number | null, maximumFractionDigits = 2) =>
+  n == null
+    ? '-'
+    : n.toLocaleString('it-IT', {
+        style: 'currency',
+        currency: 'EUR',
+        minimumFractionDigits: Math.min(2, maximumFractionDigits),
+        maximumFractionDigits,
+      });
 
 const fmtDate = (iso: string) => {
   const [, m, d] = iso.split('-');
@@ -58,7 +60,7 @@ const CustomTooltip: React.FC<{ active?: boolean; payload?: any[]; label?: strin
     <div className="bg-white border border-slate-100 shadow-lg rounded-xl px-4 py-3 min-w-[140px]">
       <p className="text-[11px] text-slate-400 font-medium mb-1.5">{`${d}/${m}/${y}`}</p>
       <p className="text-sm font-semibold text-slate-800">
-        {payload[0].value != null ? `€${(payload[0].value as number).toFixed(4)}` : '—'}
+        {payload[0].value != null ? fmtEur(payload[0].value as number) : '-'}
       </p>
       <p className="text-[10px] text-slate-400 mt-0.5">IVA inclusa</p>
     </div>
@@ -82,10 +84,14 @@ const VevaUsageChart: React.FC = () => {
     silent ? setRefreshing(true) : setLoading(true);
     setError(null);
     try {
-      const { data: resp } = await api.get<VeraDailyResponse>(`/vera/usage/daily/?days=${d}`);
+      const { data: resp } = await api.get<VeraDailyResponse>('/vera/usage/daily/', {
+        params: {
+          days: d,
+        },
+      });
       const pts: ChartPoint[] = resp.series.map((r) => ({
         date: r.date,
-        cost: applyMarkup(r.total_cost_eur),
+        cost: r.total_cost_with_markup_eur,
       }));
       setPoints(pts);
     } catch {
@@ -174,8 +180,7 @@ const VevaUsageChart: React.FC = () => {
             </div>
             <p className="text-[13px] text-slate-500 font-medium">Nessun dato disponibile</p>
             <p className="text-[12px] text-slate-400 max-w-[280px] leading-relaxed">
-              I dati appariranno quando il backend inizierà a inviare le tracce di consumo a{' '}
-              <code className="bg-slate-100 px-1 rounded text-[11px]">POST /api/vera/usage/</code>
+              I dati appariranno dopo la sincronizzazione dei costi Vera dai provider.
             </p>
           </div>
         ) : (
@@ -198,7 +203,7 @@ const VevaUsageChart: React.FC = () => {
                 interval={days <= 14 ? 0 : Math.floor(days / 10)}
               />
               <YAxis
-                tickFormatter={(v) => `€${(v as number).toFixed(3)}`}
+                tickFormatter={(v) => fmtEur(v as number, 0)}
                 axisLine={false}
                 tickLine={false}
                 tick={{ fontSize: 10, fill: '#94A3B8', fontWeight: 500 }}
@@ -220,14 +225,9 @@ const VevaUsageChart: React.FC = () => {
           </ResponsiveContainer>
         )}
       </div>
-
-      {hasCost && (
-        <p className="text-[10px] text-slate-300 text-right">
-          Margine 25% + IVA 22% inclusi
-        </p>
-      )}
     </div>
   );
 };
 
 export default VevaUsageChart;
+

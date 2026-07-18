@@ -41,12 +41,14 @@ export interface BillingMonthlySummary {
   amountEur: number;
   subtotalWithMarkupEur: number;
   totalWithVatEur: number;
+  veraTotalWithVatEur: number;
   currency: string;
   chargeDate: string;
   isFresh: boolean;
   refreshError: string | null;
   invoice: BillingInvoice | null;
   providerCosts: ProviderMonthlyCost[];
+  costBreakdown: Record<string, unknown>;
 }
 
 export const billingService = {

@@ -35,10 +35,12 @@ interface Message {
 const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   onSend,
   selectedChat,
+  searchWebEnabled,
   setSearchWebEnabled,
   setIsOverview,
   setIsTyping,
   conversationId,
+  selectedModel,
   onConversationUpdated,
 }) => {
   const [input, setInput] = useState('');
@@ -137,6 +139,8 @@ const ChatInputArea: React.FC<ChatInputAreaProps> = ({
     try {
       const formData = new FormData();
       formData.append('content', userMessage);
+      formData.append('model', selectedModel);
+      formData.append('web_search_enabled', searchWebEnabled ? 'true' : 'false');
       filesToUpload.forEach(file => formData.append('file', file));
       if (conversationRef) {
         formData.append('conversation_id', conversationRef);

@@ -98,6 +98,16 @@ const MarkdownContent: React.FC<{ content: string; isUser: boolean }> = ({ conte
 
 // ─── Preview document renderer ────────────────────────────────────────────────
 
+const getDraftTypeLabel = (type: DraftType) => {
+  if (type === 'newsletter') return 'Newsletter';
+  return 'PILL Formativo';
+};
+
+const getDraftTypeObjectLabel = (type: DraftType) => {
+  if (type === 'newsletter') return 'newsletter';
+  return 'PILL';
+};
+
 const PreviewDocument: React.FC<{ content: string; type: DraftType }> = ({ content, type }) => (
   <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
     {/* Doc header */}
@@ -109,7 +119,7 @@ const PreviewDocument: React.FC<{ content: string; type: DraftType }> = ({ conte
     >
       <div>
         <p className="text-white/60 text-[11px] uppercase tracking-widest font-medium mb-0.5">
-          {type === 'newsletter' ? 'Newsletter' : 'PILL Formativo'} — Bozza
+          {getDraftTypeLabel(type)} — Bozza
         </p>
         <p className="text-white text-sm font-light tracking-wide">
           {new Date().toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' })}
@@ -210,7 +220,7 @@ const Newsletter: React.FC = () => {
     if (match) {
       setPreviewContent(match[1].trim());
     }
-  }, [messages]);
+  }, [draftType, messages]);
 
   const handleFileAttach = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -457,7 +467,7 @@ const Newsletter: React.FC = () => {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={`Descrivi la ${draftType === 'newsletter' ? 'newsletter' : 'PILL'} da generare…`}
+              placeholder={`Descrivi la ${getDraftTypeObjectLabel(draftType)} da generare...`}
               className="flex-1 resize-none rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:border-[#1e3a8a] focus:outline-none transition min-h-[44px] max-h-[140px]"
               rows={1}
               style={{ lineHeight: '1.5' }}
@@ -492,7 +502,7 @@ const Newsletter: React.FC = () => {
             </div>
             <div>
               <h2 className="text-sm font-semibold text-slate-800">
-                Anteprima {draftType === 'newsletter' ? 'Newsletter' : 'PILL Formativo'}
+                Anteprima {getDraftTypeLabel(draftType)}
               </h2>
               {previewContent && (
                 <p className="text-[11px] text-slate-400">Aggiornata automaticamente dall'ultima risposta</p>
@@ -540,10 +550,11 @@ const Newsletter: React.FC = () => {
                 </div>
               </div>
               <div>
-                <p className="text-slate-600 font-medium text-[15px]">Nessuna bozza generata</p>
+                <p className="text-slate-600 font-medium text-[15px]">
+                  Nessuna bozza generata
+                </p>
                 <p className="text-slate-400 text-[13px] mt-1 max-w-[280px] leading-relaxed">
-                  Chiedi ad Agente Vera di generare una{' '}
-                  {draftType === 'newsletter' ? 'newsletter normativa' : 'PILL formativa'}. Apparirà qui l'anteprima formattata.
+                  {`Chiedi ad Agente Vera di generare una ${draftType === 'newsletter' ? 'newsletter normativa' : 'PILL formativa'}. Apparira qui l'anteprima formattata.`}
                 </p>
               </div>
               <div className="flex flex-col gap-2 mt-2">

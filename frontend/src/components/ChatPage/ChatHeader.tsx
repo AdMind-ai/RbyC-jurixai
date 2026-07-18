@@ -38,10 +38,10 @@ interface ChatHeaderProps {
 }
 
 const modelDescriptions: Record<ModelId, { name: string, desc: string, subtitle: string }> = {
-  [ModelId.GPT_5_4]: {
+  [ModelId.GPT_5_6_TERRA]: {
     name: 'GPT-5.6 - Terra',
     desc: 'GPT-5.6 Terra è la scelta principale per ragionamento avanzato, tool usage e automazioni multi-step.',
-    subtitle: 'Accesso internet attivo - Ragionamento complesso'
+    subtitle: 'Web search opzionale - Ragionamento complesso'
   },
 }
 
@@ -76,9 +76,9 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
   const [newChatName, setNewChatName] = useState('');
   const [chatPendingDeletion, setChatPendingDeletion] = useState<Chat | null>(null);
 
-  const currentModelInfo = modelDescriptions[selectedModel] ?? modelDescriptions[ModelId.GPT_5_4];
+  const currentModelInfo = modelDescriptions[selectedModel] ?? modelDescriptions[ModelId.GPT_5_6_TERRA];
   const modelToProvider: Record<ModelId, StoredChatProvider> = {
-    [ModelId.GPT_5_4]: 'gpt',
+    [ModelId.GPT_5_6_TERRA]: 'gpt',
   };
 
   const handleSaveClick = () => {
@@ -204,9 +204,9 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
 
       <div className="flex bg-slate-100 rounded-xl p-1">
         <button
-          onClick={() => setSelectedModel(ModelId.GPT_5_4)}
+          onClick={() => setSelectedModel(ModelId.GPT_5_6_TERRA)}
           className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
-            selectedModel === ModelId.GPT_5_4
+            selectedModel === ModelId.GPT_5_6_TERRA
               ? 'bg-white shadow-sm text-[#1e3a8a]'
               : 'text-slate-500 hover:text-slate-800'
           }`}
