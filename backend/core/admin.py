@@ -9,6 +9,7 @@ from core.models.segreteria_societaria.shareholder_model import Shareholder
 from core.models.segreteria_societaria.deadline import Deadline
 from core.models.draft_document.company_document_layout import CompanyDocumentLayout
 from core.models.usage import UsageRecord
+from core.models.vera_usage_model import VeraUsageRecord
 # Register your models here.
 @admin.register(Company)
 class CompanyAdmin(admin.ModelAdmin):
@@ -89,3 +90,23 @@ class UsageRecordAdmin(admin.ModelAdmin):
     search_fields = ('user__email', 'company__name')
     readonly_fields = ('created_at', 'updated_at')
     date_hierarchy = 'occurred_at'
+
+
+@admin.register(VeraUsageRecord)
+class VeraUsageRecordAdmin(admin.ModelAdmin):
+    list_display = (
+        'date',
+        'provider',
+        'model',
+        'cost_eur',
+        'input_tokens',
+        'output_tokens',
+        'total_tokens',
+        'request_count',
+        'updated_at',
+    )
+    list_filter = ('provider', 'date', 'model')
+    search_fields = ('model',)
+    readonly_fields = ('id', 'created_at', 'updated_at')
+    date_hierarchy = 'date'
+    ordering = ('-date', 'provider', 'model')
