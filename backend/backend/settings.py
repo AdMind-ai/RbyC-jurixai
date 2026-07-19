@@ -224,6 +224,10 @@ CELERY_BEAT_SCHEDULE = {
             'provider': 'openai',
         },
     },
+    'sync_openai_rbyc_cost': {
+        'task': 'billing.tasks.sync_openai_rbyc_cost',
+        'schedule': crontab(minute=VERA_OPENAI_COST_SYNC_MINUTE),
+    },
     'sync_vera_anthropic_costs': {
         'task': 'core.tasks.sync_vera_costs',
         'schedule': crontab(
