@@ -4,6 +4,8 @@ from core.models.check_compliance_chat_models import (
 	CheckComplianceConversation,
 	CheckComplianceMessage,
 )
+from core.models.compliance_log_model import ComplianceLog
+from core.models.vera_usage_model import VeraUsageRecord, VeraProvider
 from core.models.openai_chat_models import ChatConversation, ChatMessage
 from core.models.perplexity_models import PerplexityConversation, PerplexityMessage
 from core.models.stored_chat_models import StoredChatSession, StoredChatMessage
@@ -14,6 +16,9 @@ __all__ = [
 	"CheckComplianceAttachment",
 	"CheckComplianceConversation",
 	"CheckComplianceMessage",
+	"ComplianceLog",
+	"VeraUsageRecord",
+	"VeraProvider",
 	"ChatConversation",
 	"ChatMessage",
 	"PerplexityConversation",

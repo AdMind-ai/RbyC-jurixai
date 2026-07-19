@@ -15,8 +15,7 @@ export enum Role {
 }
 
 export enum ModelId {
-  PERPLEXITY = 'perplexity',
-  GPT_5_4 = 'gpt-5-4'
+  GPT_5_6_TERRA = 'gpt-5.6-terra'
 }
 
 export interface Officer {

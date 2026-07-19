@@ -1,25 +1,22 @@
 import React, { useState, useEffect, useContext } from 'react';
 import {
-  LayoutDashboard,
-  Building2,
-  FileText,
-  Bot,
   Search,
+  FileText,
   ShieldCheck,
   MessageSquareText,
   FolderOpen,
   Home,
-  ChevronRight,
   ChevronDown,
-  Briefcase,
+  ChevronRight,
+  Bot,
   UserPlus,
   LogOut,
-  BarChart3
+  BarChart3,
+  Newspaper,
+  ClipboardList,
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import Logo from '../assets/logo.png';
-import CollapsedIcon from '../assets/collapsed-icon.svg';
 
 const routeMap = {
   home: '/',
@@ -28,29 +25,21 @@ const routeMap = {
   compliance: '/compliance/chat',
   'compliance-chat': '/compliance/chat',
   'compliance-documents': '/compliance/documents',
+  'compliance-logs': '/compliance/logs',
   'chat-general': '/chat-general',
+  newsletter: '/newsletter',
   accessi: '/accessi',
   usage: '/usage',
-  'seg-dashboard': '/segreteria/dashboard',
-  'seg-companies': '/segreteria/companies',
-  'seg-documents': '/segreteria/documents',
-  'seg-assistant': '/segreteria/assistant',
 } as const;
 
 type RouteKey = keyof typeof routeMap;
 
 type SvgIconComponent = React.ComponentType<React.SVGProps<SVGSVGElement> & { size?: number | string }>;
 
-const segreteriaTabs: { key: RouteKey; label: string; Icon: SvgIconComponent }[] = [
-  { key: 'seg-dashboard', label: 'Dashboard', Icon: LayoutDashboard },
-  { key: 'seg-companies', label: 'Società', Icon: Building2 },
-  { key: 'seg-documents', label: 'Documenti AI', Icon: FileText },
-  { key: 'seg-assistant', label: 'Assistente Legale', Icon: Bot },
-];
-
 const complianceTabs: { key: RouteKey; label: string; Icon: SvgIconComponent }[] = [
-  { key: 'compliance-chat', label: 'Chat', Icon: MessageSquareText },
+  { key: 'compliance-chat', label: 'Agente Vera', Icon: MessageSquareText },
   { key: 'compliance-documents', label: 'Documenti', Icon: FolderOpen },
+  { key: 'compliance-logs', label: 'Log', Icon: ClipboardList },
 ];
 
 type SidebarProps = {
@@ -61,25 +50,17 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapseChange }) => {
   const auth = useContext(AuthContext);
   const userFirst = auth?.user?.first_name || '';
   const userLast = auth?.user?.last_name || '';
-  const userName = (userFirst || userLast) ? `${userFirst} ${userLast}`.trim() : (auth?.user?.username || 'User');
+  const userName = (userFirst || userLast)
+    ? `${userFirst} ${userLast}`.trim()
+    : auth?.user?.username || 'Utente';
   const usernameOrFirst = userFirst || auth?.user?.username || '';
   const userInitial = usernameOrFirst ? usernameOrFirst.charAt(0).toUpperCase() : 'U';
-  const userRole = auth?.user?.is_admin ? "Amministratore" : "Standard";
-
 
   const navigate = useNavigate();
   const location = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [isSegreteriaOpen, setIsSegreteriaOpen] = useState(false);
   const [isComplianceOpen, setIsComplianceOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-
-  // Open Segreteria if current route matches
-  useEffect(() => {
-    if (location.pathname.startsWith('/segreteria') || location.pathname.startsWith('/seg-')) {
-      setIsSegreteriaOpen(true);
-    }
-  }, [location.pathname]);
 
   useEffect(() => {
     if (location.pathname.startsWith('/compliance')) {
@@ -88,268 +69,240 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapseChange }) => {
   }, [location.pathname]);
 
   useEffect(() => {
-    // if user navigates to segreteria route while collapsed, keep collapsed state but
-    // ensure segreteria section doesn't auto-expand visually (we keep state as-is)
-  }, [isCollapsed]);
+    if (onCollapseChange) onCollapseChange(isCollapsed);
+  }, [isCollapsed, onCollapseChange]);
 
   const handleNav = (tab: RouteKey) => {
     const route = routeMap[tab];
     if (route) navigate(route);
   };
 
-  const toggleSegreteria = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsSegreteriaOpen(!isSegreteriaOpen);
-    if (!isSegreteriaOpen && !(location.pathname.startsWith('/segreteria') || location.pathname.startsWith('/seg-'))) {
-      navigate(routeMap['seg-dashboard']);
-    }
-  };
-
-  const toggleCompliance = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsComplianceOpen(!isComplianceOpen);
-    if (!isComplianceOpen && !location.pathname.startsWith('/compliance')) {
-      navigate(routeMap['compliance-chat']);
-    }
-  };
-
-  const toggleCollapse = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsCollapsed(!isCollapsed);
-  };
-
-  useEffect(() => {
-    if (onCollapseChange) onCollapseChange(isCollapsed);
-  }, [isCollapsed, onCollapseChange]);
-
-  const iconSize = isCollapsed ? 24 : 20;
-  const subIconSize = isCollapsed ? 20 : 16;
+  const isActive = (tab: RouteKey) => location.pathname === routeMap[tab];
+  const isComplianceActive = location.pathname.startsWith('/compliance');
 
   const handleLogout = () => {
     auth?.logout();
-    navigate("/login");
+    navigate('/login');
   };
 
+  // Shared class builders
+  const navItem = (active: boolean, collapsed: boolean) =>
+    `w-full flex items-center gap-3 transition-all duration-200 rounded-xl
+     ${collapsed ? 'justify-center py-3 px-2 mx-0' : 'px-3 py-2.5 mx-2'}
+     ${active
+       ? 'bg-white/10 text-white'
+       : 'text-blue-200/70 hover:bg-white/5 hover:text-blue-100'}`;
+
+  const subNavItem = (active: boolean) =>
+    `w-full flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all duration-200
+     ml-6 mr-2 text-[12px] font-medium
+     ${active
+       ? 'bg-white/10 text-white'
+       : 'text-blue-200/60 hover:bg-white/5 hover:text-blue-100'}`;
+
+  const iconSize = isCollapsed ? 20 : 17;
+  const subIconSize = 14;
+
   return (
-    <div className={`${isCollapsed ? 'w-24' : 'w-64'} bg-[#1e3a8a] text-white h-screen flex flex-col fixed left-0 top-0 shadow-2xl z-20 border-r border-blue-900 transition-[width] duration-200`}>
-      {/* Logo Section */}
-      <div className={`relative border-b border-blue-800 bg-[#172554] ${isCollapsed ? 'py-4' : 'p-6'}`}>
-        {!isCollapsed ? (
-          <>
-            <img src={Logo} alt="Refink Logo" className="w-32 mx-auto" />
-            <button
-              onClick={toggleCollapse}
-              title={isCollapsed ? 'Apri sidebar' : 'Comprimi sidebar'}
-              className="absolute right-2 top-2 p-1 rounded-md text-blue-200 hover:text-white hover:bg-blue-800/30 flex items-center justify-center"
-            >
-              <img src={CollapsedIcon} alt="" className="w-5 h-5" />
-            </button>
-          </>
-        ) : (
-          <div className="flex items-center justify-center h-full">
-            <button
-              onClick={toggleCollapse}
-              title={isCollapsed ? 'Apri sidebar' : 'Comprimi sidebar'}
-              className="p-1 rounded-md text-blue-200 hover:text-white hover:bg-blue-800/30 flex items-center justify-center"
-            >
-              <img src={CollapsedIcon} alt="" className="w-5 h-5" />
-            </button>
+    <div
+      className={`${isCollapsed ? 'w-20' : 'w-64'} bg-[#1e3a8a] text-white h-screen flex flex-col fixed left-0 top-0 z-20 transition-[width] duration-200`}
+    >
+      {/* Logo */}
+      <div
+        className="bg-[#172554] flex items-center cursor-pointer select-none px-5"
+        style={{ height: 72 }}
+        onClick={() => setIsCollapsed(!isCollapsed)}
+        title={isCollapsed ? 'Espandi sidebar' : 'Comprimi sidebar'}
+      >
+        {isCollapsed ? (
+          <div className="flex items-center justify-center w-full">
+            {/* Green dot — from logo mark */}
+            <span
+              className="block rounded-full"
+              style={{ width: 10, height: 10, background: '#1b9162' }}
+            />
           </div>
+        ) : (
+          <img
+            src="/logo-dark.svg"
+            alt="Refink"
+            style={{ height: 38, width: 'auto', display: 'block' }}
+          />
         )}
       </div>
 
       {/* Navigation */}
-      <nav className={`flex-1 overflow-y-auto ${isCollapsed ? 'pt-4 px-1' : 'py-6 px-3 space-y-1'}`}>
+      <nav className="flex-1 overflow-y-auto py-5 flex flex-col gap-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+
+        {/* Home */}
         <button
           onClick={() => handleNav('home')}
           title={isCollapsed ? 'Home' : undefined}
-          className={`w-full flex items-center gap-3 ${isCollapsed ? 'justify-center py-3' : 'px-4 py-3'} rounded-lg transition-all duration-200 mb-4 ${location.pathname === routeMap['home']
-            ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
-            : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
-            }`}
+          className={navItem(isActive('home'), isCollapsed)}
         >
           <Home size={iconSize} />
-          <span className={`${isCollapsed ? 'hidden' : 'font-medium text-sm'}`}>Home</span>
+          {!isCollapsed && <span className="text-[13px] font-medium">Home</span>}
         </button>
 
-        <div className={`${isCollapsed ? 'hidden' : 'px-4 py-2 text-[11px] font-bold text-blue-300 uppercase tracking-wider opacity-70'}`}>
-          Strumenti
-        </div>
+        {/* Divider */}
+        {!isCollapsed && <div className="h-px bg-blue-800/40 mx-5 my-2" />}
 
+        {/* Ricerca documentale */}
         <button
           onClick={() => handleNav('search')}
           title={isCollapsed ? 'Ricerca documentale' : undefined}
-          className={`w-full flex items-center gap-3 ${isCollapsed ? 'justify-center py-3' : 'px-4 py-3'} rounded-lg transition-all duration-200 ${location.pathname === routeMap['search']
-            ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
-            : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
-            }`}
+          className={navItem(isActive('search'), isCollapsed)}
         >
           <Search size={iconSize} />
-          <span className={`${isCollapsed ? 'hidden' : 'font-medium text-sm'}`}>Ricerca documentale</span>
+          {!isCollapsed && <span className="text-[13px] font-medium">Ricerca documentale</span>}
         </button>
 
+        {/* Draft Document */}
         <button
           onClick={() => handleNav('draft')}
           title={isCollapsed ? 'Draft Document' : undefined}
-          className={`w-full flex items-center gap-3 ${isCollapsed ? 'justify-center py-3' : 'px-4 py-3'} rounded-lg transition-all duration-200 ${location.pathname === routeMap['draft']
-            ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
-            : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
-            }`}
+          className={navItem(isActive('draft'), isCollapsed)}
         >
           <FileText size={iconSize} />
-          <span className={`${isCollapsed ? 'hidden' : 'font-medium text-sm'}`}>Draft Document</span>
+          {!isCollapsed && <span className="text-[13px] font-medium">Draft Document</span>}
         </button>
 
+        {/* Check compliance (dropdown) */}
         <div>
           <button
-            onClick={toggleCompliance}
+            onClick={() => {
+              setIsComplianceOpen(!isComplianceOpen);
+              if (!isComplianceOpen && !isComplianceActive) navigate(routeMap['compliance-chat']);
+            }}
             title={isCollapsed ? 'Check compliance' : undefined}
-            className={`w-full flex items-center ${isCollapsed ? 'justify-center py-3' : 'justify-between px-4 py-3'} rounded-lg transition-all duration-200 ${location.pathname.startsWith('/compliance')
-              ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
-              : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
-              }`}
+            className={`w-full flex items-center transition-all duration-200 rounded-xl
+              ${isCollapsed ? 'justify-center py-3 px-2 mx-0' : 'px-3 py-2.5 mx-2 justify-between'}
+              ${isComplianceActive
+                ? 'bg-white/10 text-white'
+                : 'text-blue-200/70 hover:bg-white/5 hover:text-blue-100'}`}
           >
             <div className="flex items-center gap-3">
               <ShieldCheck size={iconSize} />
-              <span className={`${isCollapsed ? 'hidden' : 'font-medium text-sm'}`}>Check compliance</span>
+              {!isCollapsed && <span className="text-[13px] font-medium">Check compliance</span>}
             </div>
-            {!isCollapsed && (isComplianceOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />)}
+            {!isCollapsed && (
+              isComplianceOpen
+                ? <ChevronDown size={14} />
+                : <ChevronRight size={14} />
+            )}
           </button>
 
           {isComplianceOpen && (
-            <div className={`${isCollapsed ? 'mt-1 ml-0 space-y-1' : 'mt-1 ml-4 space-y-1 border-l border-blue-700 pl-2'}`}>
+            <div className="mt-0.5 flex flex-col gap-0.5">
               {complianceTabs.map(tab => (
                 <button
                   key={tab.key}
                   title={isCollapsed ? tab.label : undefined}
                   onClick={() => handleNav(tab.key)}
-                  className={`w-full flex items-center gap-3 ${isCollapsed ? 'justify-center py-3' : 'px-4 py-2'} rounded-lg text-xs transition-all duration-200 ${location.pathname === routeMap[tab.key]
-                    ? 'text-[#4ade80] font-semibold bg-blue-900/50'
-                    : 'text-blue-300 hover:text-white'
-                    }`}
+                  className={isCollapsed
+                    ? navItem(isActive(tab.key), true)
+                    : subNavItem(isActive(tab.key))}
                 >
                   <tab.Icon size={subIconSize} />
-                  <span className={`${isCollapsed ? 'hidden' : 'text-xs font-medium'}`}>{tab.label}</span>
+                  {!isCollapsed && tab.label}
                 </button>
               ))}
             </div>
           )}
         </div>
 
+        {/* Chat Assistant */}
         <button
           onClick={() => handleNav('chat-general')}
           title={isCollapsed ? 'Chat Assistant' : undefined}
-          className={`w-full flex items-center gap-3 ${isCollapsed ? 'justify-center py-3' : 'px-4 py-3'} rounded-lg transition-all duration-200 ${location.pathname === routeMap['chat-general']
-            ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
-            : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
-            }`}
+          className={navItem(isActive('chat-general'), isCollapsed)}
         >
           <Bot size={iconSize} />
-          <span className={`${isCollapsed ? 'hidden' : 'font-medium text-sm'}`}>Chat Assistant</span>
+          {!isCollapsed && <span className="text-[13px] font-medium">Chat Assistant</span>}
         </button>
 
-        {/* Dropdown Group */}
-        <div>
-          <button
-            onClick={toggleSegreteria}
-            title={isCollapsed ? 'Segreteria Societaria' : undefined}
-            className={`w-full flex items-center ${isCollapsed ? 'justify-center py-3' : 'justify-between px-4 py-3'} rounded-lg transition-all duration-200 ${location.pathname.startsWith('/seg-')
-              || location.pathname.startsWith('/segreteria')
-              ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
-              : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
-              }`}
-          >
-            <div className={`flex items-center gap-3 ${isCollapsed ? '' : ''}`}>
-              <Briefcase size={iconSize} />
-              <span className={`${isCollapsed ? 'hidden' : 'font-medium text-sm'}`}>Segreteria Societaria</span>
-            </div>
-            {!isCollapsed && (isSegreteriaOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />)}
-          </button>
+        {/* Newsletter */}
+        <button
+          onClick={() => handleNav('newsletter')}
+          title={isCollapsed ? 'Newsletter' : undefined}
+          className={navItem(isActive('newsletter'), isCollapsed)}
+        >
+          <Newspaper size={iconSize} />
+          {!isCollapsed && <span className="text-[13px] font-medium">Newsletter</span>}
+        </button>
 
-          {isSegreteriaOpen && (
-            <div className={`${isCollapsed ? 'mt-1 ml-0 space-y-1' : 'mt-1 ml-4 space-y-1 border-l border-blue-700 pl-2'}`}>
-              {segreteriaTabs.map(tab => (
-                <button
-                  key={tab.key}
-                  title={isCollapsed ? tab.label : undefined}
-                  onClick={() => handleNav(tab.key)}
-                  className={`w-full flex items-center gap-3 ${isCollapsed ? 'justify-center py-3' : 'px-4 py-2'} rounded-lg text-xs transition-all duration-200 ${location.pathname === routeMap[tab.key]
-                    ? 'text-[#4ade80] font-semibold bg-blue-900/50'
-                    : 'text-blue-300 hover:text-white'
-                    }`}
-                >
-                  <tab.Icon size={subIconSize} />
-                  <span className={`${isCollapsed ? 'hidden' : 'text-xs font-medium'}`}>{tab.label}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        {/* Segreteria Societaria - nascosta temporaneamente */}
+
       </nav>
 
-      {/* Accessi & Usage Buttons */}
-      <div className={`border-t border-blue-800 bg-[#1e3a8a] ${isCollapsed ? 'py-2 px-1' : 'px-3 py-2'} space-y-2`}>
-        <button
-          onClick={() => handleNav('usage')}
-          title={isCollapsed ? 'Usage' : undefined}
-          className={`w-full flex items-center gap-3 ${isCollapsed ? 'justify-center py-3' : 'px-4 py-3'} rounded-lg transition-all duration-200 ${location.pathname === routeMap['usage']
-            ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
-            : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
-            }`}
-        >
-          <BarChart3 size={iconSize} />
-          <span className={`${isCollapsed ? 'hidden' : 'font-medium text-sm'}`}>Consumo AI</span>
-        </button>
+      {/* Bottom section */}
+      <div className="pb-2">
+        {!isCollapsed && <div className="h-px bg-blue-800/40 mx-5 mb-2" />}
 
-        <button
-          onClick={() => handleNav('accessi')}
-          title={isCollapsed ? 'Accessi' : undefined}
-          className={`w-full flex items-center gap-3 ${isCollapsed ? 'justify-center py-3' : 'px-4 py-3'} rounded-lg transition-all duration-200 ${location.pathname === routeMap['accessi']
-            ? 'bg-[#172554] text-white border-l-4 border-[#15803d]'
-            : 'text-blue-200 hover:bg-blue-800/50 hover:text-white'
-            }`}
-        >
-          <UserPlus size={iconSize} />
-          <span className={`${isCollapsed ? 'hidden' : 'font-medium text-sm'}`}>Accessi</span>
-        </button>
-      </div>
+        <div className="flex flex-col gap-0.5">
+          <button
+            onClick={() => handleNav('usage')}
+            title={isCollapsed ? 'Consumo AI' : undefined}
+            className={navItem(isActive('usage'), isCollapsed)}
+          >
+            <BarChart3 size={iconSize} />
+            {!isCollapsed && <span className="text-[13px] font-medium">Consumo AI</span>}
+          </button>
 
-      {/* User Profile Section */}
-      <div className={`border-t border-blue-800 bg-[#172554] ${isCollapsed ? 'py-3 px-2' : 'p-4'}`}>
+          <button
+            onClick={() => handleNav('accessi')}
+            title={isCollapsed ? 'Accessi' : undefined}
+            className={navItem(isActive('accessi'), isCollapsed)}
+          >
+            <UserPlus size={iconSize} />
+            {!isCollapsed && <span className="text-[13px] font-medium">Accessi</span>}
+          </button>
+        </div>
+
+        {/* User profile */}
+        {!isCollapsed && <div className="h-px bg-blue-800/40 mx-5 my-2" />}
+
         <div
           onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-          title={isCollapsed ? 'Profilo' : undefined}
-          className={`flex items-center gap-3 cursor-pointer hover:bg-[#1e3a8a] p-2 rounded-lg transition-colors ${isCollapsed ? 'justify-center' : ''}`}
+          className={`flex items-center gap-3 cursor-pointer transition-colors rounded-xl mx-2 px-3 py-2.5
+            hover:bg-white/5 ${isCollapsed ? 'justify-center' : ''}`}
         >
-          <div className={`${isCollapsed ? 'w-10 h-10' : 'w-9 h-9'} bg-[#15803d] rounded-full flex items-center justify-center text-white font-bold text-sm shadow-sm border-2 border-blue-900`}>
+          <div className="w-8 h-8 rounded-full bg-[#172554] border border-blue-700 flex items-center justify-center text-white font-semibold text-sm shrink-0">
             {userInitial}
           </div>
           {!isCollapsed && (
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white truncate">{userName}</p>
-              <p className="text-[12px] text-blue-300 truncate">{userRole}</p>
-            </div>
+            <>
+              <span className="text-[13px] font-medium text-blue-100 truncate flex-1">{userName}</span>
+              <LogOut size={14} className="text-blue-300/60 shrink-0" />
+            </>
           )}
-          {!isCollapsed && (isUserMenuOpen ? <ChevronDown size={16} className="text-blue-300" /> : <ChevronRight size={16} className="text-blue-300" />)}
         </div>
 
-        {isUserMenuOpen && (
-          <div className="mt-2 space-y-1 animate-fade-in">
+        {isUserMenuOpen && !isCollapsed && (
+          <div className="mx-2 mb-1">
             <button
               onClick={handleLogout}
-              title={isCollapsed ? 'Disconnetti' : ''}
-              className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-red-300 hover:text-white hover:bg-red-500/20 rounded-lg transition-colors ${isCollapsed ? 'justify-center' : ''}`}
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-red-300 hover:text-white hover:bg-red-500/20 rounded-lg transition-colors"
             >
-              <LogOut size={14} />
-              {!isCollapsed && 'Disconnetti'}
+              <LogOut size={13} />
+              Disconnetti
             </button>
           </div>
         )}
-      </div>
 
-      {/* Footer */}
-      <div className={`py-2 bg-[#172554] text-[10px] text-blue-400 text-center border-t border-blue-800 ${isCollapsed ? 'text-xs' : ''}`}>
-        {!isCollapsed ? 'Refink Suite v2.4.0' : ''}
+        {!isCollapsed && (
+          <div className="flex flex-col items-center gap-1.5 py-3 mt-1">
+            {/* Green dot accent — dal logo Refink */}
+            <div className="flex items-center gap-[5px]">
+              <span className="block rounded-full" style={{ width: 5, height: 5, background: '#365142' }} />
+              <span className="block rounded-full" style={{ width: 5, height: 5, background: '#1b9162' }} />
+              <span className="block rounded-full" style={{ width: 5, height: 5, background: '#4ade80' }} />
+            </div>
+            <p className="text-[10px] text-blue-400/50 text-center">
+              Refink Suite v2.4.0
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

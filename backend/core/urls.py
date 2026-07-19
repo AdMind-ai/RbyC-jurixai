@@ -79,6 +79,18 @@ urlpatterns = [
          name='openai-check-compliance-analyze'),
     path('check-compliance', CheckComplianceView.as_view(),
          name='check-compliance'),
+    path('check-compliance/logs/', ComplianceLogListView.as_view(),
+         name='check-compliance-logs'),
+    path('check-compliance/logs/<uuid:pk>/', ComplianceLogDetailView.as_view(),
+         name='check-compliance-log-detail'),
+
+    # Newsletter & PILL Formativo
+    path('newsletter/chat/', NewsletterChatView.as_view(), name='newsletter-chat'),
+
+    # Vera usage tracking
+    path('vera/usage/', VeraUsageIngestView.as_view(), name='vera-usage-ingest'),
+    path('vera/usage/daily/', VeraUsageDailyView.as_view(), name='vera-usage-daily'),
+    path('vera/usage/raw/', VeraUsageRawListView.as_view(), name='vera-usage-raw'),
 
     # Deadlines
     path('deadlines/', DeadlineListCreateView.as_view(), name='deadline-list-create'),

@@ -17,8 +17,8 @@ interface Message {
 }
 
 const providerToModel: Record<StoredChatProvider, ModelId> = {
-  gpt: ModelId.GPT_5_4,
-  perplexity: ModelId.PERPLEXITY,
+  gpt: ModelId.GPT_5_6_TERRA,
+  perplexity: ModelId.GPT_5_6_TERRA,
 };
 
 const flattenStoredContent = (content: unknown): string => {
@@ -57,15 +57,14 @@ const flattenStoredContent = (content: unknown): string => {
 };
 
 const Chat: React.FC = () => {
-  const [selectedModel, setSelectedModel] = useState<ModelId>(ModelId.GPT_5_4)
+  const [selectedModel, setSelectedModel] = useState<ModelId>(ModelId.GPT_5_6_TERRA)
   const [messages, setMessages] = useState<Message[]>([])
   const [isTyping, setIsTyping] = useState(false);
   const [isOverview, setIsOverview] = useState(false);
   const [searchWebEnabled, setSearchWebEnabled] = useState(false)
   const [selectedChat, setSelectedChat] = useState<StoredChatSelection | null>(null);
   const [conversationRefs, setConversationRefs] = useState<Record<ModelId, string | null>>({
-    [ModelId.GPT_5_4]: null,
-    [ModelId.PERPLEXITY]: null,
+    [ModelId.GPT_5_6_TERRA]: null,
   });
   const [shouldPersist, setShouldPersist] = useState(false);
 
@@ -90,7 +89,7 @@ const Chat: React.FC = () => {
   );
 
   const requestNewConversation = useCallback(async () => {
-    updateConversationRef(ModelId.GPT_5_4, null);
+    updateConversationRef(ModelId.GPT_5_6_TERRA, null);
     try {
       const resp = await fetchWithoutAuth('/openai/chat/create-conversation/', {
         method: "POST",
@@ -100,7 +99,7 @@ const Chat: React.FC = () => {
         throw new Error(`Failed with status ${resp.status}`);
       }
       const data = await resp.json();
-      updateConversationRef(ModelId.GPT_5_4, data.conversation_id);
+      updateConversationRef(ModelId.GPT_5_6_TERRA, data.conversation_id);
       return data.conversation_id as string;
     } catch (err) {
       console.error("Erro ao criar nova conversa:", err);
@@ -121,7 +120,7 @@ const Chat: React.FC = () => {
   const handleResetConversationContext = useCallback(async () => {
     setMessages([]);
     setSelectedChat(null);
-    if (selectedModel === ModelId.GPT_5_4) {
+    if (selectedModel === ModelId.GPT_5_6_TERRA) {
       await requestNewConversation();
     } else {
       updateConversationRef(selectedModel, null);
@@ -193,7 +192,7 @@ const Chat: React.FC = () => {
     const provider = selectedChat.provider;
     const targetModel = providerToModel[provider];
     const conversationId = selectedChat.thread_id ?? conversationRefs[targetModel] ?? null;
-    const requiresConversationId = provider === 'gpt' || provider === 'perplexity';
+    const requiresConversationId = provider === 'gpt';
 
     if (requiresConversationId && !conversationId) {
       return;
@@ -229,17 +228,16 @@ const Chat: React.FC = () => {
     setShouldPersist(true);
   }, []);
 
-
   const activeConversationId = selectedChat?.thread_id ?? conversationRefs[selectedModel] ?? null;
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen w-full bg-[#f8fafc]">
-      {/* Header */}
+    <div className="page-root flex flex-col h-full bg-slate-50">
       <ChatHeader
         conversationId={activeConversationId}
         selectedModel={selectedModel}
         setSelectedModel={setSelectedModel}
         searchWebEnabled={searchWebEnabled}
+        setSearchWebEnabled={setSearchWebEnabled}
         onChatSelect={handleChatSelect}
         selectedChat={selectedChat}
         setSelectedChat={setSelectedChat}
@@ -248,32 +246,26 @@ const Chat: React.FC = () => {
         setMessages={setMessages}
         onResetConversation={handleResetConversationContext}
       />
-      <div className="flex-1 relative flex flex-col items-center justify-center h-full w-full relative">
-        <div className="w-full max-w-6xl mx-auto px-8 flex flex-col h-full">
-          <ChatMessageList
-            messages={messages}
-            isTyping={isTyping}
-            isOverview={isOverview}
-            chatColor='#F9F9FB'
-          />
-          {/* Messages Container */}
-          <div className="w-full">
-            <ChatInputArea
-                conversationId={activeConversationId}
-              onSend={handleSendMessage}
-              selectedChat={selectedChat}
-              setSelectedChat={setSelectedChat}
-              searchWebEnabled={searchWebEnabled}
-              setSearchWebEnabled={setSearchWebEnabled}
-              setIsOverview={setIsOverview}
-              setIsTyping={setIsTyping}
-              messages={messages}
-              selectedModel={selectedModel}
-                onConversationIdChange={updateConversationRef}
-                onConversationUpdated={requestAutoPersist}
-            />
-          </div>
-        </div>
+      <div className="flex-1 overflow-hidden relative flex flex-col w-full">
+        <ChatMessageList
+          messages={messages}
+          isTyping={isTyping}
+          isOverview={isOverview}
+        />
+        <ChatInputArea
+          conversationId={activeConversationId}
+          onSend={handleSendMessage}
+          selectedChat={selectedChat}
+          setSelectedChat={setSelectedChat}
+          searchWebEnabled={searchWebEnabled}
+          setSearchWebEnabled={setSearchWebEnabled}
+          setIsOverview={setIsOverview}
+          setIsTyping={setIsTyping}
+          messages={messages}
+          selectedModel={selectedModel}
+          onConversationIdChange={updateConversationRef}
+          onConversationUpdated={requestAutoPersist}
+        />
       </div>
     </div>
   );

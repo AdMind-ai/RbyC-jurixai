@@ -48,6 +48,10 @@ COMPLIANCE_DOCUMENTS_BUCKET_REGION = os.environ.get(
     'eu-central-1',
 )
 COMPLIANCE_CHAT_BUCKET_NAME = os.environ.get('COMPLIANCE_CHAT_BUCKET_NAME')
+COMPLIANCE_CHAT_BUCKET_REGION = os.environ.get(
+    'COMPLIANCE_CHAT_BUCKET_REGION',
+    COMPLIANCE_DOCUMENTS_BUCKET_REGION or AWS_S3_REGION_NAME,
+)
 COMPLIANCE_CHAT_UPLOAD_PREFIX = os.environ.get(
     'COMPLIANCE_CHAT_UPLOAD_PREFIX',
     'documents/chat-uploads/',
@@ -66,6 +70,12 @@ VERA_RUN_POLL_INTERVAL_SECONDS = float(os.environ.get('VERA_RUN_POLL_INTERVAL_SE
 VERA_DEFAULT_ORGANIZATION_ID = os.environ.get('VERA_DEFAULT_ORGANIZATION_ID')
 VERA_DEFAULT_CLIENT_ID = os.environ.get('VERA_DEFAULT_CLIENT_ID')
 VERA_DEFAULT_MATTER_ID = os.environ.get('VERA_DEFAULT_MATTER_ID')
+
+# Vera cost sync — OpenAI + Anthropic
+VERA_OPENAI_ADMIN_KEY = os.environ.get('VERA_OPENAI_ADMIN_KEY') or os.environ.get('OPENAI_ADMIN_KEY')
+VERA_OPENAI_PROJECT_ID = os.environ.get('VERA_OPENAI_PROJECT_ID')
+VERA_ANTHROPIC_API_KEY = os.environ.get('VERA_ANTHROPIC_API_KEY')
+VERA_ANTHROPIC_WORKSPACE_ID = os.environ.get('VERA_ANTHROPIC_WORKSPACE_ID')
 
 FUNCTIONALITY_DOCUMENTS_BUCKET_NAME = os.environ.get('FUNCTIONALITY_DOCUMENTS_BUCKET_NAME')
 
@@ -104,6 +114,31 @@ BILLING_COMPANY_MARKUP_PERCENTAGE = os.environ.get('BILLING_COMPANY_MARKUP_PERCE
 BILLING_IVA_PERCENTAGE = os.environ.get('BILLING_IVA_PERCENTAGE', '22')
 OPENAI_ADMIN_KEY = os.environ.get('OPENAI_ADMIN_KEY')
 OPENAI_COSTS_PROJECT_ID = os.environ.get('OPENAI_COSTS_PROJECT_ID') or os.environ.get('OPENAI_PROJECT_ID')
+RBYC_OPENAI_PROJECT_ID = (
+    os.environ.get('RBYC_OPENAI_PROJECT_ID')
+    or OPENAI_COSTS_PROJECT_ID
+    or os.environ.get('OPENAI_PROJECT_ID')
+)
+AI_USAGE_RBYC_MARKUP_PERCENTAGE = os.environ.get(
+    'AI_USAGE_RBYC_MARKUP_PERCENTAGE',
+    BILLING_COMPANY_MARKUP_PERCENTAGE,
+)
+AI_USAGE_VERA_MARKUP_PERCENTAGE = os.environ.get('AI_USAGE_VERA_MARKUP_PERCENTAGE', '25')
+AI_USAGE_IVA_PERCENTAGE = os.environ.get('AI_USAGE_IVA_PERCENTAGE', BILLING_IVA_PERCENTAGE)
+VERA_COST_SYNC_DAYS = int(os.environ.get('VERA_COST_SYNC_DAYS', '35'))
+VERA_COST_SYNC_CACHE_SECONDS = int(os.environ.get('VERA_COST_SYNC_CACHE_SECONDS', '900'))
+VERA_COST_SYNC_ERROR_COOLDOWN_SECONDS = int(
+    os.environ.get('VERA_COST_SYNC_ERROR_COOLDOWN_SECONDS', '900')
+)
+VERA_OPENAI_COST_SYNC_MINUTE = os.environ.get('VERA_OPENAI_COST_SYNC_MINUTE', '*/30')
+VERA_ANTHROPIC_COST_SYNC_HOUR = os.environ.get('VERA_ANTHROPIC_COST_SYNC_HOUR', '*/3')
+VERA_ANTHROPIC_COST_SYNC_MINUTE = int(os.environ.get('VERA_ANTHROPIC_COST_SYNC_MINUTE', '0'))
+VERA_ANTHROPIC_COST_REPORT_LAG_DAYS = int(
+    os.environ.get('VERA_ANTHROPIC_COST_REPORT_LAG_DAYS', '0')
+)
+VERA_ANTHROPIC_COST_REPORT_LIMIT = int(
+    os.environ.get('VERA_ANTHROPIC_COST_REPORT_LIMIT', '31')
+)
 
 
 MCP_SERVER_URL = os.environ.get('MCP_SERVER_URL', 'https://mcp-server-ricerca-rbyc.onrender.com/sse')
@@ -156,7 +191,6 @@ DOCUMENT_PREVIEW_SYNC_PROCESS_ALL = os.environ.get(
 DOCUMENT_PREVIEW_SYNC_MAX_BATCHES = int(
     os.environ.get('DOCUMENT_PREVIEW_SYNC_MAX_BATCHES', '0')
 )
-
 now = datetime.now()
 current_year = now.year
 
@@ -180,6 +214,25 @@ CELERY_BEAT_SCHEDULE = {
             'force': False,
             'process_all': DOCUMENT_PREVIEW_SYNC_PROCESS_ALL,
             'max_batches': DOCUMENT_PREVIEW_SYNC_MAX_BATCHES,
+        },
+    },
+    'sync_vera_openai_costs': {
+        'task': 'core.tasks.sync_vera_costs',
+        'schedule': crontab(minute=VERA_OPENAI_COST_SYNC_MINUTE),
+        'kwargs': {
+            'days': VERA_COST_SYNC_DAYS,
+            'provider': 'openai',
+        },
+    },
+    'sync_vera_anthropic_costs': {
+        'task': 'core.tasks.sync_vera_costs',
+        'schedule': crontab(
+            hour=VERA_ANTHROPIC_COST_SYNC_HOUR,
+            minute=VERA_ANTHROPIC_COST_SYNC_MINUTE,
+        ),
+        'kwargs': {
+            'days': VERA_COST_SYNC_DAYS,
+            'provider': 'anthropic',
         },
     },
     'generate_monthly_billing_invoice': {

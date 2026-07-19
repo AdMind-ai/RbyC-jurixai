@@ -94,7 +94,7 @@ class VeraComplianceService:
                 self._sleep_before_retry(attempt)
         raise VeraComplianceServiceError("Error calling Vera runs API.") from last_exception
 
-    def _build_run_payload(self, messages, session_key, instructions=None):
+    def _build_run_payload(self, messages, session_key, instructions=None, tag=None):
         message_items = list(messages or [])
         if not message_items:
             raise VeraComplianceServiceError("Vera run requires at least one message.")
@@ -118,10 +118,12 @@ class VeraComplianceService:
             payload["instructions"] = instructions
         if conversation_history:
             payload["conversation_history"] = conversation_history
+        if tag:
+            payload["tag"] = tag
         return payload
 
-    def create_run(self, messages, session_key, instructions=None):
-        payload = self._build_run_payload(messages, session_key, instructions=instructions)
+    def create_run(self, messages, session_key, instructions=None, tag=None):
+        payload = self._build_run_payload(messages, session_key, instructions=instructions, tag=tag)
         response = self._request("POST", "runs", json=payload)
         data = response.json()
         run_id = data.get("run_id")
@@ -158,8 +160,8 @@ class VeraComplianceService:
 
             time.sleep(self.poll_interval)
 
-    def send_message(self, messages, session_key):
-        run_id = self.create_run(messages, session_key)
+    def send_message(self, messages, session_key, tag=None):
+        run_id = self.create_run(messages, session_key, tag=tag)
         return self._poll_run_until_final(run_id)
 
     def stream_run_events(self, run_id):
@@ -184,13 +186,13 @@ class VeraComplianceService:
             logger.exception("Error streaming Vera run events: %s", exc)
             raise VeraComplianceServiceError("Error streaming Vera run events.") from exc
 
-    def stream_message(self, messages, session_key):
+    def stream_message(self, messages, session_key, tag=None):
         for attempt in range(self.max_retries + 1):
             emitted_content = False
             emitted_text = ""
             run_id = None
             try:
-                run_id = self.create_run(messages, session_key)
+                run_id = self.create_run(messages, session_key, tag=tag)
                 final_output = ""
 
                 for event in self.stream_run_events(run_id):

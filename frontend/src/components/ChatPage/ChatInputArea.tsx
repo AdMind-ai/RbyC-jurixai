@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { fetchWithAuth } from '../../api/fetchWithAuth';
-import { Bot, Paperclip, Upload, X } from 'lucide-react';
+import { Paperclip, Send, X } from 'lucide-react';
 import { ModelId } from '../../types/types'
-import { perplexityService } from '../../services/perplexityService';
 import { StoredChatSelection } from '../../types/chat';
 
 interface ChatInputAreaProps {
@@ -17,6 +16,7 @@ interface ChatInputAreaProps {
   selectedModel: ModelId;
   onConversationIdChange?: (model: ModelId, conversationId: string | null) => void;
   onConversationUpdated?: () => void;
+  messages: Message[];
 }
 
 interface Attachment {
@@ -32,16 +32,15 @@ interface Message {
   attachments?: Attachment[];
 }
 
-const ChatInputArea: React.FC<ChatInputAreaProps & { messages: Message[] }> = ({
+const ChatInputArea: React.FC<ChatInputAreaProps> = ({
   onSend,
   selectedChat,
-  selectedModel,
+  searchWebEnabled,
   setSearchWebEnabled,
   setIsOverview,
   setIsTyping,
   conversationId,
-  messages,
-  onConversationIdChange,
+  selectedModel,
   onConversationUpdated,
 }) => {
   const [input, setInput] = useState('');
@@ -49,27 +48,6 @@ const ChatInputArea: React.FC<ChatInputAreaProps & { messages: Message[] }> = ({
   const [isLoading, setIsLoading] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Show empty state if no messages have been sent yet
-  const showEmptyState = !selectedChat && messages.length === 0;
-
-  const modelMessaging = {
-    [ModelId.GPT_5_4]: {
-      color: '#1e3a8a',
-      label: 'GPT-5.4',
-      body: 'Posso cercare sul web per normative aggiornate, analizzare documenti allegati e rispondere a quesiti complessi.',
-      accept: ".pdf,.txt,.jpg,.png"
-    },
-    [ModelId.PERPLEXITY]: {
-      color: '#f97316',
-      label: 'Perplexity',
-      body: 'Fornisco risposte precise e aggiornate in tempo reale citando sempre le fonti.',
-      accept: ".pdf,.txt,.doc,.docx,.rtf"
-    }
-  } satisfies Record<ModelId, { color: string; label: string; body: string, accept: string }>;
-
-  const currentMessaging = modelMessaging[selectedModel] ?? modelMessaging[ModelId.GPT_5_4];
-
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -107,8 +85,8 @@ const ChatInputArea: React.FC<ChatInputAreaProps & { messages: Message[] }> = ({
 
   useEffect(() => {
     const handler = handleDeepResearchReady as EventListener;
-    window.addEventListener("deepResearchReady", handler as EventListener);
-    return () => window.removeEventListener("deepResearchReady", handler as EventListener);
+    window.addEventListener("deepResearchReady", handler);
+    return () => window.removeEventListener("deepResearchReady", handler);
   }, [selectedChat, onSend]);
 
   const sendMessageWithGPT = async (payload: FormData) => {
@@ -138,43 +116,8 @@ const ChatInputArea: React.FC<ChatInputAreaProps & { messages: Message[] }> = ({
     }
 
     onConversationUpdated?.();
-
     setIsTyping(false);
   };
-
-  const sendMessageWithPerplexity = async (
-    prompt: string,
-    filesToUpload: File[],
-    historyOverride?: Message[],
-    conversationRef?: string | null
-  ) => {
-    const historySource = historyOverride ?? messages;
-    const historyForPerplexity = historySource.map(message => ({
-      role: message.sender,
-      content: message.content
-    }));
-
-    const { conversationId: updatedConversationId } = await perplexityService.generatePerplexityResponse({
-      prompt,
-      files: filesToUpload,
-      conversation: historyForPerplexity,
-      conversationId: conversationRef,
-      onChunk: (chunk) => {
-        if (chunk) {
-          onSend(chunk, 'ai', true);
-        }
-      }
-    });
-
-    const normalizedConversationId = updatedConversationId || conversationRef || null;
-    if (onConversationIdChange && normalizedConversationId !== conversationRef) {
-      onConversationIdChange(ModelId.PERPLEXITY, normalizedConversationId);
-    }
-
-    onConversationUpdated?.();
-    setIsTyping(false);
-  };
-
 
   const handleSubmit = async () => {
     if (!input.trim() && files.length === 0) {
@@ -184,7 +127,6 @@ const ChatInputArea: React.FC<ChatInputAreaProps & { messages: Message[] }> = ({
     const userMessage = input;
     const filesToUpload = [...files];
     const conversationRef = selectedChat?.thread_id ?? conversationId ?? null;
-    const historyWithUser: Message[] = [...messages, { sender: 'user', content: userMessage }];
 
     setIsOverview(false);
     setIsTyping(true);
@@ -195,17 +137,15 @@ const ChatInputArea: React.FC<ChatInputAreaProps & { messages: Message[] }> = ({
     setFiles([]);
 
     try {
-      if (selectedModel === ModelId.PERPLEXITY) {
-        await sendMessageWithPerplexity(userMessage, filesToUpload, historyWithUser, conversationRef);
-      } else {
-        const formData = new FormData();
-        formData.append('content', userMessage);
-        filesToUpload.forEach(file => formData.append('file', file));
-        if (conversationRef) {
-          formData.append('conversation_id', conversationRef);
-        }
-        await sendMessageWithGPT(formData);
+      const formData = new FormData();
+      formData.append('content', userMessage);
+      formData.append('model', selectedModel);
+      formData.append('web_search_enabled', searchWebEnabled ? 'true' : 'false');
+      filesToUpload.forEach(file => formData.append('file', file));
+      if (conversationRef) {
+        formData.append('conversation_id', conversationRef);
       }
+      await sendMessageWithGPT(formData);
     } catch (error) {
       console.error('Error sending message:', error);
       setIsTyping(false);
@@ -215,135 +155,73 @@ const ChatInputArea: React.FC<ChatInputAreaProps & { messages: Message[] }> = ({
     }
   };
 
-
+  const adjustTextareaHeight = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+    e.target.style.height = 'auto';
+    e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+  };
 
   return (
-    <div className={
-      messages.length > 0 || selectedChat
-        ? "w-full max-w-6xl flex flex-col items-center justify-center mt-0 pt-0 absolute bottom-0 left-1/2 -translate-x-1/2 z-40 bg-transparent mb-6"
-        : "w-full flex flex-col items-center justify-center mt-0 pt-0"
-    }>
-      {showEmptyState && (
-        <>
-          <div className="flex flex-col items-center justify-center mb-4">
-            <div
-              className="w-16 h-16 rounded-2xl shadow-md flex items-center justify-center mb-6 text-white"
-              style={{ color: currentMessaging.color }}
-            >
-              <Bot size={32} />
-            </div>
-            <h3 className="text-xl font-bold text-slate-800 text-center">Come posso esserti utile?</h3>
-            <p className="text-slate-500 mt-2 mb-6 text-center max-w-md text-sm">
-              Sono potenziato da <strong>{currentMessaging.label}</strong>. {currentMessaging.body}
-            </p>
-          </div>
-          <div className="w-full max-w-2xl">
-            <div className="w-full bg-white p-2 rounded-2xl shadow-sm border border-slate-300 relative">
-              {files.length > 0 && (
-                <div className="flex gap-2 p-2 overflow-x-auto border-b border-slate-200 mb-2">
-                  {files.map((f, i) => (
-                    <div key={i} className="flex items-center gap-2 bg-slate-100 text-xs px-2 py-1 rounded-lg text-slate-700 animate-fade-in border border-slate-200">
-                      <Paperclip size={12} />
-                      <span className="max-w-[100px] truncate">{f.name}</span>
-                      <button onClick={() => setFiles(prev => prev.filter((_, idx) => idx !== i))} className="hover:text-red-500"><X size={12} /></button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <textarea
-                ref={inputRef}
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSubmit())}
-                placeholder="Scrivi qui la tua richiesta (es. 'Cerca le ultime sentenze sulla Cassazione...')"
-                className="w-full p-4 text-lg outline-none text-slate-700 placeholder:text-slate-300 resize-none h-28 bg-transparent"
-              />
-              <div className="flex justify-between items-center px-3 pb-3 gap-3">
-                <div>
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    className="hidden"
-                    onChange={handleFileChange}
-                    accept={modelMessaging[selectedModel]?.accept || ".pdf,.txt,.jpg,.png"}
-                  />
-                  <button
-                    onClick={handleFileUploadClick}
-                    className="flex items-center gap-3 px-4 py-2 bg-white border border-slate-300 rounded-xl text-slate-600 hover:border-[#1e3a8a] hover:text-[#1e3a8a] text-base transition-colors"
-                  >
-                    <Upload size={16} /> Allega File
-                  </button>
-                </div>
-                <button
-                  onClick={handleSubmit}
-                  disabled={(!input.trim() && files.length === 0) || isLoading}
-                  className="px-7 py-3 bg-slate-200 text-slate-500 font-medium rounded-xl hover:bg-[#1e3a8a] hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-3 text-lg"
-                >
-                  {isLoading ? <span className="inline-block w-5 h-5 bg-slate-300 rounded-full animate-spin" /> : 'Invia'}
-                </button>
+    <div className="bg-white border-t border-slate-100 px-6 py-4 w-full shrink-0">
+      <div className="max-w-4xl mx-auto relative">
+        {files.length > 0 && (
+          <div className="flex gap-2 mb-2">
+            {files.map((f, i) => (
+              <div key={i} className="flex items-center gap-1.5 bg-slate-100 text-xs px-2 py-1 rounded-lg text-slate-600 border border-slate-200">
+                <Paperclip size={12} />
+                <span className="max-w-[120px] truncate">{f.name}</span>
+                <button onClick={() => setFiles(prev => prev.filter((_, idx) => idx !== i))} className="hover:text-red-500"><X size={12} /></button>
               </div>
-            </div>
+            ))}
           </div>
-        </>
-      )}
-      {!showEmptyState && (
-        <div className="w-full flex justify-center">
-          <form className="w-full max-w-6xl bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-300 flex items-center gap-3 relative" onSubmit={e => { e.preventDefault(); handleSubmit(); }}>
-            {/* Arquivos anexados acima do input, igual ChatGeneralView */}
-            {files.length > 0 && (
-              <div className="absolute bottom-full left-0 mb-2 ml-2 flex gap-2">
-                {files.map((f, i) => (
-                  <div key={i} className="flex items-center gap-2 bg-slate-800 text-white text-xs px-3 py-1.5 rounded-lg shadow-lg animate-fade-in">
-                    <Paperclip size={12} />
-                    <span className="max-w-[150px] truncate">{f.name}</span>
-                    <button type="button" onClick={() => setFiles(prev => prev.filter((_, idx) => idx !== i))} className="hover:text-red-300 ml-1"><X size={12} /></button>
-                  </div>
-                ))}
-              </div>
+        )}
+        <div className="relative flex items-end">
+          <input
+            type="file"
+            ref={fileInputRef}
+            className="hidden"
+            onChange={handleFileChange}
+            accept=".pdf,.txt,.jpg,.png"
+          />
+          <button
+            type="button"
+            onClick={handleFileUploadClick}
+            className="absolute left-3 bottom-2.5 p-1.5 text-slate-400 hover:text-[#1e3a8a] transition-colors"
+            title="Allega file"
+          >
+            <Paperclip size={18} />
+          </button>
+          
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={adjustTextareaHeight}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey && (input.trim() || files.length > 0)) {
+                e.preventDefault();
+                handleSubmit();
+              }
+            }}
+            placeholder="Scrivi la tua richiesta..."
+            className="apple-input w-full pl-11 pr-14 resize-none overflow-y-auto"
+            style={{ minHeight: '44px', maxHeight: '120px' }}
+            rows={1}
+          />
+          
+          <button
+            onClick={handleSubmit}
+            disabled={(!input.trim() && files.length === 0) || isLoading}
+            className="absolute right-1.5 bottom-1.5 p-1.5 btn-primary rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Invia"
+          >
+            {isLoading ? (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Send size={18} />
             )}
-            <input
-              type="file"
-              ref={fileInputRef}
-              className="hidden"
-              onChange={handleFileChange}
-              accept={modelMessaging[selectedModel]?.accept || ".pdf,.txt,.jpg,.png"}
-            />
-            <button
-              type="button"
-              onClick={handleFileUploadClick}
-              className="text-slate-400 hover:text-[#1e3a8a] p-2 rounded-full hover:bg-slate-50 transition-colors"
-              title="Allega file"
-            >
-              <Paperclip size={18} />
-            </button>
-            <input
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSubmit())}
-              placeholder="Fai una domanda o chiedi di analizzare i file allegati..."
-              className="flex-1 bg-transparent outline-none text-base text-slate-700 placeholder:text-slate-400 px-2"
-              style={{ minWidth: 0 }}
-              autoComplete="off"
-            />
-            <button
-              type="submit"
-              disabled={(!input.trim() && files.length === 0) || isLoading}
-              className="px-4 py-1.5 bg-[#1e3a8a] hover:bg-blue-900 text-white rounded-lg text-base font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {isLoading ? (
-                <span className="inline-block w-6 h-6 bg-slate-300 rounded-full animate-spin" />
-              ) : (
-                <>
-                  Invia
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 ml-1">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7" />
-                  </svg>
-                </>
-              )}
-            </button>
-          </form>
+          </button>
         </div>
-      )}
+      </div>
     </div>
   );
 };

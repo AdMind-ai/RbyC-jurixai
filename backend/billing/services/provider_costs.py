@@ -33,7 +33,6 @@ class ProviderCostService:
     OPENAI_COSTS_URL = "https://api.openai.com/v1/organization/costs"
     BILLABLE_PROVIDERS = (
         ProviderCostProvider.OPENAI,
-        ProviderCostProvider.PERPLEXITY,
     )
     SOURCE_PRIORITY = {
         ProviderCostSource.NOT_CONFIGURED: 0,
@@ -47,7 +46,6 @@ class ProviderCostService:
     def refresh_monthly_costs(cls, period_month: date) -> list[ProviderMonthlyCost]:
         return [
             cls.refresh_openai_cost(period_month),
-            cls.refresh_perplexity_cost(period_month),
         ]
 
     @classmethod
@@ -82,17 +80,28 @@ class ProviderCostService:
             )
 
         payload = cls._fetch_openai_cost_payload(period_month, admin_key)
-        amount, currency = cls._parse_openai_cost_payload(payload)
+        provider_amount, provider_currency = cls._parse_openai_cost_payload(payload)
         return cls.upsert_provider_cost(
             provider=ProviderCostProvider.OPENAI,
             period_month=period_month,
-            amount=amount,
+            amount=provider_amount,
             currency=cls.billing_currency(),
             source=ProviderCostSource.ACTUAL_API,
             external_project_id=cls.openai_project_id(),
             raw_payload=payload,
-            metadata={"provider_currency": currency},
+            metadata={
+                "provider_currency": provider_currency,
+                "provider_amount": str(provider_amount),
+                "billing_basis": "openai_costs_api",
+            },
         )
+
+    @classmethod
+    def get_openai_cost(cls, period_month: date) -> Optional[ProviderMonthlyCost]:
+        return ProviderMonthlyCost.objects.filter(
+            provider=ProviderCostProvider.OPENAI,
+            period_month=period_month,
+        ).first()
 
     @classmethod
     def refresh_perplexity_cost(cls, period_month: date) -> ProviderMonthlyCost:
@@ -241,7 +250,7 @@ class ProviderCostService:
 
         for bucket in payload.get("data", []):
             for result in bucket.get("results", []):
-                if project_id and result.get("project_id") not in (None, project_id):
+                if project_id and result.get("project_id") != project_id:
                     continue
                 amount = result.get("amount") or {}
                 value = amount.get("value")
@@ -266,7 +275,11 @@ class ProviderCostService:
 
     @staticmethod
     def openai_project_id() -> Optional[str]:
-        return getattr(settings, "OPENAI_COSTS_PROJECT_ID", None) or getattr(
+        return getattr(settings, "RBYC_OPENAI_PROJECT_ID", None) or getattr(
+            settings,
+            "OPENAI_COSTS_PROJECT_ID",
+            None,
+        ) or getattr(
             settings,
             "OPENAI_PROJECT_ID",
             None,

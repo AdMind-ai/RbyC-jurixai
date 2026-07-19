@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 
 from rest_framework.test import APIClient
 
-from core.models.usage import UsageRecord, UsageTool
+from core.models.usage import UsageRecord, UsageSubTool, UsageTool
 from core.models import CheckComplianceConversation
 from core.services.document_retrieval.intent_classifier import (
 	INTENT_CROSS_DOCUMENT_COVERAGE,
@@ -47,6 +47,139 @@ class UsageTrackingServiceTests(TestCase):
 		self.assertEqual(str(result.record.quantity), "1")
 		self.assertEqual(result.record.metadata, {"source": "test"})
 
+
+class OpenAISendMessageViewTests(TestCase):
+	def setUp(self):
+		user_model = get_user_model()
+		self.user = user_model.objects.create_user(
+			email="chat-assistant@example.com",
+			username="chat-assistant",
+			password="secret123",
+		)
+		self.client = APIClient()
+		self.client.force_authenticate(user=self.user)
+
+	def _streaming_response(self, text="OK"):
+		return iter([
+			Mock(type="response.output_text.delta", delta=text),
+		])
+
+	@patch("core.views.openai.chat.send_message_view.client.responses.create")
+	def test_chat_assistant_disables_web_search_when_toggle_is_off(self, mock_create):
+		mock_create.return_value = self._streaming_response()
+
+		response = self.client.post(
+			"/api/openai/chat/send-message/",
+			{
+				"content": "Rispondi OK",
+				"conversation_id": "conv-no-web",
+				"model": "gpt-5.6-terra",
+				"web_search_enabled": "false",
+			},
+			format="multipart",
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(b"".join(response.streaming_content).decode("utf-8"), "OK")
+		request_kwargs = mock_create.call_args.kwargs
+		self.assertEqual(request_kwargs["model"], "gpt-5.6-terra")
+		self.assertNotIn("tools", request_kwargs)
+		self.assertEqual(request_kwargs["include"], ["reasoning.encrypted_content"])
+		usage = UsageRecord.objects.get(tool=UsageTool.CHAT_ASSISTANT)
+		self.assertEqual(usage.sub_tool, UsageSubTool.GPT_5_6_TERRA)
+		self.assertFalse(usage.metadata["web_search_enabled"])
+
+	@patch("core.views.openai.chat.send_message_view.client.responses.create")
+	def test_chat_assistant_enables_web_search_when_toggle_is_on(self, mock_create):
+		mock_create.return_value = self._streaming_response()
+
+		response = self.client.post(
+			"/api/openai/chat/send-message/",
+			{
+				"content": "Cerca nel web",
+				"conversation_id": "conv-web",
+				"model": "gpt-5.6-terra",
+				"web_search_enabled": "true",
+			},
+			format="multipart",
+		)
+
+		self.assertEqual(response.status_code, 200)
+		b"".join(response.streaming_content)
+		request_kwargs = mock_create.call_args.kwargs
+		self.assertEqual(request_kwargs["tools"], [{"type": "web_search_preview"}])
+		self.assertIn("web_search_call.action.sources", request_kwargs["include"])
+
+	def test_chat_assistant_rejects_unsupported_models(self):
+		response = self.client.post(
+			"/api/openai/chat/send-message/",
+			{
+				"content": "Rispondi OK",
+				"model": "gpt-5.2",
+			},
+			format="multipart",
+		)
+
+		self.assertEqual(response.status_code, 400)
+		self.assertIn("Unsupported model", str(response.data))
+
+
+class NewsletterChatViewTests(TestCase):
+	def setUp(self):
+		user_model = get_user_model()
+		self.user = user_model.objects.create_user(
+			email="newsletter@example.com",
+			username="newsletter",
+			password="secret123",
+		)
+		self.client = APIClient()
+		self.client.force_authenticate(user=self.user)
+
+	def _post_with_draft_type(self, draft_type):
+		with patch("core.views.newsletter_chat_view.VeraComplianceService") as mock_service_class:
+			mock_service = Mock()
+			mock_service.send_message.return_value = "OK"
+			mock_service_class.return_value = mock_service
+
+			response = self.client.post(
+				"/api/newsletter/chat/",
+				{
+					"message": "Genera un contenuto",
+					"draft_type": draft_type,
+					"session_id": "session-123",
+				},
+				format="json",
+			)
+
+			return response, mock_service
+
+	@override_settings(
+		VERA_API_BASE_URL="https://vera.example.test/v1",
+		VERA_API_SERVER_KEY="test-key",
+		VERA_DEFAULT_ORGANIZATION_ID="org",
+		VERA_DEFAULT_CLIENT_ID="client",
+	)
+	def test_newsletter_sends_newsletter_tag_and_bozza_instruction(self):
+		response, mock_service = self._post_with_draft_type("newsletter")
+
+		self.assertEqual(response.status_code, 200)
+		call_kwargs = mock_service.send_message.call_args.kwargs
+		self.assertEqual(call_kwargs["tag"], "[NEWSLETTER]")
+		content = call_kwargs["messages"][0]["content"]
+		self.assertIn("<bozza>", content)
+		self.assertIn("ultimo elemento isolato", content)
+
+	@override_settings(
+		VERA_API_BASE_URL="https://vera.example.test/v1",
+		VERA_API_SERVER_KEY="test-key",
+		VERA_DEFAULT_ORGANIZATION_ID="org",
+		VERA_DEFAULT_CLIENT_ID="client",
+	)
+	def test_newsletter_sends_pill_formativo_tag(self):
+		response, mock_service = self._post_with_draft_type("pill")
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(mock_service.send_message.call_args.kwargs["tag"], "[PILL FORMATIVO]")
 
 class CheckComplianceAnalyzeViewTests(TestCase):
 	def setUp(self):

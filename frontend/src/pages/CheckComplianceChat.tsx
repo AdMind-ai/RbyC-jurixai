@@ -9,7 +9,6 @@ import {
   Plus,
   Save,
   Send,
-  User,
   X,
 } from 'lucide-react';
 import {
@@ -41,14 +40,6 @@ type SavedConversation = {
   sessionId: string | null;
 };
 
-const formatFileSize = (bytes: number) => {
-  if (!bytes) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  const value = bytes / Math.pow(1024, index);
-  return `${value.toFixed(value >= 10 || index === 0 ? 0 : 1)} ${units[index]}`;
-};
-
 const STREAM_RESPONSE_BLOCK_GAP_MS = 8000;
 
 const initialMessages: LocalChatMessage[] = [
@@ -56,7 +47,7 @@ const initialMessages: LocalChatMessage[] = [
     id: 'welcome',
     role: 'assistant',
     content:
-      'Carica uno o piu documenti e descrivi l analisi di compliance che vuoi effettuare.',
+      "Carica uno o più documenti e descrivi l'analisi di compliance che vuoi effettuare.",
   },
 ];
 
@@ -80,8 +71,7 @@ const mapSessionSummary = (session: CheckComplianceConversationSummary): SavedCo
 });
 
 const TypingIndicator: React.FC = () => (
-  <div className="flex items-center gap-2 text-[15px] leading-7 text-slate-500">
-    <span>Scrivendo</span>
+  <div className="flex items-center gap-2 text-[15px] text-slate-500">
     <span className="flex items-center gap-1 pt-1">
       <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.2s]" />
       <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.1s]" />
@@ -122,19 +112,19 @@ const MarkdownMessage: React.FC<{
   }
 
   const linkClassName = isUser
-    ? 'font-semibold text-white underline decoration-white/50 underline-offset-2'
-    : 'font-semibold text-[#1F3A8B] underline decoration-[#1F3A8B]/30 underline-offset-2';
+    ? 'font-semibold text-white underline decoration-white/50 underline-offset-2 hover:decoration-white'
+    : 'font-semibold text-[#1e3a8a] underline decoration-[#1e3a8a]/30 underline-offset-2 hover:decoration-[#1e3a8a]';
   const codeClassName = isUser
-    ? 'rounded bg-white/15 px-1.5 py-0.5 font-mono text-[13px] text-white'
-    : 'rounded bg-slate-200 px-1.5 py-0.5 font-mono text-[13px] text-slate-900';
+    ? 'rounded-md bg-white/15 px-1.5 py-0.5 font-mono text-[13px] text-white'
+    : 'rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[13px] text-slate-800';
 
   return (
-    <div className="max-w-none text-[15px] leading-7">
+    <div className="max-w-none text-[15px] leading-relaxed">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
           p: ({ children }) => <p className="my-2 first:mt-0 last:mb-0">{children}</p>,
-          strong: ({ children }) => <strong className="font-bold">{children}</strong>,
+          strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
           em: ({ children }) => <em className="italic">{children}</em>,
           ul: ({ children }) => <ul className="my-2 list-disc space-y-1 pl-5">{children}</ul>,
           ol: ({ children }) => <ol className="my-2 list-decimal space-y-1 pl-5">{children}</ol>,
@@ -152,10 +142,10 @@ const MarkdownMessage: React.FC<{
           code: ({ children }) => <code className={codeClassName}>{children}</code>,
           pre: ({ children }) => (
             <pre
-              className={`my-3 overflow-x-auto rounded-lg p-3 text-sm ${
+              className={`my-3 overflow-x-auto rounded-xl p-4 text-[13px] ${
                 isUser
-                  ? 'bg-white/15 text-white'
-                  : 'border border-slate-200 bg-white text-slate-900'
+                  ? 'bg-white/10 text-white'
+                  : 'border border-slate-100 bg-slate-50 text-slate-800'
               }`}
             >
               {children}
@@ -163,35 +153,32 @@ const MarkdownMessage: React.FC<{
           ),
           blockquote: ({ children }) => (
             <blockquote
-              className={`my-3 border-l-4 pl-3 ${
-                isUser ? 'border-white/40 text-blue-50' : 'border-slate-300 text-slate-700'
+              className={`my-3 border-l-2 pl-4 italic ${
+                isUser ? 'border-white/40 text-white/90' : 'border-slate-300 text-slate-600'
               }`}
             >
               {children}
             </blockquote>
           ),
           table: ({ children }) => (
-            <div className="my-3 overflow-x-auto">
-              <table
-                className={`min-w-full border-collapse text-left text-sm ${
-                  isUser ? 'border-white/20' : 'border-slate-200'
-                }`}
-              >
+            <div className="my-3 overflow-x-auto rounded-xl border border-slate-100">
+              <table className="min-w-full border-collapse text-left text-[14px]">
                 {children}
               </table>
             </div>
           ),
+          thead: ({ children }) => (
+            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+              {children}
+            </thead>
+          ),
           th: ({ children }) => (
-            <th
-              className={`border px-3 py-2 font-bold ${
-                isUser ? 'border-white/20 bg-white/10' : 'border-slate-200 bg-slate-100'
-              }`}
-            >
+            <th className="border-b border-slate-100 px-4 py-3 font-medium text-slate-500">
               {children}
             </th>
           ),
           td: ({ children }) => (
-            <td className={`border px-3 py-2 ${isUser ? 'border-white/20' : 'border-slate-200'}`}>
+            <td className="border-b border-slate-100/60 px-4 py-3 group-hover:bg-slate-50/60">
               {children}
             </td>
           ),
@@ -213,6 +200,7 @@ const CheckComplianceChat: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const lastAssistantDeltaAtRef = useRef<number | null>(null);
+  const assistantResponseBlocksRef = useRef<string[]>([]);
   const [messages, setMessages] = useState<LocalChatMessage[]>(initialMessages);
   const [question, setQuestion] = useState('');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -386,6 +374,7 @@ const CheckComplianceChat: React.FC = () => {
     const assistantMessageId = crypto.randomUUID();
     const filesToUpload = [...selectedFiles];
     lastAssistantDeltaAtRef.current = null;
+    assistantResponseBlocksRef.current = [];
 
     setMessages((current) => [
       ...current,
@@ -421,20 +410,20 @@ const CheckComplianceChat: React.FC = () => {
           const shouldStartNewBlock =
             lastDeltaAt !== null && now - lastDeltaAt >= STREAM_RESPONSE_BLOCK_GAP_MS;
           lastAssistantDeltaAtRef.current = now;
+          const currentBlocks = assistantResponseBlocksRef.current;
+          const nextBlocks =
+            currentBlocks.length === 0 || shouldStartNewBlock
+              ? [...currentBlocks, delta]
+              : [
+                  ...currentBlocks.slice(0, -1),
+                  `${currentBlocks[currentBlocks.length - 1]}${delta}`,
+                ];
+          assistantResponseBlocksRef.current = nextBlocks;
 
           setMessages((current) =>
             current.map((message) =>
               {
                 if (message.id !== assistantMessageId) return message;
-
-                const blocks = message.responseBlocks || [];
-                const nextBlocks =
-                  blocks.length === 0 || shouldStartNewBlock
-                    ? [...blocks, delta]
-                    : [
-                        ...blocks.slice(0, -1),
-                        `${blocks[blocks.length - 1]}${delta}`,
-                      ];
 
                 return {
                   ...message,
@@ -472,6 +461,10 @@ const CheckComplianceChat: React.FC = () => {
         );
         await updateStoredConversation([...previousMessages, userMessage, fallbackAssistantMessage]);
       } else {
+        const finalResponseBlocks = reconcileResponseBlocks(
+          assistantResponseBlocksRef.current,
+          response.answer
+        );
         await updateStoredConversation([
           ...previousMessages,
           userMessage,
@@ -479,6 +472,7 @@ const CheckComplianceChat: React.FC = () => {
             id: assistantMessageId,
             role: 'assistant',
             content: response.answer,
+            responseBlocks: finalResponseBlocks,
             isStreaming: false,
           },
         ]);
@@ -488,7 +482,7 @@ const CheckComplianceChat: React.FC = () => {
               ? {
                   ...message,
                   content: response.answer,
-                  responseBlocks: reconcileResponseBlocks(message.responseBlocks, response.answer),
+                  responseBlocks: finalResponseBlocks,
                   isStreaming: false,
                 }
               : message
@@ -518,137 +512,142 @@ const CheckComplianceChat: React.FC = () => {
   };
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-slate-50">
-      <div className="border-b border-slate-200 bg-white px-8 py-6 lg:px-12">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-[#172554]">Check Compliance</h1>
-            <p className="mt-2 text-sm text-slate-500">
-              Analisi documentale di compliance
-            </p>
+    <div className="flex h-screen w-full overflow-hidden bg-[#f8fafc]">
+      {/* Pannello storico */}
+      {isHistoryOpen && (
+        <div className="flex w-[280px] flex-col border-r border-slate-100 bg-white">
+          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-4">
+            <h2 className="text-sm font-semibold text-slate-700">Storico chat</h2>
+            <button
+              type="button"
+              onClick={() => setIsHistoryOpen(false)}
+              className="rounded-md p-1.5 text-slate-400 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
+          <div className="flex-1 overflow-y-auto">
+            {historyLoading ? (
+              <div className="px-4 py-5 text-center text-sm text-slate-500">
+                Caricamento...
+              </div>
+            ) : savedConversations.length === 0 ? (
+              <div className="px-4 py-5 text-center text-sm text-slate-500">
+                Nessuna conversazione
+              </div>
+            ) : (
+              savedConversations.map((conversation) => (
+                <div
+                  key={conversation.id}
+                  className="group flex cursor-pointer items-start justify-between border-b border-slate-50 px-4 py-3 hover:bg-slate-50 transition-colors"
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleLoadConversation(conversation)}
+                    className="min-w-0 flex-1 text-left"
+                  >
+                    <div className="truncate text-sm text-slate-700">
+                      {conversation.title}
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-slate-400">
+                      {new Date(conversation.updatedAt).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })}
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConversationToDelete(conversation)}
+                    className="ml-2 hidden rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 group-hover:block transition-colors"
+                    title="Elimina"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
 
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setIsHistoryOpen(true);
-                void loadSavedConversations();
-              }}
-              className="inline-flex w-fit items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-[#172554] shadow-sm transition-colors hover:bg-slate-50"
-            >
-              <History className="h-4 w-4" />
-              Conversazioni
-            </button>
-            <button
-              type="button"
-              onClick={handleSaveConversation}
-              disabled={!hasStartedConversation || saveLoading}
-              className="inline-flex w-fit items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-[#172554] shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
-            >
-              <Save className="h-4 w-4" />
-              {saveLoading ? 'Salvataggio...' : 'Salva'}
-            </button>
+      {/* Area Chat */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Header chat */}
+        <header className="flex items-center justify-between border-b border-slate-100 bg-white px-6 py-4">
+          <div className="flex items-center gap-3">
+            {!isHistoryOpen && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsHistoryOpen(true);
+                  void loadSavedConversations();
+                }}
+                className="btn-secondary !px-2.5 !py-2.5"
+                title="Storico"
+              >
+                <History className="h-4 w-4" />
+              </button>
+            )}
+            <h1 className="text-base font-semibold text-slate-800">Agente Vera</h1>
+          </div>
+          <div className="flex items-center gap-3">
+            {hasStartedConversation && (
+              <button
+                type="button"
+                onClick={handleSaveConversation}
+                disabled={saveLoading}
+                className="btn-secondary !py-2 !px-3 text-sm"
+              >
+                <Save className="mr-1.5 h-4 w-4" />
+                {saveLoading ? 'Salvataggio...' : 'Salva'}
+              </button>
+            )}
             <button
               type="button"
               onClick={handleNewAnalysis}
-              className="inline-flex w-fit items-center justify-center gap-2 rounded-lg bg-[#1F3A8B] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#172554]"
+              className="btn-primary !py-2 !px-3 text-sm"
             >
-              <Plus className="h-4 w-4" />
-              Nuova analisi
+              <Plus className="mr-1.5 h-4 w-4" />
+              Nuova
             </button>
           </div>
-        </div>
-      </div>
+        </header>
 
-      <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 p-6 lg:p-8">
-        <section className="relative flex min-h-0 w-full flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-          {isHistoryOpen && (
-            <div className="absolute right-4 top-4 z-10 w-[360px] max-w-[calc(100%-2rem)] rounded-lg border border-slate-200 bg-white p-4 shadow-xl">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-sm font-bold text-[#172554]">Conversazioni salvate</h2>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Seleziona una conversazione per riaprirla.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsHistoryOpen(false)}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-50 hover:text-slate-700"
-                  title="Chiudi"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-
-              <div className="max-h-80 space-y-2 overflow-y-auto">
-                {historyLoading ? (
-                  <div className="rounded-lg border border-dashed border-slate-200 px-4 py-5 text-center text-sm text-slate-500">
-                    Caricamento conversazioni...
-                  </div>
-                ) : savedConversations.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-slate-200 px-4 py-5 text-center text-sm text-slate-500">
-                    Nessuna conversazione salvata.
-                  </div>
-                ) : (
-                  savedConversations.map((conversation) => (
-                    <div
-                      key={conversation.id}
-                      className="flex items-start gap-2 rounded-lg border border-slate-200 px-3 py-3 transition-colors hover:border-[#1F3A8B] hover:bg-slate-50"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => handleLoadConversation(conversation)}
-                        className="min-w-0 flex-1 text-left"
-                      >
-                        <div className="truncate text-sm font-semibold text-slate-800">
-                          {conversation.title}
-                        </div>
-                        <div className="mt-1 text-xs text-slate-400">
-                          {new Date(conversation.updatedAt).toLocaleString('it-IT')}
-                        </div>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setConversationToDelete(conversation)}
-                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
-                        title="Elimina conversazione"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
+        {/* Messaggi */}
+        <div className="flex-1 overflow-y-auto bg-[#f8fafc] px-6 py-6 space-y-6">
+          {messages.map((message) => {
+            const isUser = message.role === 'user';
+            const isWelcome = message.id === 'welcome';
+            
+            if (isWelcome) {
+              return (
+                <div key={message.id} className="flex justify-start">
+                  <div className="flex max-w-[80%] items-start gap-3 rounded-2xl bg-blue-50 p-4">
+                    <div className="flex shrink-0 items-center justify-center">
+                      <Bot className="h-5 w-5 text-[#1e3a8a]" />
                     </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
+                    <div className="text-sm text-slate-600 pt-0.5 leading-relaxed">
+                      {message.content}
+                    </div>
+                  </div>
+                </div>
+              );
+            }
 
-          <div
-            className="flex-1 space-y-5 overflow-y-auto p-5"
-          >
-            {messages.map((message) => {
-              const isUser = message.role === 'user';
-              const assistantBlocks =
-                !isUser && message.responseBlocks && message.responseBlocks.length > 0
-                  ? message.responseBlocks
-                  : null;
+            const assistantBlocks = !isUser && message.responseBlocks && message.responseBlocks.length > 0
+              ? message.responseBlocks
+              : null;
 
-              if (assistantBlocks) {
-                return (
-                  <React.Fragment key={message.id}>
-                    {assistantBlocks.map((block, blockIndex) => {
-                      const isLastBlock = blockIndex === assistantBlocks.length - 1;
-                      return (
-                        <div
-                          key={`${message.id}-${blockIndex}`}
-                          className="flex justify-start gap-3"
-                        >
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#1F3A8B]/10 text-[#1F3A8B]">
-                            <Bot className="h-5 w-5" />
+            if (assistantBlocks) {
+              return (
+                <React.Fragment key={message.id}>
+                  {assistantBlocks.map((block, blockIndex) => {
+                    const isLastBlock = blockIndex === assistantBlocks.length - 1;
+                    return (
+                      <div key={`${message.id}-${blockIndex}`} className="flex justify-start">
+                        <div className="flex max-w-[80%] items-end gap-2.5">
+                          <div className="flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-full mb-1 text-white font-semibold text-[11px] tracking-wide" style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #1b9162 100%)' }}>
+                            V
                           </div>
-
-                          <div className="max-w-[78%] rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800">
+                          <div className="chat-bubble-ai px-5 py-3.5">
                             <MarkdownMessage
                               content={block}
                               isUser={false}
@@ -656,169 +655,151 @@ const CheckComplianceChat: React.FC = () => {
                             />
                           </div>
                         </div>
-                      );
-                    })}
-                  </React.Fragment>
-                );
-              }
-
-              return (
-                <div
-                  key={message.id}
-                  className={`flex gap-3 ${
-                    messages.length === 1
-                      ? 'justify-start'
-                      : isUser
-                        ? 'justify-end'
-                        : 'justify-start'
-                  }`}
-                >
-                  {!isUser && (
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#1F3A8B]/10 text-[#1F3A8B]">
-                      <Bot className="h-5 w-5" />
-                    </div>
-                  )}
-
-                  <div
-                    className={`rounded-lg px-4 py-3 ${
-                      messages.length === 1 ? 'max-w-2xl text-left' : 'max-w-[78%]'
-                    } ${
-                      isUser
-                        ? 'bg-[#1F3A8B] text-white'
-                        : 'border border-slate-200 bg-slate-50 text-slate-800'
-                    }`}
-                  >
-                    <MarkdownMessage
-                      content={message.content}
-                      isUser={isUser}
-                      isStreaming={message.isStreaming}
-                    />
-
-                    {message.files && message.files.length > 0 && (
-                      <div className="mt-3 space-y-2">
-                        {message.files.map((file) => (
-                          <div
-                            key={`${message.id}-${file.name}-${file.size}`}
-                            className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs ${
-                              isUser
-                                ? 'bg-white/10 text-blue-50'
-                                : 'border border-slate-200 bg-white text-slate-600'
-                            }`}
-                          >
-                            <FileText className="h-4 w-4 shrink-0" />
-                            <span className="min-w-0 flex-1 truncate">{file.name}</span>
-                            <span className="shrink-0 opacity-80">{formatFileSize(file.size)}</span>
-                          </div>
-                        ))}
                       </div>
-                    )}
-                  </div>
-
-                  {isUser && (
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
-                      <User className="h-5 w-5" />
-                    </div>
-                  )}
-                </div>
+                    );
+                  })}
+                </React.Fragment>
               );
-            })}
-            <div ref={messagesEndRef} />
-          </div>
+            }
 
-          <div
-            className={`bg-white p-4 ${
-              messages.length === 1 ? '' : 'border-t border-slate-200'
-            }`}
-          >
-            {selectedFiles.length > 0 && (
-              <div className="mb-3 flex max-h-28 flex-wrap gap-2 overflow-y-auto">
-                {selectedFiles.map((file, index) => (
-                  <div
-                    key={`${file.name}-${file.size}-${index}`}
-                    className="inline-flex max-w-full items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600"
-                  >
-                    <FileText className="h-4 w-4 shrink-0 text-[#1F3A8B]" />
-                    <span className="truncate">{file.name}</span>
-                    <span className="shrink-0 text-slate-400">{formatFileSize(file.size)}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveFile(index)}
-                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-red-50 hover:text-red-600"
-                      title="Rimuovi file"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
+            return (
+              <div key={message.id} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+                {isUser ? (
+                  <div className="flex max-w-[70%] flex-col items-end gap-1.5">
+                    <div className="chat-bubble-user px-5 py-3.5">
+                      <MarkdownMessage
+                        content={message.content}
+                        isUser={true}
+                        isStreaming={message.isStreaming}
+                      />
+                      {message.files && message.files.length > 0 && (
+                        <div className="mt-3 flex flex-wrap justify-end gap-1.5">
+                          {message.files.map((file) => (
+                            <div
+                              key={`${message.id}-${file.name}-${file.size}`}
+                              className="flex items-center gap-1.5 rounded-lg bg-white/15 px-2 py-1 text-xs font-medium text-white/80"
+                            >
+                              <FileText className="h-3 w-3" />
+                              <span className="max-w-[120px] truncate">{file.name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                ))}
+                ) : (
+                  <div className="flex max-w-[80%] items-end gap-2.5">
+                    <div className="flex h-[28px] w-[28px] shrink-0 items-center justify-center rounded-full mb-1 text-white font-semibold text-[11px] tracking-wide" style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #1b9162 100%)' }}>
+                      V
+                    </div>
+                    <div className="chat-bubble-ai px-5 py-3.5">
+                      <MarkdownMessage
+                        content={message.content}
+                        isUser={false}
+                        isStreaming={message.isStreaming}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
+            );
+          })}
+          <div ref={messagesEndRef} />
+        </div>
 
-            <div className="flex items-end gap-3">
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                onChange={handleFileChange}
-                className="hidden"
-              />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isSubmitting}
-                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-300"
-                title="Allega documenti"
-              >
-                <Paperclip className="h-5 w-5" />
-              </button>
-
-              <textarea
-                ref={textareaRef}
-                value={question}
-                onChange={(event) => setQuestion(event.target.value)}
-                placeholder="Scrivi la richiesta di analisi compliance..."
-                rows={1}
-                className="max-h-40 min-h-11 flex-1 resize-none overflow-y-auto rounded-lg border border-slate-200 px-4 py-3 text-[15px] leading-6 text-slate-800 outline-none transition-colors focus:border-[#1F3A8B]"
-              />
-
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={!canSend || isSubmitting}
-                className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-[#1F3A8B] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#172554] disabled:bg-slate-300"
-              >
-                <Send className="h-4 w-4" />
-                {isSubmitting ? 'Invio...' : 'Invia'}
-              </button>
+        {/* Input bar */}
+        <div className="border-t border-slate-100 bg-white px-6 py-4">
+          {selectedFiles.length > 0 && (
+            <div className="mb-3 flex max-h-24 flex-wrap gap-2 overflow-y-auto">
+              {selectedFiles.map((file, index) => (
+                <div
+                  key={`${file.name}-${file.size}-${index}`}
+                  className="badge-gray flex items-center gap-1.5 py-1.5 px-3"
+                >
+                  <FileText className="h-3.5 w-3.5 text-slate-400" />
+                  <span className="max-w-[150px] truncate text-xs font-medium text-slate-600">{file.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveFile(index)}
+                    className="ml-1 rounded-full p-0.5 hover:bg-slate-200/50 text-slate-400 transition-colors"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
             </div>
+          )}
+
+          <div className="relative flex items-end">
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              onChange={handleFileChange}
+              className="hidden"
+            />
+            <textarea
+              ref={textareaRef}
+              value={question}
+              onChange={(event) => setQuestion(event.target.value)}
+              placeholder="Scrivi un messaggio..."
+              rows={1}
+              className="apple-input w-full resize-none py-3.5 pl-12 pr-[56px] text-[15px] leading-relaxed min-h-[50px] max-h-[140px]"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSubmit();
+                }
+              }}
+            />
+            
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isSubmitting}
+              className="absolute left-3.5 bottom-3.5 text-slate-400 hover:text-[#1e3a8a] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Paperclip className="h-5 w-5" />
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={!canSend || isSubmitting}
+              className="absolute right-2.5 bottom-2.5 flex h-[34px] w-[34px] items-center justify-center rounded-xl bg-[#1e3a8a] text-white disabled:bg-slate-100 disabled:text-slate-300 transition-colors"
+            >
+              <Send className="h-4 w-4" />
+            </button>
           </div>
-        </section>
+        </div>
       </div>
 
+      {/* Modal Eliminazione */}
       {conversationToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">
-          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-            <div className="mb-5">
-              <h2 className="text-lg font-bold text-slate-900">Eliminare conversazione?</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-500">
-                La conversazione salvata verra eliminata definitivamente dalla lista.
+        <div className="modal-overlay">
+          <div className="modal-box w-full max-w-md">
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold text-slate-800">Eliminare conversazione?</h2>
+              <p className="mt-2 text-sm text-slate-500">
+                La conversazione verrà eliminata definitivamente dalla lista.
               </p>
-              <p className="mt-3 truncate rounded-lg bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">
+              <div className="mt-4 rounded-xl bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 border border-slate-100">
                 {conversationToDelete.title}
-              </p>
+              </div>
             </div>
 
             <div className="flex justify-end gap-3">
               <button
                 type="button"
                 onClick={() => setConversationToDelete(null)}
-                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50"
+                className="btn-secondary"
               >
                 Annulla
               </button>
               <button
                 type="button"
                 onClick={handleConfirmDeleteConversation}
-                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700"
+                className="btn-danger"
               >
                 Elimina
               </button>

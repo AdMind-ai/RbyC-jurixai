@@ -16,6 +16,8 @@ import CheckComplianceDocuments from './pages/CheckComplianceDocuments'
 import AIAssistant from './components/SegreteriaSocietaria/AIAssistant'
 import { DraftDocument } from './pages/DraftDocument'
 import Usage from './pages/Usage'
+import Newsletter from './pages/Newsletter'
+import CheckComplianceLogs from './pages/CheckComplianceLogs'
 
 const AppRoutes = () => {
 
@@ -38,7 +40,11 @@ const AppRoutes = () => {
           <Route path="/compliance" element={<Navigate to="/compliance/chat" replace />} />
           <Route path="/compliance/chat" element={<CheckComplianceChat />} />
           <Route path="/compliance/documents" element={<CheckComplianceDocuments />} />
+          <Route path="/compliance/logs" element={<CheckComplianceLogs />} />
           <Route path="/chat-general" element={<Chat />} />
+
+          {/* Newsletter Route */}
+          <Route path="/newsletter" element={<Newsletter />} />
 
           {/* Access Routes */}
           <Route path="/accessi" element={<TeamManagement />} />
