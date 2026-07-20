@@ -10,6 +10,7 @@ from rest_framework.test import APIClient
 
 from core.models.usage import UsageRecord, UsageSubTool, UsageTool
 from core.models import CheckComplianceConversation
+from core.models.compliance_log_model import ComplianceLog
 from core.services.document_retrieval.intent_classifier import (
 	INTENT_CROSS_DOCUMENT_COVERAGE,
 	INTENT_ORGANIZATIONAL_STRUCTURE_YEAR_COMPARISON,
@@ -250,6 +251,72 @@ class CheckComplianceAnalyzeViewTests(TestCase):
 			request_kwargs["tools"][0]["server_url"],
 			"https://mcp.example.test/sse",
 		)
+
+
+class VeraComplianceLogIngestViewTests(TestCase):
+	def setUp(self):
+		self.client = APIClient()
+		self.payload = {
+			"tipo_evento": "aggiornamento_normativa",
+			"normativa": "Circolare 285",
+			"autorita": "Banca d'Italia",
+			"data_rilevazione": "2026-07-20T10:15:00Z",
+			"versione_precedente": {"riferimento": "v1"},
+			"versione_nuova": {
+				"riferimento": "v2",
+				"fonte_url": "https://example.test/norma",
+			},
+			"riassunto_modifica": "Aggiornato il riferimento operativo.",
+			"tag": "LOG",
+		}
+
+	@override_settings(VERA_LOG_API_KEY="vera-log-secret")
+	def test_ingest_creates_compliance_log_with_valid_api_key(self):
+		response = self.client.post(
+			"/api/vera/log/",
+			self.payload,
+			format="json",
+			HTTP_X_VERA_API_KEY="vera-log-secret",
+		)
+
+		self.assertEqual(response.status_code, 201)
+		self.assertEqual(response.data["status"], "created")
+		log = ComplianceLog.objects.get(id=response.data["id"])
+		self.assertEqual(log.normativa, "Circolare 285")
+		self.assertEqual(log.autorita, "Banca d'Italia")
+		self.assertEqual(log.raw_payload["versione_nuova"]["riferimento"], "v2")
+
+	@override_settings(VERA_LOG_API_KEY="vera-log-secret")
+	def test_ingest_rejects_missing_api_key(self):
+		response = self.client.post("/api/vera/log/", self.payload, format="json")
+
+		self.assertEqual(response.status_code, 401)
+		self.assertEqual(ComplianceLog.objects.count(), 0)
+
+	@override_settings(VERA_LOG_API_KEY="")
+	def test_ingest_returns_503_when_api_key_is_not_configured(self):
+		response = self.client.post(
+			"/api/vera/log/",
+			self.payload,
+			format="json",
+			HTTP_X_VERA_API_KEY="vera-log-secret",
+		)
+
+		self.assertEqual(response.status_code, 503)
+		self.assertEqual(ComplianceLog.objects.count(), 0)
+
+	@override_settings(VERA_LOG_API_KEY="vera-log-secret")
+	def test_ingest_rejects_invalid_payload(self):
+		response = self.client.post(
+			"/api/vera/log/",
+			{"autorita": "Banca d'Italia"},
+			format="json",
+			HTTP_X_VERA_API_KEY="vera-log-secret",
+		)
+
+		self.assertEqual(response.status_code, 400)
+		self.assertIn("normativa", response.data)
+		self.assertEqual(ComplianceLog.objects.count(), 0)
 
 
 class CheckComplianceDocumentViewTests(TestCase):
