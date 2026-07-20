@@ -8,6 +8,7 @@ from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from billing.services.provider_costs import ProviderCostService
 from core.models.vera_usage_model import VeraUsageRecord
 from core.serializers.vera_usage_serializer import (
     VeraUsageIngestSerializer,
@@ -101,10 +102,12 @@ class VeraUsageDailyView(APIView):
             days = DEFAULT_DAYS
 
         since = date.today() - timedelta(days=days - 1)
+        billable_start = ProviderCostService.billing_start_date()
+        query_since = max(since, billable_start) if billable_start else since
         # Raw queryset: un record per (date, provider, model)
         qs = (
             VeraUsageRecord.objects
-            .filter(date__gte=since)
+            .filter(date__gte=query_since)
             .values("date", "provider")
             .annotate(
                 tokens=Sum("total_tokens"),

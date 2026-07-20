@@ -106,11 +106,6 @@ const UsagePage: React.FC = () => {
 
   const { data: report, loading: reportLoading, error } = useUsageReport({ month: period ?? undefined });
 
-  const subtotalWithMarkupDisplay = billingSummary
-    ? formatEuro(billingSummary.subtotalWithMarkupEur)
-    : billingSummaryLoading
-      ? 'Caricamento...'
-      : '—';
 
   const totalWithVatDisplay = billingSummary
     ? formatEuro(billingSummary.totalWithVatEur)
@@ -182,11 +177,7 @@ const UsagePage: React.FC = () => {
       <div className="page-body space-y-6">
         {/* KPI Cards */}
         {canViewFinancials && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="apple-card">
-              <div className="text-[13px] text-slate-400">Totale mensile</div>
-              <div className="text-2xl font-semibold text-slate-800 mt-1">{subtotalWithMarkupDisplay}</div>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="apple-card">
               <div className="text-[13px] text-slate-400">Totale con IVA</div>
               <div className="text-2xl font-semibold text-slate-800 mt-1">{totalWithVatDisplay}</div>

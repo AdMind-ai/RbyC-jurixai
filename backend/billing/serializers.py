@@ -47,7 +47,6 @@ class ProviderMonthlyCostSerializer(serializers.Serializer):
 class BillingMonthlySummarySerializer(serializers.Serializer):
     periodMonth = serializers.CharField()
     amountEur = serializers.FloatField()
-    subtotalWithMarkupEur = serializers.FloatField()
     totalWithVatEur = serializers.FloatField()
     veraTotalWithVatEur = serializers.FloatField()
     currency = serializers.CharField()

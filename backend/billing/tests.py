@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -63,6 +63,12 @@ class ProviderCostServiceTests(TestCase):
             [ProviderCostProvider.OPENAI],
         )
 
+    @override_settings(
+        AI_USAGE_BILLING_START_DATE=None,
+        RBYC_OPENAI_PROJECT_ID=None,
+        OPENAI_COSTS_PROJECT_ID=None,
+        OPENAI_PROJECT_ID=None,
+    )
     def test_actual_api_overrides_not_configured(self):
         ProviderCostService.ensure_not_configured_cost(
             provider=ProviderCostProvider.OPENAI,
@@ -95,6 +101,48 @@ class ProviderCostServiceTests(TestCase):
         self.assertEqual(openai_cost.provider_amount, Decimal("10.0000"))
         self.assertEqual(openai_cost.currency, "EUR")
         self.assertEqual(openai_cost.metadata.get("provider_currency"), "USD")
+
+    @override_settings(
+        OPENAI_ADMIN_KEY="test-key",
+        AI_USAGE_BILLING_START_DATE="2026-04-15",
+        RBYC_OPENAI_PROJECT_ID=None,
+        OPENAI_COSTS_PROJECT_ID=None,
+        OPENAI_PROJECT_ID=None,
+    )
+    def test_refresh_openai_cost_only_counts_billable_buckets(self):
+        payload = {
+            "data": [
+                {
+                    "start_time": int(datetime(2026, 4, 10, tzinfo=timezone.utc).timestamp()),
+                    "results": [
+                        {
+                            "project_id": None,
+                            "amount": {"value": 100, "currency": "USD"},
+                        }
+                    ],
+                },
+                {
+                    "start_time": int(datetime(2026, 4, 15, tzinfo=timezone.utc).timestamp()),
+                    "results": [
+                        {
+                            "project_id": None,
+                            "amount": {"value": 25, "currency": "USD"},
+                        }
+                    ],
+                },
+            ]
+        }
+
+        with patch.object(
+            ProviderCostService,
+            "_fetch_openai_cost_payload",
+            return_value=payload,
+        ):
+            openai_cost = ProviderCostService.refresh_openai_cost(self.period_month)
+
+        self.assertEqual(openai_cost.provider_amount, Decimal("25.0000"))
+        self.assertEqual(openai_cost.metadata.get("raw_provider_amount"), "125.0000")
+        self.assertEqual(openai_cost.metadata.get("billing_start_date"), "2026-04-15")
 
     def test_total_uses_billable_providers_only(self):
         ProviderCostService.upsert_provider_cost(
@@ -189,6 +237,49 @@ class AIUsageCostServiceTests(TestCase):
         self.assertEqual(summary.vera_with_markup, Decimal("62.5000"))
         self.assertEqual(summary.total_with_markup, Decimal("182.50"))
         self.assertEqual(summary.total_with_vat, Decimal("222.65"))
+        self.assertEqual(summary.vera_total_with_vat, Decimal("76.25"))
+
+    @override_settings(
+        AI_USAGE_RBYC_MARKUP_PERCENTAGE="20",
+        AI_USAGE_VERA_MARKUP_PERCENTAGE="25",
+        AI_USAGE_IVA_PERCENTAGE="22",
+        AI_USAGE_BILLING_START_DATE="2026-04-15",
+    )
+    def test_build_monthly_summary_excludes_vera_costs_before_billing_start(self):
+        ProviderCostService.upsert_provider_cost(
+            provider=ProviderCostProvider.OPENAI,
+            period_month=self.period_month,
+            amount=Decimal("0.0000"),
+            currency="EUR",
+            source=ProviderCostSource.ACTUAL_API,
+        )
+        VeraUsageRecord.objects.create(
+            date=date(2026, 4, 10),
+            provider="openai",
+            model="vera-openai-before",
+            cost_eur=Decimal("100.000000"),
+        )
+        VeraUsageRecord.objects.create(
+            date=date(2026, 4, 15),
+            provider="openai",
+            model="vera-openai-after",
+            cost_eur=Decimal("20.000000"),
+        )
+        VeraUsageRecord.objects.create(
+            date=date(2026, 4, 16),
+            provider="anthropic",
+            model="vera-claude-after",
+            cost_eur=Decimal("30.000000"),
+        )
+
+        summary = AIUsageCostService.build_monthly_summary(
+            self.period_month,
+            refresh_rbyc=False,
+            refresh_vera=False,
+        )
+
+        self.assertEqual(summary.vera_openai_raw, Decimal("20.0000"))
+        self.assertEqual(summary.vera_anthropic_raw, Decimal("30.0000"))
         self.assertEqual(summary.vera_total_with_vat, Decimal("76.25"))
 
 

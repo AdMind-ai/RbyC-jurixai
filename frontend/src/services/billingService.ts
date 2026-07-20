@@ -39,7 +39,6 @@ export interface ProviderMonthlyCost {
 export interface BillingMonthlySummary {
   periodMonth: string;
   amountEur: number;
-  subtotalWithMarkupEur: number;
   totalWithVatEur: number;
   veraTotalWithVatEur: number;
   currency: string;
