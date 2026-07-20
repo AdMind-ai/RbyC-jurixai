@@ -41,7 +41,11 @@ from .stored_chat_session_view import (
     StoredChatSessionDetailView,
 )
 from .usage_view import UsageManualRecordView, UsageMonthListView, UsageReportView
-from .compliance_log_view import ComplianceLogListView, ComplianceLogDetailView
+from .compliance_log_view import (
+    ComplianceLogDetailView,
+    ComplianceLogListView,
+    VeraComplianceLogIngestView,
+)
 from .vera_usage_view import VeraUsageIngestView, VeraUsageDailyView, VeraUsageRawListView
 from .newsletter_chat_view import NewsletterChatView
 
@@ -94,6 +98,7 @@ __all__ = [
     'UsageManualRecordView',
     'ComplianceLogListView',
     'ComplianceLogDetailView',
+    'VeraComplianceLogIngestView',
     'VeraUsageIngestView',
     'VeraUsageDailyView',
     'VeraUsageRawListView',

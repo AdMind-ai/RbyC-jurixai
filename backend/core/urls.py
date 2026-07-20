@@ -83,6 +83,8 @@ urlpatterns = [
          name='check-compliance-logs'),
     path('check-compliance/logs/<uuid:pk>/', ComplianceLogDetailView.as_view(),
          name='check-compliance-log-detail'),
+    path('vera/log/', VeraComplianceLogIngestView.as_view(),
+         name='vera-log-ingest'),
 
     # Newsletter & PILL Formativo
     path('newsletter/chat/', NewsletterChatView.as_view(), name='newsletter-chat'),
