@@ -10,6 +10,7 @@ from core.models.segreteria_societaria.deadline import Deadline
 from core.models.draft_document.company_document_layout import CompanyDocumentLayout
 from core.models.usage import UsageRecord
 from core.models.vera_usage_model import VeraUsageRecord
+from core.models.compliance_log_model import ComplianceLog
 # Register your models here.
 @admin.register(Company)
 class CompanyAdmin(admin.ModelAdmin):
@@ -110,3 +111,20 @@ class VeraUsageRecordAdmin(admin.ModelAdmin):
     readonly_fields = ('id', 'created_at', 'updated_at')
     date_hierarchy = 'date'
     ordering = ('-date', 'provider', 'model')
+
+
+@admin.register(ComplianceLog)
+class ComplianceLogAdmin(admin.ModelAdmin):
+    list_display = (
+        'data_rilevazione',
+        'tipo_evento',
+        'normativa',
+        'autorita',
+        'tag',
+        'created_at',
+    )
+    list_filter = ('tipo_evento', 'autorita', 'tag', 'data_rilevazione')
+    search_fields = ('normativa', 'autorita', 'riassunto_modifica')
+    readonly_fields = ('id', 'raw_payload', 'created_at')
+    date_hierarchy = 'data_rilevazione'
+    ordering = ('-data_rilevazione', '-created_at')
