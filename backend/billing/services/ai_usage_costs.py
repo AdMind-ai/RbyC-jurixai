@@ -220,6 +220,7 @@ class AIUsageCostService:
                 "rbycMarkupPercentage": float(summary.rbyc_markup_percentage),
                 "veraMarkupPercentage": float(summary.vera_markup_percentage),
                 "ivaPercentage": float(summary.vat_percentage),
+                "billingStartDate": ProviderCostService.billing_start_date_iso(),
             },
         }
 
@@ -266,10 +267,13 @@ class AIUsageCostService:
     @classmethod
     def _sum_vera_cost(cls, period_month: date, provider: str) -> Decimal:
         next_month = cls.next_month(period_month)
+        billable_start = ProviderCostService.billable_start_for_month(period_month)
+        if billable_start is None:
+            return cls._decimal(None)
         total = (
             VeraUsageRecord.objects.filter(
                 provider=provider,
-                date__gte=period_month,
+                date__gte=billable_start,
                 date__lt=next_month,
             )
             .aggregate(total=Sum("cost_eur"))

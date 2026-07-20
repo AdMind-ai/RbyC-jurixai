@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timezone as dt_timezone
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 
@@ -80,7 +80,10 @@ class ProviderCostService:
             )
 
         payload = cls._fetch_openai_cost_payload(period_month, admin_key)
-        provider_amount, provider_currency = cls._parse_openai_cost_payload(payload)
+        provider_amount, provider_currency, raw_provider_amount = cls._parse_openai_cost_payload(
+            payload,
+            period_month,
+        )
         return cls.upsert_provider_cost(
             provider=ProviderCostProvider.OPENAI,
             period_month=period_month,
@@ -92,6 +95,8 @@ class ProviderCostService:
             metadata={
                 "provider_currency": provider_currency,
                 "provider_amount": str(provider_amount),
+                "raw_provider_amount": str(raw_provider_amount),
+                "billing_start_date": cls.billing_start_date_iso(),
                 "billing_basis": "openai_costs_api",
             },
         )
@@ -243,12 +248,15 @@ class ProviderCostService:
                 return payload
 
     @classmethod
-    def _parse_openai_cost_payload(cls, payload: dict) -> tuple[Decimal, str]:
+    def _parse_openai_cost_payload(cls, payload: dict, period_month: date) -> tuple[Decimal, str, Decimal]:
         project_id = cls.openai_project_id()
         total = Decimal("0")
+        raw_total = Decimal("0")
         currency = cls.billing_currency()
+        billable_start = cls.billable_start_for_month(period_month)
 
         for bucket in payload.get("data", []):
+            bucket_date = cls._bucket_date(bucket)
             for result in bucket.get("results", []):
                 if project_id and result.get("project_id") != project_id:
                     continue
@@ -257,9 +265,17 @@ class ProviderCostService:
                 if value is None:
                     continue
                 currency = (amount.get("currency") or currency).upper()
-                total += Decimal(str(value))
+                cost = Decimal(str(value))
+                raw_total += cost
+                if billable_start is None or (bucket_date is not None and bucket_date < billable_start):
+                    continue
+                total += cost
 
-        return total.quantize(Decimal("0.0001"), ROUND_HALF_UP), currency
+        return (
+            total.quantize(Decimal("0.0001"), ROUND_HALF_UP),
+            currency,
+            raw_total.quantize(Decimal("0.0001"), ROUND_HALF_UP),
+        )
 
     @staticmethod
     def billing_currency() -> str:
@@ -284,3 +300,38 @@ class ProviderCostService:
             "OPENAI_PROJECT_ID",
             None,
         )
+
+    @classmethod
+    def billable_start_for_month(cls, period_month: date) -> Optional[date]:
+        billing_start = cls.billing_start_date()
+        if billing_start is None:
+            return period_month
+        next_month = cls.next_month(period_month)
+        if billing_start >= next_month:
+            return None
+        return max(period_month, billing_start)
+
+    @staticmethod
+    def billing_start_date() -> Optional[date]:
+        value = (getattr(settings, "AI_USAGE_BILLING_START_DATE", None) or "").strip()
+        if not value:
+            return None
+        return date.fromisoformat(value)
+
+    @classmethod
+    def billing_start_date_iso(cls) -> Optional[str]:
+        billing_start = cls.billing_start_date()
+        return billing_start.isoformat() if billing_start else None
+
+    @staticmethod
+    def next_month(period_month: date) -> date:
+        if period_month.month == 12:
+            return date(period_month.year + 1, 1, 1)
+        return date(period_month.year, period_month.month + 1, 1)
+
+    @staticmethod
+    def _bucket_date(bucket: dict) -> Optional[date]:
+        bucket_start = bucket.get("start_time")
+        if bucket_start is None:
+            return None
+        return datetime.fromtimestamp(int(bucket_start), tz=dt_timezone.utc).date()
