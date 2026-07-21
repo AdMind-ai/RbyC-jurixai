@@ -334,7 +334,7 @@ class VeraComplianceLogIngestViewTests(TestCase):
 			"tag": "LOG",
 		}
 
-	@override_settings(VERA_LOG_API_KEY="vera-log-secret")
+	@override_settings(VERA_INBOUND_API_KEY="vera-log-secret")
 	def test_ingest_creates_compliance_log_with_valid_api_key(self):
 		response = self.client.post(
 			"/api/vera/log/",
@@ -350,14 +350,14 @@ class VeraComplianceLogIngestViewTests(TestCase):
 		self.assertEqual(log.autorita, "Banca d'Italia")
 		self.assertEqual(log.raw_payload["versione_nuova"]["riferimento"], "v2")
 
-	@override_settings(VERA_LOG_API_KEY="vera-log-secret")
+	@override_settings(VERA_INBOUND_API_KEY="vera-log-secret")
 	def test_ingest_rejects_missing_api_key(self):
 		response = self.client.post("/api/vera/log/", self.payload, format="json")
 
 		self.assertEqual(response.status_code, 401)
 		self.assertEqual(ComplianceLog.objects.count(), 0)
 
-	@override_settings(VERA_LOG_API_KEY="")
+	@override_settings(VERA_INBOUND_API_KEY="")
 	def test_ingest_returns_503_when_api_key_is_not_configured(self):
 		response = self.client.post(
 			"/api/vera/log/",
@@ -369,7 +369,7 @@ class VeraComplianceLogIngestViewTests(TestCase):
 		self.assertEqual(response.status_code, 503)
 		self.assertEqual(ComplianceLog.objects.count(), 0)
 
-	@override_settings(VERA_LOG_API_KEY="vera-log-secret")
+	@override_settings(VERA_INBOUND_API_KEY="vera-log-secret")
 	def test_ingest_rejects_invalid_payload(self):
 		response = self.client.post(
 			"/api/vera/log/",

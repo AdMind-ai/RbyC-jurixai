@@ -92,7 +92,6 @@ urlpatterns = [
     path('newsletter/chat/', NewsletterChatView.as_view(), name='newsletter-chat'),
     path('newsletter/saved/', SavedNewsletterListCreateView.as_view(), name='newsletter-saved-list'),
     path('newsletter/saved/<uuid:pk>/', SavedNewsletterDetailView.as_view(), name='newsletter-saved-detail'),
-    path('newsletter/ingest/', VeraNewsletterIngestView.as_view(), name='newsletter-vera-ingest'),
 
     # Notifications
     path('notifications/', NotificationListView.as_view(), name='notification-list'),

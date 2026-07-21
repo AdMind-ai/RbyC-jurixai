@@ -71,27 +71,3 @@ class SaveNewsletterSerializer(serializers.Serializer):
             source=NewsletterSource.MANUAL,
         )
 
-
-class VeraNewsletterIngestSerializer(serializers.Serializer):
-    """Used by Vera to push an auto-generated newsletter."""
-    title = serializers.CharField(max_length=512, required=False, allow_blank=True)
-    content = serializers.CharField()
-    newsletter_type = serializers.ChoiceField(
-        choices=NewsletterType.choices,
-        default=NewsletterType.NEWSLETTER,
-    )
-    generated_at = serializers.DateTimeField(required=False, allow_null=True)
-
-    def create(self, validated_data):
-        content = validated_data["content"]
-        title = validated_data.get("title", "").strip()
-        if not title:
-            first_line = next((l.strip().lstrip("#").strip() for l in content.splitlines() if l.strip()), "")
-            title = first_line[:120] if first_line else "Newsletter automatica"
-        return SavedNewsletter.objects.create(
-            title=title,
-            content=content,
-            newsletter_type=validated_data.get("newsletter_type", NewsletterType.NEWSLETTER),
-            source=NewsletterSource.AUTO,
-            generated_at=validated_data.get("generated_at"),
-        )

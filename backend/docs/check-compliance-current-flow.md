@@ -138,6 +138,7 @@ Observacoes:
 ```env
 VERA_API_BASE_URL=https://vera-api.admind.ai/v1
 VERA_API_SERVER_KEY=<secret>
+VERA_INBOUND_API_KEY=<secret-para-webhooks-da-vera>
 VERA_API_MODEL=vera-compliance
 VERA_API_TIMEOUT_SECONDS=900
 VERA_API_MAX_RETRIES=2
