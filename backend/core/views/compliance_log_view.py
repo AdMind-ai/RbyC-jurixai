@@ -64,12 +64,12 @@ def _parse_vera_date(value: str):
 
 class VeraComplianceLogIngestView(APIView):
     """
-    GET  /api/vera/log/?desde=YYYY-MM-DD&ate=YYYY-MM-DD
-         — recupera logs do período para o Agente Vera.
-         Aceita datas em formato YYYY-MM-DD ou YYYY-MM-DDTHH:MM:SSZ.
+    GET  /api/vera/log/?da=YYYY-MM-DD&a=YYYY-MM-DD
+         — recupera i log del periodo per Agente Vera.
+         Accetta date in formato YYYY-MM-DD o YYYY-MM-DDTHH:MM:SSZ.
     POST /api/vera/log/
          — ingestione machine-to-machine da Agente Vera.
-    Autenticação via header X-Vera-Api-Key.
+    Autenticazione via header X-Vera-Api-Key.
     """
 
     authentication_classes = []
@@ -89,9 +89,9 @@ class VeraComplianceLogIngestView(APIView):
 
     def get(self, request):
         """
-        Recupera logs do período especificado por ?desde=...&ate=...
-        Aceita YYYY-MM-DD ou YYYY-MM-DDTHH:MM:SSZ.
-        Se omitidos, devolve todos os logs (sem limite de data).
+        Recupera i log del periodo specificato tramite ?da=...&a=...
+        Accetta YYYY-MM-DD o YYYY-MM-DDTHH:MM:SSZ.
+        Se omessi, restituisce tutti i log senza filtro di data.
         """
         _, err = self._check_key(request)
         if err:
@@ -99,24 +99,24 @@ class VeraComplianceLogIngestView(APIView):
 
         qs = ComplianceLog.objects.all()
 
-        desde_raw = request.query_params.get("desde")
-        ate_raw = request.query_params.get("ate")
+        da_raw = request.query_params.get("da")
+        a_raw = request.query_params.get("a")
 
-        if desde_raw:
+        if da_raw:
             try:
-                desde_dt = _parse_vera_date(desde_raw)
-                qs = qs.filter(data_rilevazione__gte=desde_dt)
+                da_dt = _parse_vera_date(da_raw)
+                qs = qs.filter(data_rilevazione__gte=da_dt)
             except ValueError as exc:
                 return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-        if ate_raw:
+        if a_raw:
             try:
-                from datetime import timedelta, datetime, timezone as tz
-                ate_dt = _parse_vera_date(ate_raw)
-                # Se veio só data (sem hora), inclui o dia inteiro
-                if len(ate_raw.strip()) == 10:
-                    ate_dt = ate_dt.replace(hour=23, minute=59, second=59)
-                qs = qs.filter(data_rilevazione__lte=ate_dt)
+                from datetime import datetime, timezone as tz
+                a_dt = _parse_vera_date(a_raw)
+                # Se passato solo come data (senza ora), include l'intera giornata fino alle 23:59:59
+                if len(a_raw.strip()) == 10:
+                    a_dt = a_dt.replace(hour=23, minute=59, second=59)
+                qs = qs.filter(data_rilevazione__lte=a_dt)
             except ValueError as exc:
                 return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 

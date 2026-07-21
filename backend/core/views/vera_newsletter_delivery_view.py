@@ -1,7 +1,7 @@
 """
 POST /api/vera/newsletter/
-Recebe a newsletter gerada pelo Agente Vera e persiste como SavedNewsletter(source='auto').
-Cria também uma Notification do tipo newsletter_auto.
+Riceve la newsletter generata da Agente Vera e la persiste come SavedNewsletter(source='auto').
+Crea anche una Notification di tipo newsletter_auto.
 """
 
 import logging
@@ -19,72 +19,61 @@ logger = logging.getLogger(__name__)
 
 class VeraNewsletterDeliveryView(APIView):
     """
-    POST /api/vera/newsletter/ — entrega da newsletter gerada pelo Agente Vera.
+    POST /api/vera/newsletter/ — consegna della newsletter generata da Agente Vera.
 
-    Payload esperado:
+    Payload atteso:
     {
-      "tipo_evento": "newsletter_mensal",
-      "periodo": {"inicio": "2026-06-25", "fim": "2026-07-25"},
-      "titulo": "Newsletter Compliance — Julho 2026",
-      "conteudo_markdown": "# Título\n\n...",
-      "quantidade_atualizacoes": 3,
-      "gerado_em": "2026-07-25T09:00:00Z",
-      "status": "publicado"
+      "tipo_evento": "newsletter_mensile",
+      "periodo": {"inizio": "2026-06-25", "fine": "2026-07-25"},
+      "titolo": "Newsletter Compliance — Luglio 2026",
+      "contenuto_markdown": "# Titolo\n\n...",
+      "quantita_aggiornamenti": 3,
+      "generato_il": "2026-07-25T09:00:00Z",
+      "stato": "pubblicato"
     }
     """
 
     authentication_classes = []
     permission_classes = [permissions.AllowAny]
 
-    def _check_api_key(self, request) -> bool:
-        expected_key = getattr(settings, "VERA_API_SERVER_KEY", None) or getattr(settings, "VERA_LOG_API_KEY", None)
-        if not expected_key:
-            logger.error("Nenhuma VERA_API_SERVER_KEY configurada.")
-            return False
-        return request.headers.get("X-Vera-Api-Key") == expected_key
-
     def post(self, request):
         expected_key = getattr(settings, "VERA_API_SERVER_KEY", None) or getattr(settings, "VERA_LOG_API_KEY", None)
         if not expected_key:
             return Response(
-                {"detail": "Vera newsletter delivery is not configured."},
+                {"detail": "Vera newsletter delivery non configurata."},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
         if request.headers.get("X-Vera-Api-Key") != expected_key:
-            logger.warning("VeraNewsletterDeliveryView: request não autorizada.")
+            logger.warning("VeraNewsletterDeliveryView: richiesta non autorizzata.")
             return Response({"detail": "Invalid Vera API key."}, status=status.HTTP_401_UNAUTHORIZED)
 
         data = request.data
 
-        titulo = data.get("titulo", "")
-        conteudo = data.get("conteudo_markdown", "")
-        tipo_evento = data.get("tipo_evento", "newsletter_mensal")
+        titolo = data.get("titolo", "")
+        contenuto = data.get("contenuto_markdown", "")
+        tipo_evento = data.get("tipo_evento", "newsletter_mensile")
         periodo = data.get("periodo", {})
-        quantidade_atualizacoes = data.get("quantidade_atualizacoes")
-        gerado_em = data.get("gerado_em")
-        status_vera = data.get("status", "publicado")
+        quantita_aggiornamenti = data.get("quantita_aggiornamenti")
+        generato_il = data.get("generato_il")
+        stato = data.get("stato", "pubblicato")
 
-        if not conteudo:
-            return Response({"detail": "conteudo_markdown é obrigatório."}, status=status.HTTP_400_BAD_REQUEST)
+        if not contenuto:
+            return Response({"detail": "contenuto_markdown è obbligatorio."}, status=status.HTTP_400_BAD_REQUEST)
 
-        if not titulo:
-            # Título de fallback a partir do período
-            inicio = periodo.get("inicio", "")
-            fim = periodo.get("fim", "")
-            titulo = f"Newsletter Compliance — {fim or inicio or 'Auto'}"
+        if not titolo:
+            inizio = periodo.get("inizio", "")
+            fine = periodo.get("fine", "")
+            titolo = f"Newsletter Compliance — {fine or inizio or 'Auto'}"
 
-        # Determina o tipo: "newsletter" é o default para entregas Vera
-        newsletter_type = "newsletter"
-
-        # Converte gerado_em se presente
+        # Conversione generato_il se presente
         generated_at_dt = None
-        if gerado_em:
+        if generato_il:
             try:
                 from datetime import datetime, timezone as tz
                 for fmt in ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S.%fZ"):
                     try:
-                        generated_at_dt = datetime.strptime(gerado_em, fmt).replace(tzinfo=tz.utc)
+                        generated_at_dt = datetime.strptime(generato_il, fmt).replace(tzinfo=tz.utc)
                         break
                     except ValueError:
                         pass
@@ -92,9 +81,9 @@ class VeraNewsletterDeliveryView(APIView):
                 pass
 
         newsletter = SavedNewsletter.objects.create(
-            title=titulo,
-            content=conteudo,
-            newsletter_type=newsletter_type,
+            title=titolo,
+            content=contenuto,
+            newsletter_type="newsletter",
             source="auto",
             generated_at=generated_at_dt,
         )
@@ -102,16 +91,16 @@ class VeraNewsletterDeliveryView(APIView):
         # Notifica
         try:
             body_parts = []
-            if periodo.get("inicio") and periodo.get("fim"):
-                body_parts.append(f"Período: {periodo['inicio']} → {periodo['fim']}.")
-            if quantidade_atualizacoes is not None:
-                plural = "aggiornamento" if quantidade_atualizacoes == 1 else "aggiornamenti"
-                body_parts.append(f"Basata su {quantidade_atualizacoes} {plural} normativi.")
+            if periodo.get("inizio") and periodo.get("fine"):
+                body_parts.append(f"Periodo: {periodo['inizio']} → {periodo['fine']}.")
+            if quantita_aggiornamenti is not None:
+                plurale = "aggiornamento" if quantita_aggiornamenti == 1 else "aggiornamenti"
+                body_parts.append(f"Basata su {quantita_aggiornamenti} {plurale} normativi.")
             body_parts.append("Disponibile nella sezione Newsletter → Archivio.")
 
             Notification.objects.create(
                 notification_type=NotificationType.NEWSLETTER_AUTO,
-                title=f"Nuova newsletter disponibile — {titulo}",
+                title=f"Nuova newsletter disponibile — {titolo}",
                 body=" ".join(body_parts),
                 reference_id=str(newsletter.id),
                 reference_type="newsletter",
@@ -120,15 +109,15 @@ class VeraNewsletterDeliveryView(APIView):
             logger.warning("Impossibile creare notifica per newsletter Vera: %s", exc)
 
         logger.info(
-            "VeraNewsletterDeliveryView: newsletter '%s' (id=%s) salvata, tipo_evento=%s, status_vera=%s",
-            titulo, newsletter.id, tipo_evento, status_vera,
+            "VeraNewsletterDeliveryView: newsletter '%s' (id=%s) salvata, tipo_evento=%s, stato=%s",
+            titolo, newsletter.id, tipo_evento, stato,
         )
 
         return Response(
             {
                 "id": str(newsletter.id),
                 "status": "created",
-                "titulo": titulo,
+                "titolo": titolo,
                 "created_at": newsletter.created_at.isoformat(),
             },
             status=status.HTTP_201_CREATED,
