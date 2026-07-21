@@ -191,7 +191,7 @@ class AIUsageCostService:
 
         return {
             "periodMonth": summary.period_month.strftime("%Y-%m"),
-            "amountEur": float(summary.total_with_vat),
+            "amountEur": float(summary.total_with_markup),
             "totalWithVatEur": float(summary.total_with_vat),
             "veraTotalWithVatEur": float(summary.vera_total_with_vat),
             "currency": summary.currency,

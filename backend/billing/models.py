@@ -19,6 +19,22 @@ class BillingInvoiceStatus(models.TextChoices):
     ERROR = "error", "Error"
 
 
+class WalletTransactionType(models.TextChoices):
+    CREDIT = "credit", "Credit"
+    USAGE_DEBIT = "usage_debit", "Usage debit"
+    AUTO_RECHARGE = "auto_recharge", "Auto recharge"
+    MANUAL_RECHARGE = "manual_recharge", "Manual recharge"
+    ADMIN_ADJUSTMENT = "admin_adjustment", "Admin adjustment"
+    PAYMENT_FAILED = "payment_failed", "Payment failed"
+
+
+class WalletTransactionStatus(models.TextChoices):
+    PENDING = "pending", "Pending"
+    COMPLETED = "completed", "Completed"
+    FAILED = "failed", "Failed"
+    VOID = "void", "Void"
+
+
 class ProviderCostProvider(models.TextChoices):
     OPENAI = "openai", "OpenAI"
     PERPLEXITY = "perplexity", "Perplexity"
@@ -106,6 +122,103 @@ class BillingInvoice(models.Model):
     def mark_attempt(self) -> None:
         self.attempt_count += 1
         self.last_attempt_at = timezone.now()
+
+
+class Wallet(models.Model):
+    billing_account = models.OneToOneField(
+        BillingAccount,
+        on_delete=models.CASCADE,
+        related_name="wallet",
+    )
+    balance_eur = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+    )
+    currency = models.CharField(max_length=3, default="EUR")
+    auto_recharge_enabled = models.BooleanField(default=True)
+    recharge_amount_eur = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("100.00"),
+        validators=[MinValueValidator(Decimal("0"))],
+    )
+    threshold_eur = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("5.00"),
+        validators=[MinValueValidator(Decimal("0"))],
+    )
+    last_recharge_attempt_at = models.DateTimeField(blank=True, null=True)
+    last_error = models.TextField(blank=True, null=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Wallet"
+        verbose_name_plural = "Wallets"
+
+    def __str__(self) -> str:
+        return f"Wallet {self.id} - {self.balance_eur} {self.currency}"
+
+    @classmethod
+    def get_solo(cls) -> "Wallet":
+        account = BillingAccount.get_solo()
+        try:
+            wallet = account.wallet
+            return wallet
+        except cls.DoesNotExist:
+            pass
+        return cls.objects.create(
+            billing_account=account,
+            recharge_amount_eur=Decimal(str(getattr(settings, "WALLET_DEFAULT_RECHARGE_AMOUNT_EUR", "100.00"))),
+            threshold_eur=Decimal(str(getattr(settings, "WALLET_DEFAULT_THRESHOLD_EUR", "5.00"))),
+        )
+
+
+class WalletTransaction(models.Model):
+    wallet = models.ForeignKey(
+        Wallet,
+        on_delete=models.CASCADE,
+        related_name="transactions",
+    )
+    transaction_type = models.CharField(max_length=32, choices=WalletTransactionType.choices)
+    status = models.CharField(
+        max_length=32,
+        choices=WalletTransactionStatus.choices,
+        default=WalletTransactionStatus.COMPLETED,
+        db_index=True,
+    )
+    amount_eur = models.DecimalField(max_digits=12, decimal_places=2)
+    balance_after_eur = models.DecimalField(max_digits=12, decimal_places=2)
+    description = models.CharField(max_length=255)
+    idempotency_key = models.CharField(max_length=255, blank=True, null=True, unique=True)
+    stripe_payment_intent_id = models.CharField(max_length=255, blank=True, null=True)
+    stripe_invoice_id = models.CharField(max_length=255, blank=True, null=True)
+    period_start = models.DateField(blank=True, null=True)
+    period_end = models.DateField(blank=True, null=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_by_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="created_wallet_transactions",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Wallet transaction"
+        verbose_name_plural = "Wallet transactions"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["transaction_type", "status"]),
+            models.Index(fields=["created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.transaction_type} {self.amount_eur} EUR ({self.status})"
 
 
 class ProviderMonthlyCost(models.Model):

@@ -13,6 +13,10 @@ from billing.serializers import (
     BillingMonthlySummarySerializer,
     BillingSetupSessionSerializer,
     BillingStatusSerializer,
+    WalletAdminAdjustmentInputSerializer,
+    WalletRechargeSerializer,
+    WalletStatusSerializer,
+    WalletTransactionSerializer,
 )
 from billing.services.internal_costs import (
     InternalCostsConfigurationError,
@@ -21,6 +25,7 @@ from billing.services.internal_costs import (
 )
 from billing.services.monthly_billing import MonthlyBillingService
 from billing.services.stripe_billing import StripeBillingService
+from billing.services.wallet import WalletService
 
 
 class IsCompanyAdmin(permissions.BasePermission):
@@ -70,6 +75,68 @@ class BillingSetupSessionView(APIView):
             request=request,
         )
         serializer = BillingSetupSessionSerializer(payload)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class WalletStatusView(APIView):
+    permission_classes = [IsCompanyAdmin]
+
+    def get(self, request, *args, **kwargs):
+        serializer = WalletStatusSerializer(WalletService.build_status())
+        return Response(serializer.data)
+
+
+class WalletTransactionListView(APIView):
+    permission_classes = [IsCompanyAdmin]
+
+    def get(self, request, *args, **kwargs):
+        try:
+            limit = int(request.query_params.get("limit", "100"))
+        except ValueError:
+            return Response({"detail": "Invalid limit."}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = WalletTransactionSerializer(
+            WalletService.list_transactions(limit=limit),
+            many=True,
+        )
+        return Response(serializer.data)
+
+
+class WalletRechargeView(APIView):
+    permission_classes = [IsCompanyAdmin]
+
+    def post(self, request, *args, **kwargs):
+        transaction = WalletService.recharge(user=request.user, automatic=False)
+        payload = {
+            "transaction": transaction,
+            "wallet": WalletService.build_status(),
+        }
+        serializer = WalletRechargeSerializer(payload)
+        status_code = (
+            status.HTTP_402_PAYMENT_REQUIRED
+            if transaction.status == "failed"
+            else status.HTTP_201_CREATED
+        )
+        return Response(serializer.data, status=status_code)
+
+
+class WalletAdminAdjustmentView(APIView):
+    permission_classes = [IsCompanyAdmin]
+
+    def post(self, request, *args, **kwargs):
+        if not request.user.is_staff and not request.user.is_superuser:
+            return Response({"detail": "Forbidden."}, status=status.HTTP_403_FORBIDDEN)
+
+        input_serializer = WalletAdminAdjustmentInputSerializer(data=request.data)
+        input_serializer.is_valid(raise_exception=True)
+        try:
+            transaction = WalletService.create_admin_adjustment(
+                amount_eur=input_serializer.validated_data["amountEur"],
+                description=input_serializer.validated_data["description"],
+                created_by_user=request.user,
+            )
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = WalletTransactionSerializer(transaction)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 

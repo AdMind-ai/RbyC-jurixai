@@ -1,14 +1,22 @@
-
 import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, CreditCard } from 'lucide-react';
+import { ChevronDown, Clock3, TrendingUp } from 'lucide-react';
 
 import ConsumptionTable from '../components/UsagePage/ConsumptionTable';
 import VevaUsageChart from '../components/UsagePage/VevaUsageChart';
 import { formatEuro } from '../constants/usage';
 import { AuthContext } from '../context/AuthContext';
 import { useUsageReport } from '../hooks/useUsageReport';
-import { billingService, BillingMonthlySummary, BillingStatus } from '../services/billingService';
+import { billingService, BillingMonthlySummary } from '../services/billingService';
 import { usageService, UsageMonthOption } from '../services/usageService';
+
+const formatUsageDate = (value?: string | null) => {
+  if (!value) return '-';
+  return new Date(value).toLocaleDateString('it-IT', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  });
+};
 
 const UsagePage: React.FC = () => {
   const auth = useContext(AuthContext);
@@ -16,13 +24,9 @@ const UsagePage: React.FC = () => {
   const [monthsLoading, setMonthsLoading] = useState<boolean>(true);
   const [monthsError, setMonthsError] = useState<string | null>(null);
   const [period, setPeriod] = useState<string | null>(null);
-  const [billingStatus, setBillingStatus] = useState<BillingStatus | null>(null);
   const [billingSummary, setBillingSummary] = useState<BillingMonthlySummary | null>(null);
   const [billingSummaryLoading, setBillingSummaryLoading] = useState<boolean>(false);
   const [billingSummaryError, setBillingSummaryError] = useState<string | null>(null);
-  const [billingLoading, setBillingLoading] = useState<boolean>(true);
-  const [billingActionLoading, setBillingActionLoading] = useState<boolean>(false);
-  const [billingError, setBillingError] = useState<string | null>(null);
 
   const isAdmin = auth?.user?.is_admin === true;
   const canViewFinancials = isAdmin;
@@ -53,30 +57,6 @@ const UsagePage: React.FC = () => {
     loadMonths();
   }, [loadMonths]);
 
-  const loadBillingStatus = useCallback(async () => {
-    setBillingLoading(true);
-    try {
-      const status = await billingService.getStatus();
-      setBillingStatus(status);
-      setBillingError(null);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Errore nel recupero dei dati di pagamento.';
-      setBillingError(message);
-      setBillingStatus(null);
-    } finally {
-      setBillingLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!canViewFinancials) {
-      setBillingStatus(null);
-      setBillingLoading(false);
-      return;
-    }
-    loadBillingStatus();
-  }, [canViewFinancials, loadBillingStatus]);
-
   const loadBillingSummary = useCallback(async (selectedMonth: string) => {
     setBillingSummaryLoading(true);
     setBillingSummary(null);
@@ -106,22 +86,20 @@ const UsagePage: React.FC = () => {
 
   const { data: report, loading: reportLoading, error } = useUsageReport({ month: period ?? undefined });
 
-
+  const subtotalDisplay = billingSummary
+    ? formatEuro(billingSummary.amountEur)
+    : billingSummaryLoading
+      ? 'Caricamento...'
+      : '-';
   const totalWithVatDisplay = billingSummary
     ? formatEuro(billingSummary.totalWithVatEur)
-    : billingSummaryLoading
-      ? 'Caricamento...'
-      : '-';
-
-  const chargeDateDisplay = billingSummary
-    ? new Date(`${billingSummary.chargeDate}T00:00:00`).toLocaleDateString('it-IT', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    })
-    : billingSummaryLoading
-      ? 'Caricamento...'
-      : '-';
+    : '-';
+  const vatAmountDisplay = billingSummary
+    ? formatEuro(Math.max(billingSummary.totalWithVatEur - billingSummary.amountEur, 0))
+    : '-';
+  const vatPercentage = billingSummary && typeof billingSummary.costBreakdown.ivaPercentage === 'number'
+    ? billingSummary.costBreakdown.ivaPercentage
+    : 22;
 
   const selectedPeriodLabel = useMemo(() => {
     if (!period) {
@@ -130,32 +108,19 @@ const UsagePage: React.FC = () => {
     return monthOptions.find((option) => option.value === period)?.label || 'Periodo selezionato';
   }, [period, monthOptions]);
 
-  const cardLabel = billingStatus?.paymentMethodReady && billingStatus.card
-    ? `${(billingStatus.card.brand || 'Carta').toUpperCase()} **** ${billingStatus.card.last4 || '----'}`
-    : 'Nessuna carta registrata';
-
-  const cardExpiry = billingStatus?.paymentMethodReady && billingStatus.card?.expMonth && billingStatus.card?.expYear
-    ? `Scadenza ${String(billingStatus.card.expMonth).padStart(2, '0')}/${billingStatus.card.expYear}`
-    : 'La carta verra usata per la fattura mensile automatica.';
-
-  const handleSetupPaymentMethod = async () => {
-    setBillingActionLoading(true);
-    setBillingError(null);
-    try {
-      const session = await billingService.createSetupSession();
-      window.location.assign(session.checkoutUrl);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Errore durante la creazione della sessione Stripe.';
-      setBillingError(message);
-      setBillingActionLoading(false);
-    }
-  };
+  const lastUsageDate = formatUsageDate(report?.lastUsage?.occurredAt);
+  const lastUsageText = report?.lastUsage
+    ? `${report.lastUsage.totalRequests} ${report.lastUsage.totalRequests === 1 ? 'interazione' : 'interazioni'} quel giorno`
+    : 'Nessun utilizzo registrato nel periodo';
 
   return (
     <div className="page-root">
       <div className="page-header">
-        <h1 className="page-title">Consumo AI</h1>
-        <div className="relative max-w-[200px] w-full">
+        <div>
+          <h3 className="page-title">Utilizzo</h3>
+          <p className="text-sm text-slate-500 mt-1">Utilizzo dell'IA nell'applicazione web Rbyc</p>
+        </div>
+        <div className="relative max-w-[220px] w-full">
           <select
             value={period ?? ''}
             onChange={(e) => setPeriod(e.target.value || null)}
@@ -175,56 +140,53 @@ const UsagePage: React.FC = () => {
       <div className="page-divider" />
 
       <div className="page-body space-y-6">
-        {/* KPI Cards */}
         {canViewFinancials && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="apple-card">
-              <div className="text-[13px] text-slate-400">Totale con IVA</div>
-              <div className="text-2xl font-semibold text-slate-800 mt-1">{totalWithVatDisplay}</div>
-              <p className="text-xs text-slate-400 mt-2">Addebito previsto: {chargeDateDisplay}</p>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 w-full">
+            <div className="apple-card relative overflow-hidden min-h-[150px] py-6 px-7 border-blue-100 bg-[#f4f7ff]">
+              <div className="absolute left-0 top-0 h-full w-1 bg-[#3b559c]" />
+              <div className="flex items-start justify-between gap-6">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 text-[13px] font-medium text-slate-500">
+                    <span className="h-9 w-9 rounded-xl bg-[#3b559c]/10 text-[#3b559c] flex items-center justify-center shrink-0">
+                      <TrendingUp size={18} />
+                    </span>
+                    <span>Consumo totale</span>
+                  </div>
+                  <div className="text-[34px] leading-tight font-semibold text-slate-900 mt-4">{subtotalDisplay}</div>
+                  <p className="text-xs text-slate-500 mt-2">{selectedPeriodLabel}</p>
+                  <div className="mt-4 pt-3 border-t border-blue-100/80 space-y-1.5 text-sm">
+                    <div className="flex items-center justify-between gap-8 text-slate-500">
+                      <span>IVA ({vatPercentage}%)</span>
+                      <span>{vatAmountDisplay}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-8 font-semibold text-slate-900">
+                      <span>Totale</span>
+                      <span>{totalWithVatDisplay}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
               {billingSummaryError && (
                 <p className="text-xs text-red-500 mt-2 truncate">{billingSummaryError}</p>
               )}
             </div>
-            <div className="apple-card">
-              <div className="flex items-center gap-2 text-[13px] text-slate-400">
-                Data addebito
-              </div>
-              <div className="text-2xl font-semibold text-slate-800 mt-1">{chargeDateDisplay}</div>
-            </div>
-          </div>
-        )}
-
-        {/* Metodo di pagamento */}
-        {canViewFinancials && (
-          <div className="apple-card flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <CreditCard className="text-slate-400 w-6 h-6" />
-              <div>
-                <div className="text-sm font-medium text-slate-800">Metodo di pagamento</div>
-                <div className="text-[13px] text-slate-500">
-                  {billingLoading ? 'Caricamento...' : cardLabel}
-                  {!billingLoading && cardExpiry !== 'La carta verra usata per la fattura mensile automatica.' && ` • ${cardExpiry}`}
+            <div className="apple-card relative overflow-hidden min-h-[150px] py-6 px-7">
+              <div className="flex items-start gap-5">
+                <div className="h-12 w-12 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
+                  <Clock3 size={21} />
                 </div>
-                {billingError && (
-                  <p className="text-xs text-red-500 mt-1">{billingError}</p>
-                )}
+                <div className="min-w-0">
+                  <div className="text-[13px] font-medium text-slate-500">Ultimo utilizzo</div>
+                  <div className="text-[30px] leading-tight font-semibold text-slate-900 mt-4">{lastUsageDate}</div>
+                  <p className="text-xs text-slate-500 mt-2">{lastUsageText}</p>
+                </div>
               </div>
             </div>
-            <button
-              onClick={handleSetupPaymentMethod}
-              disabled={billingActionLoading}
-              className="btn-secondary whitespace-nowrap"
-            >
-              {billingStatus?.paymentMethodReady ? 'Aggiorna carta' : 'Aggiungi carta'}
-            </button>
           </div>
         )}
 
-        {/* Grafico consumo Vera */}
         {canViewFinancials && <VevaUsageChart />}
 
-        {/* Tabella consumo */}
         <div className="space-y-4">
           {monthsError && (
             <div className="p-4 bg-red-50 text-red-700 rounded-xl text-sm border border-red-100">

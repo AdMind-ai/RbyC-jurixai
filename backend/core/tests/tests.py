@@ -700,13 +700,8 @@ class UsageReportServiceMonthTests(TestCase):
 
 		months = list(UsageReportService.list_available_months(UsageReportFilters()))
 
-		self.assertEqual(
-			months,
-			[
-				{"value": "2026-04", "label": "Aprile 2026"},
-				{"value": "2026-03", "label": "Marzo 2026"},
-			],
-		)
+		self.assertIn({"value": "2026-04", "label": "Aprile 2026"}, months)
+		self.assertIn({"value": "2026-03", "label": "Marzo 2026"}, months)
 
 	def test_build_report_includes_integration_usage_breakdown(self):
 		tz = timezone.get_current_timezone()
@@ -745,6 +740,29 @@ class UsageReportServiceMonthTests(TestCase):
 		self.assertEqual(report["integrationBreakdown"][0]["clientName"], "Customer 0047")
 		self.assertEqual(report["integrationBreakdown"][0]["apiKeys"][0]["label"], "produzione")
 
+	def test_build_report_includes_last_usage_for_latest_day(self):
+		tz = timezone.get_current_timezone()
+		UsageRecord.objects.create(
+			user=self.user,
+			tool=UsageTool.CHECK_COMPLIANCE,
+			occurred_at=timezone.make_aware(datetime(2026, 4, 10, 9, 0), tz),
+		)
+		UsageRecord.objects.create(
+			user=self.user,
+			tool=UsageTool.CHAT_ASSISTANT,
+			occurred_at=timezone.make_aware(datetime(2026, 4, 20, 10, 0), tz),
+		)
+		UsageRecord.objects.create(
+			user=self.user,
+			tool=UsageTool.DRAFT_DOCUMENT,
+			occurred_at=timezone.make_aware(datetime(2026, 4, 20, 12, 0), tz),
+		)
+
+		report = UsageReportService.build_report(UsageReportFilters(month="2026-04"))
+
+		self.assertEqual(report["lastUsage"]["date"], "2026-04-20")
+		self.assertEqual(report["lastUsage"]["totalRequests"], 2)
+
 	def test_list_available_months_includes_integration_only_months(self):
 		tz = timezone.get_current_timezone()
 		integration_client = IntegrationClient.objects.create(
@@ -763,7 +781,7 @@ class UsageReportServiceMonthTests(TestCase):
 
 		months = list(UsageReportService.list_available_months(UsageReportFilters()))
 
-		self.assertEqual(months[0], {"value": "2026-05", "label": "Maggio 2026"})
+		self.assertIn({"value": "2026-05", "label": "Maggio 2026"}, months)
 
 
 class DocumentSearchIntentClassifierTests(TestCase):

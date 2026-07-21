@@ -5,6 +5,7 @@ from celery import shared_task
 
 from billing.services.monthly_billing import MonthlyBillingService
 from billing.services.provider_costs import ProviderCostService
+from billing.services.wallet import WalletService
 
 logger = logging.getLogger(__name__)
 
@@ -63,4 +64,16 @@ def sync_openai_rbyc_cost(self, month=None):
         }
     except Exception as exc:
         logger.exception("OpenAI RbyC cost sync task failed")
+        raise self.retry(exc=exc)
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60 * 15)
+def debit_ai_usage_from_wallet(self, month=None):
+    try:
+        period_month = date.fromisoformat(month).replace(day=1) if month else date.today().replace(day=1)
+        result = WalletService.debit_ai_usage_for_month(period_month)
+        logger.info("AI usage wallet debit task completed", extra=result)
+        return result
+    except Exception as exc:
+        logger.exception("AI usage wallet debit task failed")
         raise self.retry(exc=exc)

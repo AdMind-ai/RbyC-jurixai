@@ -14,6 +14,7 @@ import {
   BarChart3,
   Newspaper,
   ClipboardList,
+  WalletCards,
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
@@ -29,7 +30,9 @@ const routeMap = {
   'chat-general': '/chat-general',
   newsletter: '/newsletter',
   accessi: '/accessi',
-  usage: '/usage',
+  usage: '/usage/utilizzo',
+  'usage-utilizzo': '/usage/utilizzo',
+  'usage-wallet': '/usage/wallet',
 } as const;
 
 type RouteKey = keyof typeof routeMap;
@@ -40,6 +43,11 @@ const complianceTabs: { key: RouteKey; label: string; Icon: SvgIconComponent }[]
   { key: 'compliance-chat', label: 'Agente Vera', Icon: MessageSquareText },
   { key: 'compliance-documents', label: 'Documenti', Icon: FolderOpen },
   { key: 'compliance-logs', label: 'Log', Icon: ClipboardList },
+];
+
+const usageTabs: { key: RouteKey; label: string; Icon: SvgIconComponent }[] = [
+  { key: 'usage-utilizzo', label: 'Utilizzo', Icon: BarChart3 },
+  { key: 'usage-wallet', label: 'Wallet', Icon: WalletCards },
 ];
 
 type SidebarProps = {
@@ -60,11 +68,15 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapseChange }) => {
   const location = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isComplianceOpen, setIsComplianceOpen] = useState(false);
+  const [isUsageOpen, setIsUsageOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
   useEffect(() => {
     if (location.pathname.startsWith('/compliance')) {
       setIsComplianceOpen(true);
+    }
+    if (location.pathname.startsWith('/usage')) {
+      setIsUsageOpen(true);
     }
   }, [location.pathname]);
 
@@ -79,6 +91,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapseChange }) => {
 
   const isActive = (tab: RouteKey) => location.pathname === routeMap[tab];
   const isComplianceActive = location.pathname.startsWith('/compliance');
+  const isUsageActive = location.pathname.startsWith('/usage');
 
   const handleLogout = () => {
     auth?.logout();
@@ -240,14 +253,48 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapseChange }) => {
         {!isCollapsed && <div className="h-px bg-blue-800/40 mx-5 mb-2" />}
 
         <div className="flex flex-col gap-0.5">
-          <button
-            onClick={() => handleNav('usage')}
-            title={isCollapsed ? 'Consumo AI' : undefined}
-            className={navItem(isActive('usage'), isCollapsed)}
-          >
-            <BarChart3 size={iconSize} />
-            {!isCollapsed && <span className="text-[13px] font-medium">Consumo AI</span>}
-          </button>
+          <div>
+            <button
+              onClick={() => {
+                setIsUsageOpen(!isUsageOpen);
+                if (!isUsageOpen && !isUsageActive) navigate(routeMap['usage-utilizzo']);
+              }}
+              title={isCollapsed ? 'Consumo AI' : undefined}
+              className={`w-full flex items-center transition-all duration-200 rounded-xl
+                ${isCollapsed ? 'justify-center py-3 px-2 mx-0' : 'px-3 py-2.5 mx-2 justify-between'}
+                ${isUsageActive
+                  ? 'bg-white/10 text-white'
+                  : 'text-blue-200/70 hover:bg-white/5 hover:text-blue-100'}`}
+            >
+              <div className="flex items-center gap-3">
+                <BarChart3 size={iconSize} />
+                {!isCollapsed && <span className="text-[13px] font-medium">Consumo AI</span>}
+              </div>
+              {!isCollapsed && (
+                isUsageOpen
+                  ? <ChevronDown size={14} />
+                  : <ChevronRight size={14} />
+              )}
+            </button>
+
+            {isUsageOpen && (
+              <div className="mt-0.5 flex flex-col gap-0.5">
+                {usageTabs.map(tab => (
+                  <button
+                    key={tab.key}
+                    title={isCollapsed ? tab.label : undefined}
+                    onClick={() => handleNav(tab.key)}
+                    className={isCollapsed
+                      ? navItem(isActive(tab.key), true)
+                      : subNavItem(isActive(tab.key))}
+                  >
+                    <tab.Icon size={subIconSize} />
+                    {!isCollapsed && tab.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           <button
             onClick={() => handleNav('accessi')}
