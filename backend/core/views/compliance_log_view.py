@@ -76,7 +76,7 @@ class VeraComplianceLogIngestView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def _check_key(self, request):
-        expected_key = getattr(settings, "VERA_LOG_API_KEY", None)
+        expected_key = getattr(settings, "VERA_INBOUND_API_KEY", None)
         if not expected_key:
             return None, Response(
                 {"detail": "Vera log ingest is not configured."},
@@ -125,11 +125,11 @@ class VeraComplianceLogIngestView(APIView):
         return Response({"count": len(logs), "logs": logs})
 
     def post(self, request):
-        expected_key = getattr(settings, "VERA_LOG_API_KEY", None)
+        expected_key = getattr(settings, "VERA_INBOUND_API_KEY", None)
         provided_key = request.headers.get("X-Vera-Api-Key")
 
         if not expected_key:
-            logger.error("VERA_LOG_API_KEY non configurata.")
+            logger.error("VERA_INBOUND_API_KEY non configurata.")
             return Response(
                 {"detail": "Vera log ingest is not configured."},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,

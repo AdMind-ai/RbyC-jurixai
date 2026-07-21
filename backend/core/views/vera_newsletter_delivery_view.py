@@ -37,7 +37,7 @@ class VeraNewsletterDeliveryView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        expected_key = getattr(settings, "VERA_API_SERVER_KEY", None) or getattr(settings, "VERA_LOG_API_KEY", None)
+        expected_key = getattr(settings, "VERA_INBOUND_API_KEY", None)
         if not expected_key:
             return Response(
                 {"detail": "Vera newsletter delivery non configurata."},
