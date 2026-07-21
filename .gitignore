@@ -1,2 +1,8 @@
 .env
 .vscode/
+# Ficheiros com secrets — nunca comprometer
+attached_assets/*.env
+attached_assets/_*.env
+*.env.local
+*.env.production
+*.env.development
