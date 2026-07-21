@@ -24,6 +24,7 @@ type ChatMessage = {
   role: Role;
   content: string;
   isStreaming?: boolean;
+  liveStatus?: string;
   files?: { name: string; size: number }[];
 };
 
@@ -56,15 +57,18 @@ const WELCOME: ChatMessage = {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-const TypingDots: React.FC = () => (
-  <span className="inline-flex items-center gap-1 pt-1">
-    {[0, 100, 200].map((d) => (
-      <span
-        key={d}
-        className="block h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce"
-        style={{ animationDelay: `${d}ms` }}
-      />
-    ))}
+const TypingDots: React.FC<{ message?: string }> = ({ message }) => (
+  <span className="inline-flex items-center gap-2 pt-1 text-slate-500">
+    {message && <span className="text-xs">{message}</span>}
+    <span className="inline-flex items-center gap-1">
+      {[0, 100, 200].map((d) => (
+        <span
+          key={d}
+          className="block h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce"
+          style={{ animationDelay: `${d}ms` }}
+        />
+      ))}
+    </span>
   </span>
 );
 
@@ -255,7 +259,34 @@ const Newsletter: React.FC = () => {
     setMessages((prev) => [...prev, { id: aiId, role: 'assistant', content: '', isStreaming: true }]);
 
     try {
-      const data = await newsletterChatService.sendMessage(userMsg.content, draftType, sessionId);
+      const data = await newsletterChatService.streamMessage(
+        userMsg.content,
+        draftType,
+        sessionId,
+        (delta) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === aiId
+                ? {
+                    ...m,
+                    content: `${m.content}${delta}`,
+                    isStreaming: true,
+                    liveStatus: undefined,
+                  }
+                : m
+            )
+          );
+        },
+        (statusMessage) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === aiId && !m.content
+                ? { ...m, liveStatus: statusMessage, isStreaming: true }
+                : m
+            )
+          );
+        }
+      );
 
       const answer: string = data.answer ?? '';
       const returnedKey: string = data.sessionKey ?? '';
@@ -263,7 +294,12 @@ const Newsletter: React.FC = () => {
       setMessages((prev) =>
         prev.map((m) =>
           m.id === aiId
-            ? { ...m, content: answer || 'Nessuna risposta ricevuta.', isStreaming: false }
+            ? {
+                ...m,
+                content: answer || m.content || 'Nessuna risposta ricevuta.',
+                isStreaming: false,
+                liveStatus: undefined,
+              }
             : m
         )
       );
@@ -275,7 +311,7 @@ const Newsletter: React.FC = () => {
       setMessages((prev) =>
         prev.map((m) =>
           m.id === aiId
-            ? { ...m, content: 'Si è verificato un errore. Riprova.', isStreaming: false }
+            ? { ...m, content: 'Si è verificato un errore. Riprova.', isStreaming: false, liveStatus: undefined }
             : m
         )
       );
@@ -417,7 +453,7 @@ const Newsletter: React.FC = () => {
                       </div>
                     </>
                   ) : msg.isStreaming ? (
-                    <TypingDots />
+                    <TypingDots message={msg.liveStatus} />
                   ) : null}
 
                   {msg.isStreaming && msg.content && (

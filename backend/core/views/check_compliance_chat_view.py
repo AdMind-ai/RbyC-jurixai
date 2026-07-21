@@ -412,7 +412,7 @@ class CheckComplianceChatView(APIView):
             def run_vera_stream():
                 try:
                     service = VeraComplianceService()
-                    for delta in service.stream_message(
+                    for event in service.stream_message_events(
                         messages=[
                             {
                                 "role": "user",
@@ -422,7 +422,14 @@ class CheckComplianceChatView(APIView):
                         session_key=session_key,
                         tag=tag,
                     ):
-                        stream_queue.put(("delta", delta))
+                        event_type = event.get("type")
+                        if event_type == "answer_delta":
+                            stream_queue.put(("delta", event.get("delta") or ""))
+                        elif event_type == "run_status":
+                            stream_queue.put(("run_status", event.get("message") or ""))
+                        elif event_type == "answer_completed":
+                            stream_queue.put(("done", event.get("answer") or ""))
+                            return
                     stream_queue.put(("done", None))
                 except VeraComplianceConfigurationError:
                     stream_queue.put(("configuration_error", None))
@@ -467,7 +474,20 @@ class CheckComplianceChatView(APIView):
                         )
                         continue
 
+                    if event_type == "run_status":
+                        yield _encode_sse_event(
+                            "run_status",
+                            {
+                                "type": "run_status",
+                                "message": payload,
+                                "session_key": session_key,
+                            },
+                        )
+                        continue
+
                     if event_type == "done":
+                        if payload:
+                            full_answer = payload
                         yield _encode_sse_event(
                             "answer_completed",
                             {
