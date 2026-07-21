@@ -193,7 +193,7 @@ class NewsletterChatViewTests(TestCase):
 	def test_newsletter_streams_status_and_deltas(self, mock_service_class):
 		mock_service = Mock()
 		mock_service.stream_message_events.return_value = iter([
-			{"type": "run_status", "message": "Preparando la bozza..."},
+			{"type": "run_status", "message": "Preparando la bozza"},
 			{"type": "answer_delta", "delta": "API"},
 			{"type": "answer_delta", "delta": "_OK"},
 			{"type": "answer_completed", "answer": "API_OK"},
@@ -215,7 +215,7 @@ class NewsletterChatViewTests(TestCase):
 		self.assertEqual(response["Content-Type"], "text/event-stream")
 		body = b"".join(response.streaming_content).decode("utf-8")
 		self.assertIn("event: run_status", body)
-		self.assertIn("Preparando la bozza...", body)
+		self.assertIn("Preparando la bozza", body)
 		self.assertIn('"delta": "API"', body)
 		self.assertIn('"answer": "API_OK"', body)
 
@@ -224,11 +224,11 @@ class VeraRunStatusMapperTests(TestCase):
 	def test_maps_known_tools_to_safe_messages(self):
 		self.assertEqual(
 			map_vera_tool_event_to_status({"event": "tool.started", "tool": "read_file"}),
-			"Analizzando i documenti...",
+			"Analizzando i documenti",
 		)
 		self.assertEqual(
 			map_vera_tool_event_to_status({"event": "tool.started", "tool": "web_search"}),
-			"Verificando le fonti...",
+			"Verificando le fonti",
 		)
 
 	def test_maps_unknown_tool_to_fallback_without_preview(self):
@@ -238,7 +238,7 @@ class VeraRunStatusMapperTests(TestCase):
 				"tool": "new_internal_tool",
 				"preview": "secret/path/or/command",
 			}),
-			"Elaborazione in corso...",
+			"Elaborazione in corso",
 		)
 
 	def test_ignores_non_started_events(self):
@@ -676,7 +676,7 @@ class CheckComplianceChatViewTests(TestCase):
 	def test_chat_streams_vera_deltas(self, mock_service_class):
 		mock_service = Mock()
 		mock_service.stream_message_events.return_value = iter([
-			{"type": "run_status", "message": "Analizzando i documenti..."},
+			{"type": "run_status", "message": "Analizzando i documenti"},
 			{"type": "answer_delta", "delta": "API"},
 			{"type": "answer_delta", "delta": "_OK"},
 			{"type": "answer_completed", "answer": "API_OK"},
@@ -693,7 +693,7 @@ class CheckComplianceChatViewTests(TestCase):
 		self.assertEqual(response["Content-Type"], "text/event-stream")
 		body = b"".join(response.streaming_content).decode("utf-8")
 		self.assertIn("event: run_status", body)
-		self.assertIn("Analizzando i documenti...", body)
+		self.assertIn("Analizzando i documenti", body)
 		self.assertIn("event: answer_delta", body)
 		self.assertIn('"delta": "API"', body)
 		self.assertIn('"delta": "_OK"', body)
