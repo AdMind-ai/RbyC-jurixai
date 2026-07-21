@@ -24,7 +24,9 @@ from billing.services.provider_usage_costs import ProviderUsageCostService
 from billing.services.aws_costs import AwsCostExplorerService
 from billing.services.internal_costs import build_internal_costs_payload
 from billing.services.wallet import WalletService
+from core.models.notification_model import Notification, NotificationType
 from core.models.vera_usage_model import VeraUsageRecord
+from core.tasks import notify_wallet_credit_usage_thresholds
 
 
 class ProviderUsageCostServiceTests(SimpleTestCase):
@@ -103,6 +105,42 @@ class WalletServiceTests(TestCase):
         self.assertEqual(WalletTransaction.objects.count(), 2)
         self.assertEqual(debit.transaction_type, WalletTransactionType.USAGE_DEBIT)
         self.assertEqual(debit.amount_eur, Decimal("-12.50"))
+
+    def test_wallet_credit_usage_threshold_notifications_are_per_credit_cycle(self):
+        credit = WalletService.credit(
+            amount_eur=Decimal("100.00"),
+            description="Credito iniziale",
+            idempotency_key="wallet-credit-threshold-test",
+        )
+        WalletService.debit_usage(
+            amount_eur=Decimal("20.00"),
+            description="Consumo AI",
+            idempotency_key="wallet-debit-20",
+        )
+
+        result = notify_wallet_credit_usage_thresholds()
+        self.assertEqual(result["status"], "created")
+        self.assertEqual(result["threshold"], 20)
+        self.assertTrue(
+            Notification.objects.filter(
+                notification_type=NotificationType.CONSUMPTION_THRESHOLD,
+                reference_type="wallet_credit_usage",
+                reference_id=f"{credit.id}:20",
+            ).exists()
+        )
+
+        repeated = notify_wallet_credit_usage_thresholds()
+        self.assertEqual(repeated["status"], "already_notified")
+
+        WalletService.debit_usage(
+            amount_eur=Decimal("20.00"),
+            description="Consumo AI",
+            idempotency_key="wallet-debit-40",
+        )
+
+        next_result = notify_wallet_credit_usage_thresholds()
+        self.assertEqual(next_result["status"], "created")
+        self.assertEqual(next_result["threshold"], 40)
 
     def test_ai_usage_debit_only_records_monthly_delta(self):
         period_month = date(2026, 7, 1)

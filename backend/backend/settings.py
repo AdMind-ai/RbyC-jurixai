@@ -259,8 +259,8 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'core.tasks.notify_low_wallet_balance',
         'schedule': crontab(hour=8, minute=30),
     },
-    'notify_monthly_spend_threshold': {
-        'task': 'core.tasks.notify_monthly_spend_threshold',
+    'notify_wallet_credit_usage_thresholds': {
+        'task': 'core.tasks.notify_wallet_credit_usage_thresholds',
         'schedule': crontab(hour=8, minute=45),
     },
 }

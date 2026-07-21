@@ -96,59 +96,109 @@ def notify_low_wallet_balance():
 
 
 @shared_task
-def notify_monthly_spend_threshold():
+def notify_wallet_credit_usage_thresholds():
     """
-    Controllo giornaliero: notifica quando il consumo mensile raggiunge 80% e 100% del limite.
+    Controllo giornaliero: notifica quando il credito wallet raggiunge
+    soglie di utilizzo del 20%, 40%, 60%, 80% e 95%.
     """
     from core.models.notification_model import Notification, NotificationType
-    from django.utils import timezone
-
-    monthly_limit = float(getattr(settings, "MONTHLY_SPEND_LIMIT_EUR", 0))
-    if not monthly_limit:
-        return {"status": "no_limit_configured"}
 
     try:
-        from billing.services.ai_usage_costs import AIUsageCostService
-        today = date.today()
-        period_month = today.replace(day=1)
-        summary = AIUsageCostService.build_monthly_summary(
-            period_month,
-            refresh_rbyc=False,
-            refresh_vera=False,
+        from billing.models import WalletTransaction, WalletTransactionStatus
+        from billing.services.wallet import WalletService
+
+        wallet_status = WalletService.build_status()
+        latest_credit = (
+            WalletTransaction.objects.filter(
+                amount_eur__gt=0,
+                status=WalletTransactionStatus.COMPLETED,
+            )
+            .order_by("-created_at", "-id")
+            .first()
         )
-        current_spend = float(summary.total_with_vat)
     except Exception as exc:
-        logger.warning("notify_monthly_spend_threshold: impossibile calcolare spesa: %s", exc)
+        logger.warning("notify_wallet_credit_usage_thresholds: impossibile leggere wallet: %s", exc)
         return {"status": "error", "detail": str(exc)}
 
-    percentage = (current_spend / monthly_limit * 100) if monthly_limit else 0
-    today = date.today()
+    if not latest_credit:
+        return {"status": "no_credit_cycle"}
 
-    for threshold_pct, label in [(100, "100%"), (80, "80%")]:
-        if percentage < threshold_pct:
+    credit_amount = Decimal(str(latest_credit.amount_eur))
+    if credit_amount <= Decimal("0.00"):
+        return {"status": "no_credit_cycle"}
+
+    balance = Decimal(str(wallet_status.get("balanceEur") or 0)).quantize(Decimal("0.01"))
+    used_amount = credit_amount - balance
+    if used_amount <= Decimal("0.00"):
+        return {
+            "status": "below_threshold",
+            "usage_percentage": 0,
+            "balance": float(balance),
+        }
+
+    usage_percentage = (used_amount / credit_amount * Decimal("100")).quantize(Decimal("0.01"))
+
+    for threshold_pct in [95, 80, 60, 40, 20]:
+        label = f"{threshold_pct}%"
+        if usage_percentage < Decimal(str(threshold_pct)):
             continue
 
-        # Evita duplicati: una notifica per soglia per mese
+        reference_id = f"{latest_credit.id}:{threshold_pct}"
         already_exists = Notification.objects.filter(
             notification_type=NotificationType.CONSUMPTION_THRESHOLD,
-            body__contains=label,
-            created_at__year=today.year,
-            created_at__month=today.month,
+            reference_type="wallet_credit_usage",
+            reference_id=reference_id,
         ).exists()
         if already_exists:
-            continue
+            return {
+                "status": "already_notified",
+                "threshold": threshold_pct,
+                "usage_percentage": float(usage_percentage),
+                "balance": float(balance),
+                "credit_amount": float(credit_amount),
+            }
+
+        if threshold_pct == 95:
+            title = "Credito wallet quasi esaurito"
+        else:
+            title = f"Credito wallet utilizzato al {label}"
+        body = (
+            f"Hai utilizzato almeno il {label} del credito wallet. "
+            f"Saldo disponibile: EUR {balance:.2f} su EUR {credit_amount:.2f}."
+        )
 
         Notification.objects.create(
             notification_type=NotificationType.CONSUMPTION_THRESHOLD,
-            title=f"Raggiunto {label} del limite mensile di consumo AI",
-            body=f"Il consumo AI del mese corrente ha raggiunto {label} del limite mensile (€{current_spend:.2f} / €{monthly_limit:.2f}).",
-            reference_type="usage_report",
+            title=title,
+            body=body,
+            reference_type="wallet_credit_usage",
+            reference_id=reference_id,
         )
-        logger.info("notify_monthly_spend_threshold: notifica %s creata (spend=€%s)", label, current_spend)
-        break  # Notifica una sola soglia per volta
+        logger.info(
+            "notify_wallet_credit_usage_thresholds: notifica %s creata (balance=EUR %s, credit=EUR %s)",
+            label,
+            balance,
+            credit_amount,
+        )
+        return {
+            "status": "created",
+            "threshold": threshold_pct,
+            "usage_percentage": float(usage_percentage),
+            "balance": float(balance),
+            "credit_amount": float(credit_amount),
+        }
 
-    return {"status": "checked", "percentage": round(percentage, 1)}
+    return {
+        "status": "below_threshold",
+        "usage_percentage": float(usage_percentage),
+        "balance": float(balance),
+        "credit_amount": float(credit_amount),
+    }
 
+
+@shared_task
+def notify_monthly_spend_threshold():
+    return notify_wallet_credit_usage_thresholds()
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60 * 30)
 def sync_vera_costs(self, days=None, provider="all"):
@@ -189,3 +239,5 @@ def sync_vera_costs(self, days=None, provider="all"):
     except Exception as exc:
         logger.exception("Vera costs sync task failed")
         raise self.retry(exc=exc)
+
+
