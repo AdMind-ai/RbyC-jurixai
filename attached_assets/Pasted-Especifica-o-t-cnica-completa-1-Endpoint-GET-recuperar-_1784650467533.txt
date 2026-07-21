@@ -1,0 +1,77 @@
+Especificação técnica completa
+1. Endpoint GET — recuperar logs do período (você implementa)
+Sugestão de contrato:
+
+copy
+
+
+GET /api/vera/log/?desde=2026-06-25&ate=2026-07-25
+Headers: X-Vera-Api-Key: *** key já usada>
+Resposta esperada (array de logs no formato que já existe):
+
+JSON
+
+
+{
+  "count": 3,
+  "logs": [
+    {
+      "id": "8301998e-a165-40fa-881e-99a6580f7375",
+      "tipo_evento": "aggiornamento_normativa",
+      "normativa": "Circolare n. 288...",
+      "autorita": "Banca d'Italia",
+      "data_rilevazione": "2026-07-10T10:15:00Z",
+      "versione_precedente": {"riferimento": "..."},
+      "versione_nuova": {"riferimento": "...", "fonte_url": "..."},
+      "riassunto_modifica": "...",
+      "tag": "LOG"
+    }
+  ]
+}
+Pontos importantes:
+
+Filtro por data_rilevazione dentro do range solicitado (não pela data de criação do registro, se forem diferentes).
+Se não houver parâmetros de data, pode retornar tudo — mas eu sempre vou enviar desde/ate explícitos.
+Formato de data: ISO 8601 (YYYY-MM-DD ou YYYY-MM-DDTHH:MM:SSZ), me confirme qual aceita.
+2. Endpoint POST — receber a newsletter final (você implementa)
+Sugestão de contrato:
+
+copy
+
+
+POST /api/vera/newsletter/
+Headers: 
+  Content-Type: application/json
+  X-Vera-Api-Key: *** key>
+Payload que vou enviar:
+
+JSON
+
+
+{
+  "tipo_evento": "newsletter_mensal",
+  "periodo": {
+    "inicio": "2026-06-25",
+    "fim": "2026-07-25"
+  },
+  "titulo": "Newsletter Compliance — Julho 2026",
+  "conteudo_markdown": "# Título\n\nConteúdo completo em markdown...",
+  "quantidade_atualizacoes": 3,
+  "gerado_em": "2026-07-25T09:00:00Z",
+  "status": "publicado"
+}
+Resposta esperada: algo como {"id": "...", "status": "created"} (mesmo padrão do endpoint de log), para eu confirmar que foi recebido com sucesso.
+
+3. Minha lógica interna (lado Vera)
+Passo	Ação
+1	Todo dia 25 do mês, às 09:00 (horário a definir — me diga se prefere outro)
+2	Chamo GET /api/vera/log/?desde=<25 do mês anterior>&ate=<25 deste mês>
+3	Se count == 0 → não faço nada, não gero newsletter, não envio nada (conforme pedido)
+4	Se count > 0 → delego a redação da newsletter ao worker (mesmo padrão de qualidade/estilo já usado: markdown rico, tom profissional, síntese jornalística das atualizações)
+5	Envio o resultado final via POST /api/vera/newsletter/ com status: "publicado"
+4. O que ainda preciso confirmar com você
+Pergunta	Por quê importa
+Horário exato de disparo no dia 25 (ex: 09:00 UTC? horário de Brasília?)	Preciso fixar no agendamento
+Formato de data aceito no GET (YYYY-MM-DD só, ou também datetime completo?)	Para eu montar a query corretamente
+O que fazer se o dia 25 cair num fim de semana/feriado	Só para alinhar expectativa — normalmente eu rodaria mesmo assim, automatizado
+Confirmar nome exato da URL do endpoint de newsletter quando estiver pronto	Preciso testar antes de ativar de vez
