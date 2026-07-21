@@ -5,6 +5,8 @@ import time
 import httpx
 from django.conf import settings
 
+from core.services.vera_run_status_mapper import map_vera_tool_event_to_status
+
 
 logger = logging.getLogger(__name__)
 
@@ -187,6 +189,11 @@ class VeraComplianceService:
             raise VeraComplianceServiceError("Error streaming Vera run events.") from exc
 
     def stream_message(self, messages, session_key, tag=None):
+        for event in self.stream_message_events(messages, session_key, tag=tag):
+            if event.get("type") == "answer_delta":
+                yield event.get("delta") or ""
+
+    def stream_message_events(self, messages, session_key, tag=None):
         for attempt in range(self.max_retries + 1):
             emitted_content = False
             emitted_text = ""
@@ -197,18 +204,32 @@ class VeraComplianceService:
 
                 for event in self.stream_run_events(run_id):
                     event_type = event.get("event")
+                    status_message = map_vera_tool_event_to_status(event)
+                    if status_message:
+                        yield {
+                            "type": "run_status",
+                            "message": status_message,
+                        }
+                        continue
+
                     if event_type == "message.delta":
                         delta = event.get("delta") or ""
                         if not delta:
                             continue
                         emitted_content = True
                         emitted_text += delta
-                        yield delta
+                        yield {
+                            "type": "answer_delta",
+                            "delta": delta,
+                        }
                     elif event_type == "run.completed":
                         final_output = event.get("output") or ""
                         if final_output and not emitted_content:
                             emitted_content = True
-                            yield final_output
+                            yield {
+                                "type": "answer_delta",
+                                "delta": final_output,
+                            }
                         elif (
                             final_output
                             and emitted_text
@@ -216,7 +237,14 @@ class VeraComplianceService:
                         ):
                             remaining_output = final_output[len(emitted_text):]
                             if remaining_output:
-                                yield remaining_output
+                                yield {
+                                    "type": "answer_delta",
+                                    "delta": remaining_output,
+                                }
+                        yield {
+                            "type": "answer_completed",
+                            "answer": final_output or emitted_text,
+                        }
                         return
                     elif event_type in {"run.failed", "run.cancelled"}:
                         raise VeraComplianceServiceError(
@@ -228,11 +256,25 @@ class VeraComplianceService:
                     try:
                         final_output = self._poll_run_until_final(run_id)
                         if final_output and not emitted_content:
-                            yield final_output
+                            yield {
+                                "type": "answer_delta",
+                                "delta": final_output,
+                            }
+                            yield {
+                                "type": "answer_completed",
+                                "answer": final_output,
+                            }
                         elif final_output and emitted_text and final_output.startswith(emitted_text):
                             remaining_output = final_output[len(emitted_text):]
                             if remaining_output:
-                                yield remaining_output
+                                yield {
+                                    "type": "answer_delta",
+                                    "delta": remaining_output,
+                                }
+                            yield {
+                                "type": "answer_completed",
+                                "answer": final_output,
+                            }
                         return
                     except Exception as poll_exc:
                         logger.warning(

@@ -27,6 +27,7 @@ type LocalChatMessage = {
   content: string;
   responseBlocks?: string[];
   isStreaming?: boolean;
+  liveStatus?: string;
   files?: {
     name: string;
     size: number;
@@ -70,8 +71,9 @@ const mapSessionSummary = (session: CheckComplianceConversationSummary): SavedCo
   sessionId: session.vera_session_id,
 });
 
-const TypingIndicator: React.FC = () => (
+const TypingIndicator: React.FC<{ message?: string }> = ({ message }) => (
   <div className="flex items-center gap-2 text-[15px] text-slate-500">
+    {message && <span className="text-sm">{message}</span>}
     <span className="flex items-center gap-1 pt-1">
       <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.2s]" />
       <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.1s]" />
@@ -102,13 +104,15 @@ const MarkdownMessage: React.FC<{
   content: string;
   isUser: boolean;
   isStreaming?: boolean;
+  liveStatus?: string;
 }> = ({
   content,
   isUser,
   isStreaming,
+  liveStatus,
 }) => {
   if (!content) {
-    return <TypingIndicator />;
+    return <TypingIndicator message={liveStatus} />;
   }
 
   const linkClassName = isUser
@@ -427,11 +431,12 @@ const CheckComplianceChat: React.FC = () => {
 
                 return {
                   ...message,
-                  content: `${message.content}${delta}`,
-                  responseBlocks: nextBlocks,
-                  isStreaming: true,
-                };
-              }
+                      content: `${message.content}${delta}`,
+                      responseBlocks: nextBlocks,
+                      isStreaming: true,
+                      liveStatus: undefined,
+                    };
+                  }
             )
           );
         },
@@ -440,6 +445,15 @@ const CheckComplianceChat: React.FC = () => {
             current.map((message) =>
               message.id === assistantMessageId
                 ? { ...message, isStreaming: true }
+                : message
+            )
+          );
+        },
+        (statusMessage) => {
+          setMessages((current) =>
+            current.map((message) =>
+              message.id === assistantMessageId && !message.content
+                ? { ...message, liveStatus: statusMessage, isStreaming: true }
                 : message
             )
           );
@@ -484,6 +498,7 @@ const CheckComplianceChat: React.FC = () => {
                   content: response.answer,
                   responseBlocks: finalResponseBlocks,
                   isStreaming: false,
+                  liveStatus: undefined,
                 }
               : message
           )
@@ -671,6 +686,7 @@ const CheckComplianceChat: React.FC = () => {
                         content={message.content}
                         isUser={true}
                         isStreaming={message.isStreaming}
+                        liveStatus={message.liveStatus}
                       />
                       {message.files && message.files.length > 0 && (
                         <div className="mt-3 flex flex-wrap justify-end gap-1.5">
@@ -697,6 +713,7 @@ const CheckComplianceChat: React.FC = () => {
                         content={message.content}
                         isUser={false}
                         isStreaming={message.isStreaming}
+                        liveStatus={message.liveStatus}
                       />
                     </div>
                   </div>

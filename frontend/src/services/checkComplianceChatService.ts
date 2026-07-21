@@ -35,6 +35,7 @@ export const checkComplianceChatService = {
     documents: CheckComplianceChatDocumentReference[],
     onDelta: (delta: string) => void,
     onKeepalive?: (message: string) => void,
+    onStatus?: (message: string) => void,
     tag?: string,
   ): Promise<CheckComplianceChatResponse> {
     const response = await fetchWithAuth('/check-compliance/chat/', {
@@ -84,6 +85,13 @@ export const checkComplianceChatService = {
           answer += delta;
           sessionKey = payload.session_key || sessionKey;
           onDelta(delta);
+        }
+
+        if (payload.type === 'run_status') {
+          sessionKey = payload.session_key || sessionKey;
+          if (payload.message) {
+            onStatus?.(payload.message);
+          }
         }
 
         if (payload.type === 'answer_keepalive') {
