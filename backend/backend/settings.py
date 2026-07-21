@@ -391,7 +391,24 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-if os.environ.get("DB_ENGINE") == "django.db.backends.postgresql":
+_database_url = os.environ.get("DATABASE_URL")
+if _database_url:
+    # Parse DATABASE_URL (postgres://user:pass@host:port/dbname)
+    import urllib.parse as _urlparse
+    _u = _urlparse.urlparse(_database_url)
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": _u.path.lstrip("/"),
+            "USER": _u.username,
+            "PASSWORD": _u.password,
+            "HOST": _u.hostname,
+            "PORT": str(_u.port or 5432),
+            "CONN_MAX_AGE": int(os.environ.get("DB_CONN_MAX_AGE", "60")),
+            "CONN_HEALTH_CHECKS": True,
+        }
+    }
+elif os.environ.get("DB_ENGINE") == "django.db.backends.postgresql":
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
