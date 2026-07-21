@@ -18,6 +18,8 @@ import { DraftDocument } from './pages/DraftDocument'
 import Usage from './pages/Usage'
 import Newsletter from './pages/Newsletter'
 import CheckComplianceLogs from './pages/CheckComplianceLogs'
+import Wallet from './pages/Wallet'
+import Notifications from './pages/Notifications'
 
 const AppRoutes = () => {
 
@@ -46,11 +48,16 @@ const AppRoutes = () => {
           {/* Newsletter Route */}
           <Route path="/newsletter" element={<Newsletter />} />
 
+          {/* Notifications Route */}
+          <Route path="/notifications" element={<Notifications />} />
+
           {/* Access Routes */}
           <Route path="/accessi" element={<TeamManagement />} />
 
-          {/* Usage Route */}
-          <Route path="/usage" element={<Usage />} />
+          {/* Usage Routes */}
+          <Route path="/usage" element={<Navigate to="/usage/utilizzo" replace />} />
+          <Route path="/usage/utilizzo" element={<Usage />} />
+          <Route path="/usage/wallet" element={<Wallet />} />
 
           {/* Segreteria Societaria Sub-routes */}
           <Route path="/segreteria">

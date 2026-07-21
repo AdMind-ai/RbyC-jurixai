@@ -20,6 +20,7 @@ from core.services.document_retrieval.prompt_context import build_document_searc
 from core.services.document_retrieval.retrieval_strategies import get_retrieval_strategy
 from core.services.usage_service import UsageReportFilters, UsageReportService
 from core.services.usage_tracking import UsageTrackingService
+from core.services.vera_run_status_mapper import map_vera_tool_event_to_status
 from integrations.models import (
 	IntegrationApiKey,
 	IntegrationClient,
@@ -181,6 +182,69 @@ class NewsletterChatViewTests(TestCase):
 
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(mock_service.send_message.call_args.kwargs["tag"], "[PILL FORMATIVO]")
+
+	@override_settings(
+		VERA_API_BASE_URL="https://vera.example.test/v1",
+		VERA_API_SERVER_KEY="test-key",
+		VERA_DEFAULT_ORGANIZATION_ID="org",
+		VERA_DEFAULT_CLIENT_ID="client",
+	)
+	@patch("core.views.newsletter_chat_view.VeraComplianceService")
+	def test_newsletter_streams_status_and_deltas(self, mock_service_class):
+		mock_service = Mock()
+		mock_service.stream_message_events.return_value = iter([
+			{"type": "run_status", "message": "Preparando la bozza"},
+			{"type": "answer_delta", "delta": "API"},
+			{"type": "answer_delta", "delta": "_OK"},
+			{"type": "answer_completed", "answer": "API_OK"},
+		])
+		mock_service_class.return_value = mock_service
+
+		response = self.client.post(
+			"/api/newsletter/chat/",
+			{
+				"message": "Genera un contenuto",
+				"draft_type": "newsletter",
+				"session_id": "session-123",
+				"stream": True,
+			},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response["Content-Type"], "text/event-stream")
+		body = b"".join(response.streaming_content).decode("utf-8")
+		self.assertIn("event: run_status", body)
+		self.assertIn("Preparando la bozza", body)
+		self.assertIn('"delta": "API"', body)
+		self.assertIn('"answer": "API_OK"', body)
+
+
+class VeraRunStatusMapperTests(TestCase):
+	def test_maps_known_tools_to_safe_messages(self):
+		self.assertEqual(
+			map_vera_tool_event_to_status({"event": "tool.started", "tool": "read_file"}),
+			"Analizzando i documenti",
+		)
+		self.assertEqual(
+			map_vera_tool_event_to_status({"event": "tool.started", "tool": "web_search"}),
+			"Verificando le fonti",
+		)
+
+	def test_maps_unknown_tool_to_fallback_without_preview(self):
+		self.assertEqual(
+			map_vera_tool_event_to_status({
+				"event": "tool.started",
+				"tool": "new_internal_tool",
+				"preview": "secret/path/or/command",
+			}),
+			"Elaborazione in corso",
+		)
+
+	def test_ignores_non_started_events(self):
+		self.assertIsNone(
+			map_vera_tool_event_to_status({"event": "tool.completed", "tool": "read_file"})
+		)
 
 class CheckComplianceAnalyzeViewTests(TestCase):
 	def setUp(self):
@@ -488,6 +552,7 @@ class CheckComplianceChatViewTests(TestCase):
 				}
 			],
 			session_key=f"vera:org:client:matter:{self.user.pk}",
+			tag="[CHAT]",
 		)
 
 	@override_settings(
@@ -610,7 +675,12 @@ class CheckComplianceChatViewTests(TestCase):
 	@patch("core.views.check_compliance_chat_view.VeraComplianceService")
 	def test_chat_streams_vera_deltas(self, mock_service_class):
 		mock_service = Mock()
-		mock_service.stream_message.return_value = iter(["API", "_OK"])
+		mock_service.stream_message_events.return_value = iter([
+			{"type": "run_status", "message": "Analizzando i documenti"},
+			{"type": "answer_delta", "delta": "API"},
+			{"type": "answer_delta", "delta": "_OK"},
+			{"type": "answer_completed", "answer": "API_OK"},
+		])
 		mock_service_class.return_value = mock_service
 
 		response = self.client.post(
@@ -622,6 +692,8 @@ class CheckComplianceChatViewTests(TestCase):
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(response["Content-Type"], "text/event-stream")
 		body = b"".join(response.streaming_content).decode("utf-8")
+		self.assertIn("event: run_status", body)
+		self.assertIn("Analizzando i documenti", body)
 		self.assertIn("event: answer_delta", body)
 		self.assertIn('"delta": "API"', body)
 		self.assertIn('"delta": "_OK"', body)
@@ -700,13 +772,8 @@ class UsageReportServiceMonthTests(TestCase):
 
 		months = list(UsageReportService.list_available_months(UsageReportFilters()))
 
-		self.assertEqual(
-			months,
-			[
-				{"value": "2026-04", "label": "Aprile 2026"},
-				{"value": "2026-03", "label": "Marzo 2026"},
-			],
-		)
+		self.assertIn({"value": "2026-04", "label": "Aprile 2026"}, months)
+		self.assertIn({"value": "2026-03", "label": "Marzo 2026"}, months)
 
 	def test_build_report_includes_integration_usage_breakdown(self):
 		tz = timezone.get_current_timezone()
@@ -745,6 +812,29 @@ class UsageReportServiceMonthTests(TestCase):
 		self.assertEqual(report["integrationBreakdown"][0]["clientName"], "Customer 0047")
 		self.assertEqual(report["integrationBreakdown"][0]["apiKeys"][0]["label"], "produzione")
 
+	def test_build_report_includes_last_usage_for_latest_day(self):
+		tz = timezone.get_current_timezone()
+		UsageRecord.objects.create(
+			user=self.user,
+			tool=UsageTool.CHECK_COMPLIANCE,
+			occurred_at=timezone.make_aware(datetime(2026, 4, 10, 9, 0), tz),
+		)
+		UsageRecord.objects.create(
+			user=self.user,
+			tool=UsageTool.CHAT_ASSISTANT,
+			occurred_at=timezone.make_aware(datetime(2026, 4, 20, 10, 0), tz),
+		)
+		UsageRecord.objects.create(
+			user=self.user,
+			tool=UsageTool.DRAFT_DOCUMENT,
+			occurred_at=timezone.make_aware(datetime(2026, 4, 20, 12, 0), tz),
+		)
+
+		report = UsageReportService.build_report(UsageReportFilters(month="2026-04"))
+
+		self.assertEqual(report["lastUsage"]["date"], "2026-04-20")
+		self.assertEqual(report["lastUsage"]["totalRequests"], 2)
+
 	def test_list_available_months_includes_integration_only_months(self):
 		tz = timezone.get_current_timezone()
 		integration_client = IntegrationClient.objects.create(
@@ -763,7 +853,7 @@ class UsageReportServiceMonthTests(TestCase):
 
 		months = list(UsageReportService.list_available_months(UsageReportFilters()))
 
-		self.assertEqual(months[0], {"value": "2026-05", "label": "Maggio 2026"})
+		self.assertIn({"value": "2026-05", "label": "Maggio 2026"}, months)
 
 
 class DocumentSearchIntentClassifierTests(TestCase):

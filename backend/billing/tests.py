@@ -4,16 +4,29 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import boto3
+from django.contrib.auth import get_user_model
+from django.db.models import Sum
 from django.test import SimpleTestCase, TestCase, override_settings
 from rest_framework.test import APIClient
 
-from billing.models import ProviderCostProvider, ProviderCostSource, ProviderUsageCost
+from billing.models import (
+    BillingAccount,
+    ProviderCostProvider,
+    ProviderCostSource,
+    ProviderUsageCost,
+    Wallet,
+    WalletTransaction,
+    WalletTransactionType,
+)
 from billing.services.ai_usage_costs import AIUsageCostService
 from billing.services.provider_costs import ProviderCostService
 from billing.services.provider_usage_costs import ProviderUsageCostService
 from billing.services.aws_costs import AwsCostExplorerService
 from billing.services.internal_costs import build_internal_costs_payload
+from billing.services.wallet import WalletService
+from core.models.notification_model import Notification, NotificationType
 from core.models.vera_usage_model import VeraUsageRecord
+from core.tasks import notify_wallet_credit_usage_thresholds
 
 
 class ProviderUsageCostServiceTests(SimpleTestCase):
@@ -48,6 +61,160 @@ class ProviderUsageCostServiceTests(SimpleTestCase):
         self.assertEqual(metadata["completion_tokens"], 45)
         self.assertEqual(metadata["cost"]["total_cost"], 0.56)
         self.assertEqual(metadata["cost"]["currency"], "USD")
+
+
+class WalletServiceTests(TestCase):
+    def test_wallet_solo_uses_configured_defaults(self):
+        with override_settings(
+            WALLET_DEFAULT_RECHARGE_AMOUNT_EUR="100.00",
+            WALLET_DEFAULT_THRESHOLD_EUR="5.00",
+        ):
+            wallet = Wallet.get_solo()
+
+        self.assertEqual(wallet.balance_eur, Decimal("0.00"))
+        self.assertEqual(wallet.recharge_amount_eur, Decimal("100.00"))
+        self.assertEqual(wallet.threshold_eur, Decimal("5.00"))
+        self.assertTrue(wallet.auto_recharge_enabled)
+
+    def test_credit_and_debit_are_idempotent(self):
+        credit = WalletService.credit(
+            amount_eur=Decimal("100.00"),
+            description="Admin gift",
+            idempotency_key="gift-1",
+        )
+        repeated_credit = WalletService.credit(
+            amount_eur=Decimal("100.00"),
+            description="Admin gift",
+            idempotency_key="gift-1",
+        )
+        debit = WalletService.debit_usage(
+            amount_eur=Decimal("12.50"),
+            description="AI usage",
+            idempotency_key="usage-1",
+        )
+        repeated_debit = WalletService.debit_usage(
+            amount_eur=Decimal("12.50"),
+            description="AI usage",
+            idempotency_key="usage-1",
+        )
+
+        wallet = Wallet.get_solo()
+        self.assertEqual(credit.id, repeated_credit.id)
+        self.assertEqual(debit.id, repeated_debit.id)
+        self.assertEqual(wallet.balance_eur, Decimal("87.50"))
+        self.assertEqual(WalletTransaction.objects.count(), 2)
+        self.assertEqual(debit.transaction_type, WalletTransactionType.USAGE_DEBIT)
+        self.assertEqual(debit.amount_eur, Decimal("-12.50"))
+
+    def test_wallet_credit_usage_threshold_notifications_are_per_credit_cycle(self):
+        credit = WalletService.credit(
+            amount_eur=Decimal("100.00"),
+            description="Credito iniziale",
+            idempotency_key="wallet-credit-threshold-test",
+        )
+        WalletService.debit_usage(
+            amount_eur=Decimal("20.00"),
+            description="Consumo AI",
+            idempotency_key="wallet-debit-20",
+        )
+
+        result = notify_wallet_credit_usage_thresholds()
+        self.assertEqual(result["status"], "created")
+        self.assertEqual(result["threshold"], 20)
+        self.assertTrue(
+            Notification.objects.filter(
+                notification_type=NotificationType.CONSUMPTION_THRESHOLD,
+                reference_type="wallet_credit_usage",
+                reference_id=f"{credit.id}:20",
+            ).exists()
+        )
+
+        repeated = notify_wallet_credit_usage_thresholds()
+        self.assertEqual(repeated["status"], "already_notified")
+
+        WalletService.debit_usage(
+            amount_eur=Decimal("20.00"),
+            description="Consumo AI",
+            idempotency_key="wallet-debit-40",
+        )
+
+        next_result = notify_wallet_credit_usage_thresholds()
+        self.assertEqual(next_result["status"], "created")
+        self.assertEqual(next_result["threshold"], 40)
+
+    def test_ai_usage_debit_only_records_monthly_delta(self):
+        period_month = date(2026, 7, 1)
+        wallet = Wallet.get_solo()
+        wallet.auto_recharge_enabled = False
+        wallet.save(update_fields=["auto_recharge_enabled", "updated_at"])
+
+        first_summary = SimpleNamespace(
+            total_with_vat=Decimal("5.17"),
+            rbyc_raw=Decimal("0.00"),
+            vera_raw=Decimal("4.2377"),
+        )
+        second_summary = SimpleNamespace(
+            total_with_vat=Decimal("7.00"),
+            rbyc_raw=Decimal("0.00"),
+            vera_raw=Decimal("5.7377"),
+        )
+
+        with patch.object(AIUsageCostService, "build_monthly_summary", return_value=first_summary):
+            first_result = WalletService.debit_ai_usage_for_month(period_month)
+        with patch.object(AIUsageCostService, "build_monthly_summary", return_value=first_summary):
+            repeated_result = WalletService.debit_ai_usage_for_month(period_month)
+        with patch.object(AIUsageCostService, "build_monthly_summary", return_value=second_summary):
+            second_result = WalletService.debit_ai_usage_for_month(period_month)
+
+        wallet.refresh_from_db()
+        self.assertEqual(first_result["status"], "debited")
+        self.assertEqual(repeated_result["status"], "no_delta")
+        self.assertEqual(second_result["delta_eur"], "1.83")
+        self.assertEqual(wallet.balance_eur, Decimal("-7.00"))
+        self.assertEqual(WalletTransaction.objects.count(), 2)
+        self.assertEqual(
+            WalletTransaction.objects.aggregate(total=Sum("amount_eur"))["total"],
+            Decimal("-7.00"),
+        )
+
+
+class WalletViewTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(
+            email="wallet-admin@example.com",
+            username="wallet-admin",
+            password="secret123",
+            is_staff=True,
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    def test_wallet_status_returns_wallet_and_payment_method(self):
+        account = BillingAccount.get_solo()
+        account.payment_method_ready = True
+        account.card_brand = "visa"
+        account.card_last4 = "4242"
+        account.card_exp_month = 12
+        account.card_exp_year = 2030
+        account.save()
+        WalletService.credit(amount_eur=Decimal("20.00"), description="Initial credit")
+
+        response = self.client.get("/api/billing/wallet/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["balanceEur"], 20.0)
+        self.assertTrue(response.data["paymentMethodReady"])
+        self.assertEqual(response.data["card"]["last4"], "4242")
+
+    def test_wallet_transactions_returns_history(self):
+        WalletService.credit(amount_eur=Decimal("30.00"), description="Initial credit")
+
+        response = self.client.get("/api/billing/wallet/transactions/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["amountEur"], 30.0)
 
 
 class ProviderCostServiceTests(TestCase):
@@ -205,6 +372,7 @@ class AIUsageCostServiceTests(TestCase):
         AI_USAGE_RBYC_MARKUP_PERCENTAGE="20",
         AI_USAGE_VERA_MARKUP_PERCENTAGE="25",
         AI_USAGE_IVA_PERCENTAGE="22",
+        AI_USAGE_BILLING_START_DATE=None,
     )
     def test_build_monthly_summary_applies_distinct_markups(self):
         ProviderCostService.upsert_provider_cost(
@@ -238,6 +406,15 @@ class AIUsageCostServiceTests(TestCase):
         self.assertEqual(summary.total_with_markup, Decimal("182.50"))
         self.assertEqual(summary.total_with_vat, Decimal("222.65"))
         self.assertEqual(summary.vera_total_with_vat, Decimal("76.25"))
+
+        payload = AIUsageCostService.serialize_for_billing(
+            self.period_month,
+            refresh_rbyc=False,
+            refresh_vera=False,
+        )
+
+        self.assertEqual(payload["amountEur"], 182.5)
+        self.assertEqual(payload["totalWithVatEur"], 222.65)
 
     @override_settings(
         AI_USAGE_RBYC_MARKUP_PERCENTAGE="20",

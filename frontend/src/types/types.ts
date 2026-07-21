@@ -150,6 +150,11 @@ export interface MonthlyReport {
   monthLabel?: string;
   currency?: string;
   totalRequests: number;
+  lastUsage?: {
+    occurredAt: string;
+    date: string;
+    totalRequests: number;
+  } | null;
   toolUsage: Record<string, ConsumptionStats>;
   userBreakdown: UserConsumption[];
   integrationBreakdown?: IntegrationConsumption[];

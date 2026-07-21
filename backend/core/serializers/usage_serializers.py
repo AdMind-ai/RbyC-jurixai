@@ -44,11 +44,18 @@ class IntegrationBreakdownSerializer(serializers.Serializer):
     apiKeys = IntegrationApiKeyBreakdownSerializer(many=True)
 
 
+class LastUsageSerializer(serializers.Serializer):
+    occurredAt = serializers.DateTimeField()
+    date = serializers.DateField()
+    totalRequests = serializers.IntegerField()
+
+
 class UsageReportSerializer(serializers.Serializer):
     month = serializers.CharField()
     monthLabel = serializers.CharField()
     currency = serializers.CharField()
     totalRequests = serializers.IntegerField()
+    lastUsage = LastUsageSerializer(allow_null=True)
     toolUsage = serializers.DictField(child=ToolBreakdownSerializer())
     userBreakdown = UserBreakdownSerializer(many=True)
     integrationBreakdown = IntegrationBreakdownSerializer(many=True, required=False)

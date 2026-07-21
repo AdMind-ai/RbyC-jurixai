@@ -127,6 +127,9 @@ AI_USAGE_RBYC_MARKUP_PERCENTAGE = os.environ.get(
 AI_USAGE_VERA_MARKUP_PERCENTAGE = os.environ.get('AI_USAGE_VERA_MARKUP_PERCENTAGE', '25')
 AI_USAGE_IVA_PERCENTAGE = os.environ.get('AI_USAGE_IVA_PERCENTAGE', BILLING_IVA_PERCENTAGE)
 AI_USAGE_BILLING_START_DATE = os.environ.get('AI_USAGE_BILLING_START_DATE')
+WALLET_DEFAULT_RECHARGE_AMOUNT_EUR = os.environ.get('WALLET_DEFAULT_RECHARGE_AMOUNT_EUR', '100.00')
+WALLET_DEFAULT_THRESHOLD_EUR = os.environ.get('WALLET_DEFAULT_THRESHOLD_EUR', '5.00')
+WALLET_USAGE_DEBIT_SYNC_MINUTE = os.environ.get('WALLET_USAGE_DEBIT_SYNC_MINUTE', '*/30')
 VERA_COST_SYNC_DAYS = int(os.environ.get('VERA_COST_SYNC_DAYS', '35'))
 VERA_COST_SYNC_CACHE_SECONDS = int(os.environ.get('VERA_COST_SYNC_CACHE_SECONDS', '900'))
 VERA_COST_SYNC_ERROR_COOLDOWN_SECONDS = int(
@@ -216,6 +219,8 @@ CELERY_BEAT_SCHEDULE = {
             'force': False,
             'process_all': DOCUMENT_PREVIEW_SYNC_PROCESS_ALL,
             'max_batches': DOCUMENT_PREVIEW_SYNC_MAX_BATCHES,
+            'process_all': DOCUMENT_PREVIEW_SYNC_PROCESS_ALL,
+            'max_batches': DOCUMENT_PREVIEW_SYNC_MAX_BATCHES,
         },
     },
     'sync_vera_openai_costs': {
@@ -241,9 +246,22 @@ CELERY_BEAT_SCHEDULE = {
             'provider': 'anthropic',
         },
     },
-    'generate_monthly_billing_invoice': {
-        'task': 'billing.tasks.generate_monthly_billing_invoice',
-        'schedule': crontab(day_of_month=1, hour=6, minute=0),
+    'debit_ai_usage_from_wallet': {
+        'task': 'billing.tasks.debit_ai_usage_from_wallet',
+        'schedule': crontab(minute=WALLET_USAGE_DEBIT_SYNC_MINUTE),
+    },
+    # Notification tasks
+    'notify_monthly_consumption_report': {
+        'task': 'core.tasks.notify_monthly_consumption_report',
+        'schedule': crontab(hour=9, minute=0, day_of_month=1),
+    },
+    'notify_low_wallet_balance': {
+        'task': 'core.tasks.notify_low_wallet_balance',
+        'schedule': crontab(hour=8, minute=30),
+    },
+    'notify_wallet_credit_usage_thresholds': {
+        'task': 'core.tasks.notify_wallet_credit_usage_thresholds',
+        'schedule': crontab(hour=8, minute=45),
     },
 }
 
@@ -276,7 +294,6 @@ SECRET_KEY = 'django-insecure-a!$duvz(gemholwmq(0q3y5&aeh@b$%g(2hgajbyh%^2i!jcbx
 MCP_INTERNAL_AUTH_SECRET = (
     os.environ.get('MCP_INTERNAL_AUTH_SECRET')
     or INTEGRATION_API_KEY
-    or SECRET_KEY
 )
 MCP_INTERNAL_AUTH_ISSUER = os.environ.get(
     'MCP_INTERNAL_AUTH_ISSUER',
@@ -388,7 +405,24 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-if os.environ.get("DB_ENGINE") == "django.db.backends.postgresql":
+_database_url = os.environ.get("DATABASE_URL")
+if _database_url:
+    # Parse DATABASE_URL (postgres://user:pass@host:port/dbname)
+    import urllib.parse as _urlparse
+    _u = _urlparse.urlparse(_database_url)
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": _u.path.lstrip("/"),
+            "USER": _u.username,
+            "PASSWORD": _u.password,
+            "HOST": _u.hostname,
+            "PORT": str(_u.port or 5432),
+            "CONN_MAX_AGE": int(os.environ.get("DB_CONN_MAX_AGE", "60")),
+            "CONN_HEALTH_CHECKS": True,
+        }
+    }
+elif os.environ.get("DB_ENGINE") == "django.db.backends.postgresql":
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
