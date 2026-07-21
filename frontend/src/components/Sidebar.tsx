@@ -247,11 +247,6 @@ const Sidebar: React.FC<SidebarProps> = ({ onCollapseChange }) => {
           {!isCollapsed && (
             <span className="text-[13px] font-medium flex-1 text-left">Notifiche</span>
           )}
-          {!isCollapsed && unreadCount > 0 && (
-            <span className="ml-auto bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
-              {unreadCount > 9 ? '9+' : unreadCount}
-            </span>
-          )}
         </button>
 
       </nav>
