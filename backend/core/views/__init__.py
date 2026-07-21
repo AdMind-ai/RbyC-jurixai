@@ -53,6 +53,7 @@ from .newsletter_saved_view import (
     SavedNewsletterDetailView,
     VeraNewsletterIngestView,
 )
+from .vera_newsletter_delivery_view import VeraNewsletterDeliveryView
 from .notification_view import (
     NotificationListView,
     NotificationReadView,
@@ -117,6 +118,7 @@ __all__ = [
     'SavedNewsletterListCreateView',
     'SavedNewsletterDetailView',
     'VeraNewsletterIngestView',
+    'VeraNewsletterDeliveryView',
     'NotificationListView',
     'NotificationReadView',
     'NotificationReadAllView',

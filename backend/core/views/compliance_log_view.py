@@ -39,14 +39,90 @@ class ComplianceLogListView(APIView):
         return Response(out.data, status=status.HTTP_201_CREATED)
 
 
+def _parse_vera_date(value: str):
+    """
+    Converte uma string de data no formato YYYY-MM-DD ou YYYY-MM-DDTHH:MM:SSZ
+    para um objecto datetime aware (UTC). Lança ValueError se o formato for inválido.
+    """
+    from django.utils.timezone import make_aware
+    from datetime import datetime, timezone as tz
+
+    value = value.strip()
+    # Tenta datetime completo primeiro
+    for fmt in ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S.%fZ"):
+        try:
+            return datetime.strptime(value, fmt).replace(tzinfo=tz.utc)
+        except ValueError:
+            pass
+    # Fallback para data simples: interpreta como início do dia UTC
+    try:
+        d = datetime.strptime(value, "%Y-%m-%d")
+        return d.replace(tzinfo=tz.utc)
+    except ValueError:
+        raise ValueError(f"Formato de data não reconhecido: {value!r}")
+
+
 class VeraComplianceLogIngestView(APIView):
     """
-    POST /api/vera/log/ — ingestione machine-to-machine da Agente Vera.
-    Autenticazione via header X-Vera-Api-Key.
+    GET  /api/vera/log/?desde=YYYY-MM-DD&ate=YYYY-MM-DD
+         — recupera logs do período para o Agente Vera.
+         Aceita datas em formato YYYY-MM-DD ou YYYY-MM-DDTHH:MM:SSZ.
+    POST /api/vera/log/
+         — ingestione machine-to-machine da Agente Vera.
+    Autenticação via header X-Vera-Api-Key.
     """
 
     authentication_classes = []
     permission_classes = [permissions.AllowAny]
+
+    def _check_key(self, request):
+        expected_key = getattr(settings, "VERA_LOG_API_KEY", None)
+        if not expected_key:
+            return None, Response(
+                {"detail": "Vera log ingest is not configured."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        if request.headers.get("X-Vera-Api-Key") != expected_key:
+            logger.warning("VeraComplianceLogIngestView: request não autorizada.")
+            return None, Response({"detail": "Invalid Vera API key."}, status=status.HTTP_401_UNAUTHORIZED)
+        return expected_key, None
+
+    def get(self, request):
+        """
+        Recupera logs do período especificado por ?desde=...&ate=...
+        Aceita YYYY-MM-DD ou YYYY-MM-DDTHH:MM:SSZ.
+        Se omitidos, devolve todos os logs (sem limite de data).
+        """
+        _, err = self._check_key(request)
+        if err:
+            return err
+
+        qs = ComplianceLog.objects.all()
+
+        desde_raw = request.query_params.get("desde")
+        ate_raw = request.query_params.get("ate")
+
+        if desde_raw:
+            try:
+                desde_dt = _parse_vera_date(desde_raw)
+                qs = qs.filter(data_rilevazione__gte=desde_dt)
+            except ValueError as exc:
+                return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        if ate_raw:
+            try:
+                from datetime import timedelta, datetime, timezone as tz
+                ate_dt = _parse_vera_date(ate_raw)
+                # Se veio só data (sem hora), inclui o dia inteiro
+                if len(ate_raw.strip()) == 10:
+                    ate_dt = ate_dt.replace(hour=23, minute=59, second=59)
+                qs = qs.filter(data_rilevazione__lte=ate_dt)
+            except ValueError as exc:
+                return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = ComplianceLogSerializer(qs, many=True)
+        logs = serializer.data
+        return Response({"count": len(logs), "logs": logs})
 
     def post(self, request):
         expected_key = getattr(settings, "VERA_LOG_API_KEY", None)
