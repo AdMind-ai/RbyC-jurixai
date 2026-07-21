@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Dict, Iterable, Optional, Tuple
 
 from django.contrib.auth import get_user_model
-from django.db.models import Count, QuerySet, Sum
+from django.db.models import Count, Max, QuerySet, Sum
 from django.db.models.functions import TruncMonth
 from django.utils import timezone
 
@@ -84,12 +84,14 @@ class UsageReportService:
         integration_breakdown = cls._aggregate_integration_breakdown(
             integration_queryset
         )
+        last_usage = cls._build_last_usage(queryset, integration_queryset)
 
         return {
             "month": month_ref.strftime("%Y-%m"),
             "monthLabel": f"{MONTH_NAMES_IT[month_ref.month]} {month_ref.year}",
             "currency": cls.currency,
             "totalRequests": cls._decimal_to_int(totals["total_qty"]) + integration_total,
+            "lastUsage": last_usage,
             "toolUsage": tool_usage,
             "userBreakdown": user_breakdown,
             "integrationBreakdown": integration_breakdown,
@@ -306,6 +308,34 @@ class UsageReportService:
 
         formatted.sort(key=lambda item: item["totalCount"], reverse=True)
         return formatted
+
+    @classmethod
+    def _build_last_usage(cls, queryset: QuerySet[UsageRecord], integration_queryset) -> Optional[Dict]:
+        usage_latest = queryset.aggregate(value=Max("occurred_at")).get("value")
+        integration_latest = integration_queryset.aggregate(value=Max("occurred_at")).get("value")
+        latest_values = [value for value in [usage_latest, integration_latest] if value]
+        if not latest_values:
+            return None
+
+        latest = max(latest_values)
+        local_latest = timezone.localtime(latest)
+        day_start = local_latest.replace(hour=0, minute=0, second=0, microsecond=0)
+        day_end = day_start + timedelta(days=1)
+
+        usage_total = queryset.filter(
+            occurred_at__gte=day_start,
+            occurred_at__lt=day_end,
+        ).aggregate(total=Sum("quantity", default=Decimal("0"))).get("total")
+        integration_total = integration_queryset.filter(
+            occurred_at__gte=day_start,
+            occurred_at__lt=day_end,
+        ).count()
+
+        return {
+            "occurredAt": latest,
+            "date": local_latest.date().isoformat(),
+            "totalRequests": cls._decimal_to_int(usage_total) + integration_total,
+        }
 
     @classmethod
     def list_available_months(cls, filters: UsageReportFilters) -> Iterable[Dict]:

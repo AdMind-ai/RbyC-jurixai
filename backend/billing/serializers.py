@@ -33,6 +33,52 @@ class BillingSetupSessionSerializer(serializers.Serializer):
     sessionId = serializers.CharField()
 
 
+class WalletStatusSerializer(serializers.Serializer):
+    balanceEur = serializers.FloatField()
+    currency = serializers.CharField()
+    autoRechargeEnabled = serializers.BooleanField()
+    rechargeAmountEur = serializers.FloatField()
+    thresholdEur = serializers.FloatField()
+    paymentMethodReady = serializers.BooleanField()
+    stripeCustomerReady = serializers.BooleanField()
+    card = BillingCardSerializer(allow_null=True)
+    lastError = serializers.CharField(allow_blank=True, allow_null=True)
+    needsRecharge = serializers.BooleanField()
+
+
+class WalletTransactionSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    transactionType = serializers.CharField(source="transaction_type")
+    status = serializers.CharField()
+    amountEur = serializers.FloatField(source="amount_eur")
+    balanceAfterEur = serializers.FloatField(source="balance_after_eur")
+    description = serializers.CharField()
+    stripePaymentIntentId = serializers.CharField(
+        source="stripe_payment_intent_id",
+        allow_blank=True,
+        allow_null=True,
+    )
+    stripeInvoiceId = serializers.CharField(
+        source="stripe_invoice_id",
+        allow_blank=True,
+        allow_null=True,
+    )
+    periodStart = serializers.DateField(source="period_start", allow_null=True)
+    periodEnd = serializers.DateField(source="period_end", allow_null=True)
+    metadata = serializers.JSONField()
+    createdAt = serializers.DateTimeField(source="created_at")
+
+
+class WalletRechargeSerializer(serializers.Serializer):
+    transaction = WalletTransactionSerializer()
+    wallet = WalletStatusSerializer()
+
+
+class WalletAdminAdjustmentInputSerializer(serializers.Serializer):
+    amountEur = serializers.DecimalField(max_digits=12, decimal_places=2)
+    description = serializers.CharField(max_length=255)
+
+
 class ProviderMonthlyCostSerializer(serializers.Serializer):
     provider = serializers.CharField()
     providerAmount = serializers.FloatField()

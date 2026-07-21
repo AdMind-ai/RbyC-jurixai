@@ -127,6 +127,9 @@ AI_USAGE_RBYC_MARKUP_PERCENTAGE = os.environ.get(
 AI_USAGE_VERA_MARKUP_PERCENTAGE = os.environ.get('AI_USAGE_VERA_MARKUP_PERCENTAGE', '25')
 AI_USAGE_IVA_PERCENTAGE = os.environ.get('AI_USAGE_IVA_PERCENTAGE', BILLING_IVA_PERCENTAGE)
 AI_USAGE_BILLING_START_DATE = os.environ.get('AI_USAGE_BILLING_START_DATE')
+WALLET_DEFAULT_RECHARGE_AMOUNT_EUR = os.environ.get('WALLET_DEFAULT_RECHARGE_AMOUNT_EUR', '100.00')
+WALLET_DEFAULT_THRESHOLD_EUR = os.environ.get('WALLET_DEFAULT_THRESHOLD_EUR', '5.00')
+WALLET_USAGE_DEBIT_SYNC_MINUTE = os.environ.get('WALLET_USAGE_DEBIT_SYNC_MINUTE', '*/30')
 VERA_COST_SYNC_DAYS = int(os.environ.get('VERA_COST_SYNC_DAYS', '35'))
 VERA_COST_SYNC_CACHE_SECONDS = int(os.environ.get('VERA_COST_SYNC_CACHE_SECONDS', '900'))
 VERA_COST_SYNC_ERROR_COOLDOWN_SECONDS = int(
@@ -241,9 +244,9 @@ CELERY_BEAT_SCHEDULE = {
             'provider': 'anthropic',
         },
     },
-    'generate_monthly_billing_invoice': {
-        'task': 'billing.tasks.generate_monthly_billing_invoice',
-        'schedule': crontab(day_of_month=1, hour=6, minute=0),
+    'debit_ai_usage_from_wallet': {
+        'task': 'billing.tasks.debit_ai_usage_from_wallet',
+        'schedule': crontab(minute=WALLET_USAGE_DEBIT_SYNC_MINUTE),
     },
 }
 

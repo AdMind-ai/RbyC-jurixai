@@ -25,6 +25,39 @@ export interface BillingStatus {
   latestInvoice: BillingInvoice | null;
 }
 
+export interface WalletStatus {
+  balanceEur: number;
+  currency: string;
+  autoRechargeEnabled: boolean;
+  rechargeAmountEur: number;
+  thresholdEur: number;
+  paymentMethodReady: boolean;
+  stripeCustomerReady: boolean;
+  card: BillingCard | null;
+  lastError: string | null;
+  needsRecharge: boolean;
+}
+
+export interface WalletTransaction {
+  id: number;
+  transactionType: string;
+  status: string;
+  amountEur: number;
+  balanceAfterEur: number;
+  description: string;
+  stripePaymentIntentId: string | null;
+  stripeInvoiceId: string | null;
+  periodStart: string | null;
+  periodEnd: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface WalletRechargeResponse {
+  transaction: WalletTransaction;
+  wallet: WalletStatus;
+}
+
 export interface ProviderMonthlyCost {
   provider: string;
   providerAmount: number;
@@ -67,6 +100,23 @@ export const billingService = {
     const { data } = await api.post<{ checkoutUrl: string; sessionId: string }>(
       '/billing/setup-session/'
     );
+    return data;
+  },
+
+  async getWallet() {
+    const { data } = await api.get<WalletStatus>('/billing/wallet/');
+    return data;
+  },
+
+  async getWalletTransactions(limit = 100) {
+    const { data } = await api.get<WalletTransaction[]>('/billing/wallet/transactions/', {
+      params: { limit },
+    });
+    return data;
+  },
+
+  async rechargeWallet() {
+    const { data } = await api.post<WalletRechargeResponse>('/billing/wallet/recharge/');
     return data;
   },
 };
