@@ -88,6 +88,15 @@ urlpatterns = [
 
     # Newsletter & PILL Formativo
     path('newsletter/chat/', NewsletterChatView.as_view(), name='newsletter-chat'),
+    path('newsletter/saved/', SavedNewsletterListCreateView.as_view(), name='newsletter-saved-list'),
+    path('newsletter/saved/<uuid:pk>/', SavedNewsletterDetailView.as_view(), name='newsletter-saved-detail'),
+    path('newsletter/ingest/', VeraNewsletterIngestView.as_view(), name='newsletter-vera-ingest'),
+
+    # Notifications
+    path('notifications/', NotificationListView.as_view(), name='notification-list'),
+    path('notifications/unread-count/', NotificationUnreadCountView.as_view(), name='notification-unread-count'),
+    path('notifications/read-all/', NotificationReadAllView.as_view(), name='notification-read-all'),
+    path('notifications/<uuid:pk>/read/', NotificationReadView.as_view(), name='notification-read'),
 
     # Vera usage tracking
     path('vera/usage/', VeraUsageIngestView.as_view(), name='vera-usage-ingest'),

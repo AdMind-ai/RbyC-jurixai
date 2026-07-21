@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.models.compliance_log_model import ComplianceLog
+from core.models.notification_model import Notification, NotificationType
 from core.serializers.compliance_log_serializer import (
     ComplianceLogIngestSerializer,
     ComplianceLogSerializer,
@@ -71,6 +72,20 @@ class VeraComplianceLogIngestView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         log = serializer.save()
+
+        # Crea notifica per tutti gli utenti
+        try:
+            autorita = log.autorita or "Normativa"
+            Notification.objects.create(
+                notification_type=NotificationType.COMPLIANCE_LOG,
+                title=f"Nuovo aggiornamento normativo — {autorita}",
+                body=log.riassunto_modifica or log.normativa[:200],
+                reference_id=str(log.id),
+                reference_type="compliance_log",
+            )
+        except Exception as exc:
+            logger.warning("Impossibile creare notifica per log compliance: %s", exc)
+
         return Response(
             {
                 "id": str(log.id),

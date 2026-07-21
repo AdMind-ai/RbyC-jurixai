@@ -248,6 +248,19 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'billing.tasks.debit_ai_usage_from_wallet',
         'schedule': crontab(minute=WALLET_USAGE_DEBIT_SYNC_MINUTE),
     },
+    # Notification tasks
+    'notify_monthly_consumption_report': {
+        'task': 'core.tasks.notify_monthly_consumption_report',
+        'schedule': crontab(hour=9, minute=0, day_of_month=1),
+    },
+    'notify_low_wallet_balance': {
+        'task': 'core.tasks.notify_low_wallet_balance',
+        'schedule': crontab(hour=8, minute=30),
+    },
+    'notify_monthly_spend_threshold': {
+        'task': 'core.tasks.notify_monthly_spend_threshold',
+        'schedule': crontab(hour=8, minute=45),
+    },
 }
 
 LOGGING = {

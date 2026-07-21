@@ -48,6 +48,17 @@ from .compliance_log_view import (
 )
 from .vera_usage_view import VeraUsageIngestView, VeraUsageDailyView, VeraUsageRawListView
 from .newsletter_chat_view import NewsletterChatView
+from .newsletter_saved_view import (
+    SavedNewsletterListCreateView,
+    SavedNewsletterDetailView,
+    VeraNewsletterIngestView,
+)
+from .notification_view import (
+    NotificationListView,
+    NotificationReadView,
+    NotificationReadAllView,
+    NotificationUnreadCountView,
+)
 
 __all__ = [
     'DeeplTranslateFileView',
@@ -103,4 +114,11 @@ __all__ = [
     'VeraUsageDailyView',
     'VeraUsageRawListView',
     'NewsletterChatView',
+    'SavedNewsletterListCreateView',
+    'SavedNewsletterDetailView',
+    'VeraNewsletterIngestView',
+    'NotificationListView',
+    'NotificationReadView',
+    'NotificationReadAllView',
+    'NotificationUnreadCountView',
 ]
