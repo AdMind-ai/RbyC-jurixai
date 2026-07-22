@@ -53,6 +53,13 @@ export interface WalletTransaction {
   createdAt: string;
 }
 
+export interface WalletTransactionPage {
+  count: number;
+  limit: number;
+  offset: number;
+  results: WalletTransaction[];
+}
+
 export interface WalletRechargeResponse {
   transaction: WalletTransaction;
   wallet: WalletStatus;
@@ -108,11 +115,24 @@ export const billingService = {
     return data;
   },
 
-  async getWalletTransactions(limit = 100) {
-    const { data } = await api.get<WalletTransaction[]>('/billing/wallet/transactions/', {
-      params: { limit },
+  async getWalletTransactions(limit = 25, offset = 0) {
+    const { data } = await api.get<WalletTransactionPage | WalletTransaction[]>('/billing/wallet/transactions/', {
+      params: { limit, offset },
     });
-    return data;
+    if (Array.isArray(data)) {
+      return {
+        count: data.length,
+        limit,
+        offset,
+        results: data,
+      };
+    }
+    return {
+      count: data.count ?? 0,
+      limit: data.limit ?? limit,
+      offset: data.offset ?? offset,
+      results: Array.isArray(data.results) ? data.results : [],
+    };
   },
 
   async rechargeWallet() {

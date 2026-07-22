@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
+  ChevronLeft,
+  ChevronRight,
   CreditCard,
   RefreshCw,
   RotateCw,
@@ -13,6 +15,8 @@ import {
   WalletStatus,
   WalletTransaction,
 } from '../services/billingService';
+
+const TRANSACTIONS_PAGE_SIZE = 25;
 
 const formatDateTime = (value: string) =>
   new Date(value).toLocaleDateString('it-IT', {
@@ -28,29 +32,34 @@ const transactionLabel: Record<string, string> = {
   usage_debit: 'Consumo',
   auto_recharge: 'Auto-ricarica',
   manual_recharge: 'Ricarica',
-  admin_adjustment: 'Rettifica admin',
+  admin_adjustment: 'Admind',
   payment_failed: 'Pagamento fallito',
 };
 
 const WalletPage: React.FC = () => {
   const [wallet, setWallet] = useState<WalletStatus | null>(null);
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
+  const [transactionCount, setTransactionCount] = useState(0);
+  const [transactionPage, setTransactionPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadWallet = useCallback(async (silent = false) => {
+  const loadWallet = useCallback(async (silent = false, page = transactionPage) => {
     if (silent) setRefreshing(true);
     else setLoading(true);
     setError(null);
     try {
+      const offset = page * TRANSACTIONS_PAGE_SIZE;
       const [walletData, transactionData] = await Promise.all([
         billingService.getWallet(),
-        billingService.getWalletTransactions(100),
+        billingService.getWalletTransactions(TRANSACTIONS_PAGE_SIZE, offset),
       ]);
       setWallet(walletData);
-      setTransactions(transactionData);
+      setTransactions(transactionData.results ?? []);
+      setTransactionCount(transactionData.count ?? 0);
+      setTransactionPage(page);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Errore nel recupero della wallet.';
       setError(message);
@@ -58,11 +67,11 @@ const WalletPage: React.FC = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [transactionPage]);
 
   useEffect(() => {
-    loadWallet();
-  }, [loadWallet]);
+    loadWallet(false, 0);
+  }, []);
 
   const cardLabel = wallet?.paymentMethodReady && wallet.card
     ? `${(wallet.card.brand || 'Carta').toUpperCase()} **** ${wallet.card.last4 || '----'}`
@@ -96,13 +105,25 @@ const WalletPage: React.FC = () => {
     try {
       const result = await billingService.rechargeWallet();
       setWallet(result.wallet);
-      await loadWallet(true);
+      await loadWallet(true, 0);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Errore durante la ricarica wallet.';
       setError(message);
     } finally {
       setActionLoading(false);
     }
+  };
+
+  const totalTransactionPages = Math.max(1, Math.ceil(transactionCount / TRANSACTIONS_PAGE_SIZE));
+  const visibleTransactions = transactions ?? [];
+  const hasPreviousTransactions = transactionPage > 0;
+  const hasNextTransactions = transactionPage + 1 < totalTransactionPages;
+  const transactionRangeStart = transactionCount === 0 ? 0 : transactionPage * TRANSACTIONS_PAGE_SIZE + 1;
+  const transactionRangeEnd = Math.min((transactionPage + 1) * TRANSACTIONS_PAGE_SIZE, transactionCount);
+
+  const changeTransactionPage = (nextPage: number) => {
+    if (nextPage < 0 || nextPage >= totalTransactionPages) return;
+    loadWallet(true, nextPage);
   };
 
   return (
@@ -115,7 +136,7 @@ const WalletPage: React.FC = () => {
           </p>
         </div>
         <button
-          onClick={() => loadWallet(true)}
+          onClick={() => loadWallet(true, transactionPage)}
           disabled={refreshing}
           className="btn-secondary py-2 px-3.5 gap-1.5 text-sm"
         >
@@ -201,12 +222,12 @@ const WalletPage: React.FC = () => {
                   <span>Descrizione</span>
                   <span className="text-right">Importo</span>
                 </div>
-                {transactions.length === 0 ? (
+                {visibleTransactions.length === 0 ? (
                   <div className="px-6 py-12 text-center text-sm text-slate-400">
                     Nessuna transazione registrata.
                   </div>
                 ) : (
-                  transactions.map((item) => (
+                  visibleTransactions.map((item) => (
                     <div
                       key={item.id}
                       className="grid grid-cols-1 md:grid-cols-[150px_1fr_160px] gap-2 md:gap-4 px-6 py-4 border-b border-slate-50 last:border-b-0 md:items-center"
@@ -232,6 +253,34 @@ const WalletPage: React.FC = () => {
                       </span>
                     </div>
                   ))
+                )}
+                {transactionCount > TRANSACTIONS_PAGE_SIZE && (
+                  <div className="flex flex-col gap-3 border-t border-slate-100 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-xs text-slate-400">
+                      {transactionRangeStart}-{transactionRangeEnd} di {transactionCount}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => changeTransactionPage(transactionPage - 1)}
+                        disabled={!hasPreviousTransactions || refreshing}
+                        className="btn-secondary py-1.5 px-3 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <ChevronLeft size={14} />
+                        Indietro
+                      </button>
+                      <span className="text-xs font-medium text-slate-500">
+                        {transactionPage + 1} / {totalTransactionPages}
+                      </span>
+                      <button
+                        onClick={() => changeTransactionPage(transactionPage + 1)}
+                        disabled={!hasNextTransactions || refreshing}
+                        className="btn-secondary py-1.5 px-3 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Avanti
+                        <ChevronRight size={14} />
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
             </section>

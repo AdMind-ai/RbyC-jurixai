@@ -92,13 +92,24 @@ class WalletTransactionListView(APIView):
     def get(self, request, *args, **kwargs):
         try:
             limit = int(request.query_params.get("limit", "100"))
+            offset = int(request.query_params.get("offset", "0"))
         except ValueError:
-            return Response({"detail": "Invalid limit."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Invalid pagination parameters."}, status=status.HTTP_400_BAD_REQUEST)
+        limit = max(1, min(limit, 200))
+        offset = max(0, offset)
         serializer = WalletTransactionSerializer(
-            WalletService.list_transactions(limit=limit),
+            WalletService.list_transactions(limit=limit, offset=offset),
             many=True,
         )
-        return Response(serializer.data)
+        count = WalletService.count_transactions()
+        return Response(
+            {
+                "count": count,
+                "limit": limit,
+                "offset": offset,
+                "results": serializer.data,
+            }
+        )
 
 
 class WalletRechargeView(APIView):
