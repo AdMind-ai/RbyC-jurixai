@@ -34,6 +34,7 @@ const ConsumptionTable: React.FC<ConsumptionTableProps> = ({ report }) => {
       ToolId.DRAFT_DOCUMENT,
       ToolId.CHECK_COMPLIANCE,
       ToolId.CHAT_ASSISTANT,
+      ToolId.NEWSLETTER_PILL,
       SubToolId.DOCUMENTI_AI,
       SubToolId.ASSISTENTE_LEGALE
     ];

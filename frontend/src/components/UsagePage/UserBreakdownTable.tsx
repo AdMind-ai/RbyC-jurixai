@@ -13,6 +13,7 @@ const UserBreakdownTable: React.FC<UserBreakdownTableProps> = ({ users }) => {
     ToolId.DRAFT_DOCUMENT,
     ToolId.CHECK_COMPLIANCE,
     ToolId.CHAT_ASSISTANT,
+    ToolId.NEWSLETTER_PILL,
     ToolId.SEGRETERIA_SOCIETARIA
   ];
 

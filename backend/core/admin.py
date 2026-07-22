@@ -180,7 +180,7 @@ class SavedNewsletterAdmin(admin.ModelAdmin):
     )
     list_filter = ('newsletter_type', 'source', 'created_at', 'generated_at')
     search_fields = ('title', 'content')
-    readonly_fields = ('id', 'created_at')
+    readonly_fields = ('id', 'metadata', 'created_at')
     date_hierarchy = 'created_at'
     ordering = ('-created_at',)
 

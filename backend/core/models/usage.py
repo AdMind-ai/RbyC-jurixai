@@ -14,6 +14,7 @@ class UsageTool(models.TextChoices):
     DRAFT_DOCUMENT = "DRAFT_DOCUMENT", "Draft document"
     CHECK_COMPLIANCE = "CHECK_COMPLIANCE", "Check compliance"
     CHAT_ASSISTANT = "CHAT_ASSISTANT", "Chat assistant"
+    NEWSLETTER_PILL = "NEWSLETTER_PILL", "Newsletter & PILL"
     SEGRETERIA_SOCIETARIA = "SEGRETERIA_SOCIETARIA", "Segreteria societaria"
 
 

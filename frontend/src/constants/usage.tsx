@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Search, FileText, Shield, Bot, Briefcase } from 'lucide-react';
+import { Search, FileText, Shield, Bot, Briefcase, Newspaper } from 'lucide-react';
 import { ToolId, SubToolId } from '../types/types';
 
 export const TOOL_CONFIG: Record<string, { name: string; icon: React.ReactNode; color: string; description: string }> = {
@@ -28,6 +28,12 @@ export const TOOL_CONFIG: Record<string, { name: string; icon: React.ReactNode; 
     color: '#1F3A8B',
     description: 'Interfaccia conversazionale per brainstorming e supporto rapido.'
   },
+  [ToolId.NEWSLETTER_PILL]: {
+    name: 'Newsletter & PILL',
+    icon: <Newspaper className="w-5 h-5" />,
+    color: '#1F3A8B',
+    description: 'Generazione di newsletter normative e contenuti formativi.'
+  },
   [ToolId.SEGRETERIA_SOCIETARIA]: {
     name: 'Segreteria Societaria (Totale)',
     icon: <Briefcase className="w-5 h-5" />,
@@ -53,6 +59,7 @@ export const METRIC_LABELS: Record<string, string> = {
   [ToolId.CHECK_COMPLIANCE]: 'Interazioni registrate',
   [ToolId.DRAFT_DOCUMENT]: 'Interazioni registrate',
   [ToolId.CHAT_ASSISTANT]: 'Interazioni registrate',
+  [ToolId.NEWSLETTER_PILL]: 'Interazioni registrate',
   [ToolId.SEGRETERIA_SOCIETARIA]: 'Interazioni registrate',
   [SubToolId.DOCUMENTI_AI]: 'Interazioni registrate',
   [SubToolId.ASSISTENTE_LEGALE]: 'Interazioni registrate'
