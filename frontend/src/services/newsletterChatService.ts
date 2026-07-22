@@ -6,6 +6,22 @@ export type NewsletterDraftType = 'newsletter' | 'pill';
 export interface NewsletterChatResponse {
   answer: string;
   sessionKey: string;
+  documents?: NewsletterDocumentReference[];
+}
+
+export interface NewsletterChatAttachment {
+  name: string;
+  size: number;
+  type: string;
+  data: string;
+}
+
+export interface NewsletterDocumentReference {
+  bucket: string;
+  s3_key: string;
+  filename: string;
+  content_type: string;
+  size: number;
 }
 
 export const newsletterChatService = {
@@ -13,11 +29,13 @@ export const newsletterChatService = {
     message: string,
     draftType: NewsletterDraftType,
     sessionId?: string,
+    attachments: NewsletterChatAttachment[] = [],
   ): Promise<NewsletterChatResponse> {
     const { data } = await api.post<NewsletterChatResponse>('/newsletter/chat/', {
       message,
       draft_type: draftType,
       ...(sessionId ? { session_id: sessionId } : {}),
+      ...(attachments.length ? { attachments } : {}),
     });
     return data;
   },
@@ -26,6 +44,7 @@ export const newsletterChatService = {
     message: string,
     draftType: NewsletterDraftType,
     sessionId: string,
+    attachments: NewsletterChatAttachment[],
     onDelta: (delta: string) => void,
     onStatus?: (message: string) => void,
   ): Promise<NewsletterChatResponse> {
@@ -36,6 +55,7 @@ export const newsletterChatService = {
         draft_type: draftType,
         session_id: sessionId,
         stream: true,
+        ...(attachments.length ? { attachments } : {}),
       }),
     });
 
@@ -59,6 +79,7 @@ export const newsletterChatService = {
     let buffer = '';
     let answer = '';
     let sessionKey = '';
+    let documents: NewsletterDocumentReference[] = [];
 
     while (true) {
       const { done, value } = await reader.read();
@@ -94,6 +115,9 @@ export const newsletterChatService = {
         if (payload.type === 'answer_completed') {
           answer = payload.answer || answer;
           sessionKey = payload.session_key || sessionKey;
+          if (Array.isArray(payload.documents)) {
+            documents = payload.documents;
+          }
         }
 
         if (payload.type === 'error') {
@@ -102,6 +126,6 @@ export const newsletterChatService = {
       }
     }
 
-    return { answer, sessionKey };
+    return { answer, sessionKey, documents };
   },
 };

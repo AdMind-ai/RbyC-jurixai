@@ -166,8 +166,9 @@ class NewsletterChatViewTests(TestCase):
 
 		self.assertEqual(response.status_code, 200)
 		call_kwargs = mock_service.send_message.call_args.kwargs
-		self.assertEqual(call_kwargs["tag"], "[NEWSLETTER]")
+		self.assertNotIn("tag", call_kwargs)
 		content = call_kwargs["messages"][0]["content"]
+		self.assertTrue(content.startswith("[NEWSLETTER]"))
 		self.assertIn("<bozza>", content)
 		self.assertIn("ultimo elemento isolato", content)
 		usage = UsageRecord.objects.get(tool=UsageTool.NEWSLETTER_PILL)
@@ -184,10 +185,60 @@ class NewsletterChatViewTests(TestCase):
 		response, mock_service = self._post_with_draft_type("pill")
 
 		self.assertEqual(response.status_code, 200)
-		self.assertEqual(mock_service.send_message.call_args.kwargs["tag"], "[PILL FORMATIVO]")
+		call_kwargs = mock_service.send_message.call_args.kwargs
+		self.assertNotIn("tag", call_kwargs)
+		self.assertTrue(call_kwargs["messages"][0]["content"].startswith("[PILL FORMATIVO]"))
 		usage = UsageRecord.objects.get(tool=UsageTool.NEWSLETTER_PILL)
 		self.assertEqual(str(usage.quantity), "1.0000")
 		self.assertEqual(usage.metadata["draft_type"], "pill")
+
+	@override_settings(
+		VERA_API_BASE_URL="https://vera.example.test/v1",
+		VERA_API_SERVER_KEY="test-key",
+		VERA_DEFAULT_ORGANIZATION_ID="org",
+		VERA_DEFAULT_CLIENT_ID="client",
+		COMPLIANCE_CHAT_BUCKET_NAME="test-chat-bucket",
+		COMPLIANCE_CHAT_UPLOAD_PREFIX="documents/chat-uploads/",
+	)
+	@patch("core.views.newsletter_chat_view.upload_bytes_to_s3_bucket")
+	@patch("core.views.newsletter_chat_view.VeraComplianceService")
+	def test_newsletter_sends_attachments_to_vera(self, mock_service_class, mock_upload):
+		mock_service = Mock()
+		mock_service.send_message.return_value = "OK"
+		mock_service_class.return_value = mock_service
+
+		response = self.client.post(
+			"/api/newsletter/chat/",
+			{
+				"message": "Usa questo allegato",
+				"draft_type": "newsletter",
+				"session_id": "session-123",
+				"attachments": [
+					{
+						"name": "norma.pdf",
+						"size": 123,
+						"type": "application/pdf",
+						"data": "ZmFrZS1wZGY=",
+					}
+				],
+			},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, 200)
+		call_kwargs = mock_service.send_message.call_args.kwargs
+		self.assertNotIn("tag", call_kwargs)
+		content = call_kwargs["messages"][0]["content"]
+		self.assertTrue(content.startswith("[NEWSLETTER]"))
+		self.assertIn("DOCUMENTI ALLEGATI", content)
+		self.assertIn('"filename": "norma.pdf"', content)
+		self.assertIn('"bucket": "test-chat-bucket"', content)
+		self.assertIn('"s3_key": "documents/chat-uploads/', content)
+		self.assertNotIn("data_base64", content)
+		self.assertEqual(response.data["documents"][0]["filename"], "norma.pdf")
+		mock_upload.assert_called_once()
+		usage = UsageRecord.objects.get(tool=UsageTool.NEWSLETTER_PILL)
+		self.assertEqual(usage.metadata["attachment_count"], 1)
 
 	@override_settings(
 		VERA_API_BASE_URL="https://vera.example.test/v1",
@@ -557,11 +608,10 @@ class CheckComplianceChatViewTests(TestCase):
 			messages=[
 				{
 					"role": "user",
-					"content": "Ola, Vera. Responda API_OK",
+					"content": "[CHAT] Ola, Vera. Responda API_OK",
 				}
 			],
 			session_key=f"vera:org:client:matter:{self.user.pk}",
-			tag="[CHAT]",
 		)
 		usage = UsageRecord.objects.get(tool=UsageTool.CHECK_COMPLIANCE)
 		self.assertEqual(str(usage.quantity), "1.0000")
@@ -662,7 +712,7 @@ class CheckComplianceChatViewTests(TestCase):
 		self.assertEqual(response.status_code, 200)
 		request_payload = mock_service.send_message.call_args.kwargs["messages"][0]["content"]
 		parsed_payload = json.loads(request_payload)
-		self.assertEqual(parsed_payload["question"], "Analizza")
+		self.assertEqual(parsed_payload["question"], "[CHAT] Analizza")
 		self.assertEqual(parsed_payload["documents"], [document])
 
 	@override_settings(VERA_API_BASE_URL="", VERA_API_SERVER_KEY="")
