@@ -6,6 +6,7 @@ import base64
 import binascii
 from uuid import uuid4
 
+import boto3
 from django.conf import settings
 from django.http import StreamingHttpResponse
 from rest_framework import permissions, serializers, status
@@ -15,7 +16,6 @@ from rest_framework.views import APIView
 
 from core.models.usage import UsageTool
 from core.services.usage_tracking import UsageTrackingService
-from core.utils.storage import upload_bytes_to_s3_bucket
 from core.services.vera_compliance_service import (
     VeraComplianceConfigurationError,
     VeraComplianceService,
@@ -75,6 +75,24 @@ def _newsletter_bucket_name():
     )
 
 
+def _newsletter_bucket_region():
+    return (
+        getattr(settings, "NEWSLETTER_CHAT_BUCKET_REGION", None)
+        or getattr(settings, "COMPLIANCE_CHAT_BUCKET_REGION", None)
+        or getattr(settings, "COMPLIANCE_DOCUMENTS_BUCKET_REGION", None)
+        or getattr(settings, "AWS_S3_REGION_NAME", None)
+    )
+
+
+def _newsletter_s3_client():
+    return boto3.client(
+        "s3",
+        aws_access_key_id=getattr(settings, "AWS_ACCESS_KEY_ID", None),
+        aws_secret_access_key=getattr(settings, "AWS_SECRET_ACCESS_KEY", None),
+        region_name=_newsletter_bucket_region(),
+    )
+
+
 def _newsletter_upload_prefix():
     prefix = (
         getattr(settings, "NEWSLETTER_CHAT_UPLOAD_PREFIX", None)
@@ -118,16 +136,22 @@ def _store_attachments(user, session_id, attachments):
         raise VeraComplianceConfigurationError("Newsletter attachments bucket is not configured.")
 
     documents = []
+    s3 = _newsletter_s3_client()
     for attachment in attachments:
         filename = _safe_filename(attachment.get("name"))
         content_type = attachment.get("type") or "application/octet-stream"
         file_bytes = _decode_attachment_data(attachment.get("data"))
         object_key = _build_upload_key(user, session_id, filename)
-        upload_bytes_to_s3_bucket(
-            file_bytes,
-            object_key,
-            bucket,
-            content_type=content_type,
+        s3.put_object(
+            Bucket=bucket,
+            Key=object_key,
+            Body=file_bytes,
+            ContentType=content_type,
+            Metadata={
+                "uploaded-by": str(getattr(user, "pk", "") or "anonymous"),
+                "original-filename": filename,
+                "source": "newsletter-pill-chat",
+            },
         )
         documents.append(
             {

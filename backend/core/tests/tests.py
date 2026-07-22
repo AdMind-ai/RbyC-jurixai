@@ -200,12 +200,14 @@ class NewsletterChatViewTests(TestCase):
 		COMPLIANCE_CHAT_BUCKET_NAME="test-chat-bucket",
 		COMPLIANCE_CHAT_UPLOAD_PREFIX="documents/chat-uploads/",
 	)
-	@patch("core.views.newsletter_chat_view.upload_bytes_to_s3_bucket")
+	@patch("core.views.newsletter_chat_view._newsletter_s3_client")
 	@patch("core.views.newsletter_chat_view.VeraComplianceService")
-	def test_newsletter_sends_attachments_to_vera(self, mock_service_class, mock_upload):
+	def test_newsletter_sends_attachments_to_vera(self, mock_service_class, mock_s3_client):
 		mock_service = Mock()
 		mock_service.send_message.return_value = "OK"
 		mock_service_class.return_value = mock_service
+		mock_s3 = Mock()
+		mock_s3_client.return_value = mock_s3
 
 		response = self.client.post(
 			"/api/newsletter/chat/",
@@ -236,7 +238,7 @@ class NewsletterChatViewTests(TestCase):
 		self.assertIn('"s3_key": "documents/chat-uploads/', content)
 		self.assertNotIn("data_base64", content)
 		self.assertEqual(response.data["documents"][0]["filename"], "norma.pdf")
-		mock_upload.assert_called_once()
+		mock_s3.put_object.assert_called_once()
 		usage = UsageRecord.objects.get(tool=UsageTool.NEWSLETTER_PILL)
 		self.assertEqual(usage.metadata["attachment_count"], 1)
 
