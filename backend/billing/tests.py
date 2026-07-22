@@ -213,8 +213,21 @@ class WalletViewTests(TestCase):
         response = self.client.get("/api/billing/wallet/transactions/")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["amountEur"], 30.0)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertEqual(response.data["results"][0]["amountEur"], 30.0)
+
+    def test_wallet_transactions_supports_limit_and_offset(self):
+        for index in range(3):
+            WalletService.credit(amount_eur=Decimal("10.00"), description=f"Credit {index}")
+
+        response = self.client.get("/api/billing/wallet/transactions/?limit=1&offset=1")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 3)
+        self.assertEqual(response.data["limit"], 1)
+        self.assertEqual(response.data["offset"], 1)
+        self.assertEqual(len(response.data["results"]), 1)
 
 
 class ProviderCostServiceTests(TestCase):

@@ -47,10 +47,16 @@ class WalletService:
         }
 
     @classmethod
-    def list_transactions(cls, *, limit: int = 100) -> list[WalletTransaction]:
+    def list_transactions(cls, *, limit: int = 100, offset: int = 0) -> list[WalletTransaction]:
         limit = max(1, min(limit, 200))
+        offset = max(0, offset)
         wallet = Wallet.get_solo()
-        return list(wallet.transactions.all()[:limit])
+        return list(wallet.transactions.all()[offset:offset + limit])
+
+    @classmethod
+    def count_transactions(cls) -> int:
+        wallet = Wallet.get_solo()
+        return wallet.transactions.count()
 
     @classmethod
     def credit(
@@ -323,6 +329,7 @@ class WalletService:
             .get("total")
         )
         return abs(cls._money(total or Decimal("0.00")))
+
 
     @classmethod
     def _record_payment_failure(
