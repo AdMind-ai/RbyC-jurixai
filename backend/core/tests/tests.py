@@ -170,6 +170,9 @@ class NewsletterChatViewTests(TestCase):
 		content = call_kwargs["messages"][0]["content"]
 		self.assertIn("<bozza>", content)
 		self.assertIn("ultimo elemento isolato", content)
+		usage = UsageRecord.objects.get(tool=UsageTool.NEWSLETTER_PILL)
+		self.assertEqual(str(usage.quantity), "1.0000")
+		self.assertEqual(usage.metadata["draft_type"], "newsletter")
 
 	@override_settings(
 		VERA_API_BASE_URL="https://vera.example.test/v1",
@@ -182,6 +185,9 @@ class NewsletterChatViewTests(TestCase):
 
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(mock_service.send_message.call_args.kwargs["tag"], "[PILL FORMATIVO]")
+		usage = UsageRecord.objects.get(tool=UsageTool.NEWSLETTER_PILL)
+		self.assertEqual(str(usage.quantity), "1.0000")
+		self.assertEqual(usage.metadata["draft_type"], "pill")
 
 	@override_settings(
 		VERA_API_BASE_URL="https://vera.example.test/v1",
@@ -218,6 +224,9 @@ class NewsletterChatViewTests(TestCase):
 		self.assertIn("Preparando la bozza", body)
 		self.assertIn('"delta": "API"', body)
 		self.assertIn('"answer": "API_OK"', body)
+		usage = UsageRecord.objects.get(tool=UsageTool.NEWSLETTER_PILL)
+		self.assertEqual(str(usage.quantity), "1.0000")
+		self.assertTrue(usage.metadata["streamed"])
 
 
 class VeraRunStatusMapperTests(TestCase):
@@ -554,6 +563,9 @@ class CheckComplianceChatViewTests(TestCase):
 			session_key=f"vera:org:client:matter:{self.user.pk}",
 			tag="[CHAT]",
 		)
+		usage = UsageRecord.objects.get(tool=UsageTool.CHECK_COMPLIANCE)
+		self.assertEqual(str(usage.quantity), "1.0000")
+		self.assertEqual(usage.metadata["source"], "check_compliance_chat")
 
 	@override_settings(
 		VERA_API_BASE_URL="https://vera.example.test/v1",
@@ -698,6 +710,9 @@ class CheckComplianceChatViewTests(TestCase):
 		self.assertIn('"delta": "API"', body)
 		self.assertIn('"delta": "_OK"', body)
 		self.assertIn('"answer": "API_OK"', body)
+		usage = UsageRecord.objects.get(tool=UsageTool.CHECK_COMPLIANCE)
+		self.assertEqual(str(usage.quantity), "1.0000")
+		self.assertTrue(usage.metadata["streamed"])
 
 	@override_settings(
 		COMPLIANCE_CHAT_BUCKET_NAME="test-chat-bucket",

@@ -71,6 +71,39 @@ const WELCOME: ChatMessage = {
   content:
     'Ciao! Sono Agente Vera. Descrivimi l\'aggiornamento normativo o l\'argomento su cui vuoi generare la newsletter o il PILL formativo, e creerò una bozza pronta da rivedere.',
 };
+const archivedMessagesFromMetadata = (metadata: SavedNewsletter['metadata']): ChatMessage[] | null => {
+  const value = metadata?.chat_messages;
+  if (!Array.isArray(value)) return null;
+
+  const restored = value
+    .map((item): ChatMessage | null => {
+      if (!item || typeof item !== 'object') return null;
+      const raw = item as Partial<ChatMessage>;
+      if (raw.role !== 'user' && raw.role !== 'assistant') return null;
+      if (typeof raw.content !== 'string') return null;
+      return {
+        id: typeof raw.id === 'string' ? raw.id : uid(),
+        role: raw.role,
+        content: raw.content,
+        files: Array.isArray(raw.files) ? raw.files : undefined,
+      };
+    })
+    .filter((item): item is ChatMessage => Boolean(item));
+
+  return restored.length > 0 ? restored : null;
+};
+
+const buildArchivedMessages = (messages: ChatMessage[]) =>
+  messages
+    .filter((message) => message.id !== 'welcome' && !message.isStreaming)
+    .map((message) => ({
+      id: message.id,
+      role: message.role,
+      content: message.role === 'assistant'
+        ? stripBozzaTag(message.content) || extractBozza(message.content) || message.content
+        : message.content,
+      files: message.files,
+    }));
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -176,6 +209,7 @@ const ArchiveTab: React.FC<{
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<SavedNewsletterSummary | null>(null);
 
   useEffect(() => {
     savedNewsletterService.list().then(setItems).catch(console.error).finally(() => setLoading(false));
@@ -191,13 +225,20 @@ const ArchiveTab: React.FC<{
     }
   };
 
-  const handleDelete = async (e: React.MouseEvent, id: string) => {
+  const openDeleteConfirm = (e: React.MouseEvent, item: SavedNewsletterSummary) => {
     e.stopPropagation();
+    setDeleteTarget(item);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    const id = deleteTarget.id;
     setDeleting(id);
     try {
       await savedNewsletterService.delete(id);
       setItems((prev) => prev.filter((x) => x.id !== id));
       if (selectedId === id) setSelectedId(null);
+      setDeleteTarget(null);
     } catch (e) {
       console.error(e);
     } finally {
@@ -222,48 +263,99 @@ const ArchiveTab: React.FC<{
   );
 
   return (
-    <div className="flex flex-col gap-2 p-4">
-      {items.map((item) => (
-        <button
-          key={item.id}
-          onClick={() => handleOpen(item.id)}
-          className={`w-full text-left rounded-xl border p-4 transition-all duration-150 group
-            ${selectedId === item.id
-              ? 'border-[#1e3a8a]/30 bg-blue-50/50 shadow-sm'
-              : 'border-slate-100 bg-white hover:border-slate-200 hover:shadow-sm'}`}
-        >
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-medium text-slate-800 truncate leading-snug">
-                {item.title}
-              </p>
-              <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-2 leading-relaxed">
-                {item.preview}
-              </p>
-              <div className="flex items-center gap-2 mt-2">
-                <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full
-                  ${item.newsletter_type === 'newsletter' ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600'}`}>
-                  {item.newsletter_type_display}
-                </span>
-                <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full
-                  ${item.source === 'auto' ? 'bg-green-50 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
-                  {item.source_display}
-                </span>
-                <span className="text-[10px] text-slate-400">{formatDate(item.created_at)}</span>
+    <>
+      <div className="flex flex-col gap-2 p-4">
+        {items.map((item) => (
+          <button
+            key={item.id}
+            onClick={() => handleOpen(item.id)}
+            className={`w-full text-left rounded-xl border p-4 transition-all duration-150 group
+              ${selectedId === item.id
+                ? 'border-[#1e3a8a]/30 bg-blue-50/50 shadow-sm'
+                : 'border-slate-100 bg-white hover:border-slate-200 hover:shadow-sm'}`}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-medium text-slate-800 truncate leading-snug">
+                  {item.title}
+                </p>
+                <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-2 leading-relaxed">
+                  {item.preview}
+                </p>
+                <div className="flex items-center gap-2 mt-2">
+                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full
+                    ${item.newsletter_type === 'newsletter' ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600'}`}>
+                    {item.newsletter_type_display}
+                  </span>
+                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full
+                    ${item.source === 'auto' ? 'bg-green-50 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
+                    {item.source_display}
+                  </span>
+                  <span className="text-[10px] text-slate-400">{formatDate(item.created_at)}</span>
+                </div>
               </div>
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => openDeleteConfirm(e, item)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setDeleteTarget(item);
+                  }
+                }}
+                className="shrink-0 p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
+                title="Elimina"
+              >
+                <Trash2 size={13} />
+              </span>
             </div>
-            <button
-              onClick={(e) => handleDelete(e, item.id)}
-              disabled={deleting === item.id}
-              className="shrink-0 p-1.5 rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
-              title="Elimina"
-            >
-              <Trash2 size={13} />
-            </button>
+          </button>
+        ))}
+      </div>
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-100 bg-white shadow-xl">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">Conferma eliminazione</h3>
+                <p className="mt-1 text-xs text-slate-500">Questa operazione non può essere annullata.</p>
+              </div>
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                title="Chiudi"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="px-5 py-4">
+              <p className="text-sm text-slate-600">
+                Vuoi davvero eliminare <strong className="text-slate-800">{deleteTarget.title}</strong> dall'archivio?
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 px-5 pb-5">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleting === deleteTarget.id}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting === deleteTarget.id}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+              >
+                {deleting === deleteTarget.id ? 'Eliminando...' : 'Elimina'}
+              </button>
+            </div>
           </div>
-        </button>
-      ))}
-    </div>
+        </div>
+      )}
+    </>
   );
 };
 
@@ -293,6 +385,8 @@ const Newsletter: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const autoSaveInFlightRef = useRef(false);
+  const autoSavedContentRef = useRef<string | null>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -319,17 +413,26 @@ const Newsletter: React.FC = () => {
   }, [messages]);
 
   const autoSave = useCallback(async (content: string) => {
-    if (saving || savedId) return;
+    if (autoSaveInFlightRef.current || savedId || autoSavedContentRef.current === content) return;
+    autoSaveInFlightRef.current = true;
     setSaving(true);
     try {
-      const saved = await savedNewsletterService.save({ content, newsletter_type: draftType });
+      const saved = await savedNewsletterService.save({
+        content,
+        newsletter_type: draftType,
+        metadata: {
+          chat_messages: buildArchivedMessages(messages),
+        },
+      });
       setSavedId(saved.id);
+      autoSavedContentRef.current = content;
     } catch (e) {
+      autoSaveInFlightRef.current = false;
       console.error('Auto-save failed', e);
     } finally {
       setSaving(false);
     }
-  }, [saving, savedId, draftType]);
+  }, [savedId, draftType, messages]);
 
   const handleFileAttach = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -421,6 +524,8 @@ const Newsletter: React.FC = () => {
     setInput('');
     setAttachedFiles([]);
     setSavedId(null);
+    autoSaveInFlightRef.current = false;
+    autoSavedContentRef.current = null;
   };
 
   const handleCopy = async () => {
@@ -442,7 +547,16 @@ const Newsletter: React.FC = () => {
   };
 
   const handleOpenArchived = (newsletter: SavedNewsletter) => {
+    autoSaveInFlightRef.current = true;
+    autoSavedContentRef.current = newsletter.content;
     setPreviewContent(newsletter.content);
+    setMessages([WELCOME, ...(archivedMessagesFromMetadata(newsletter.metadata) ?? [{
+      id: uid(),
+      role: 'assistant',
+      content: newsletter.content,
+    }])]);
+    setDraftType(newsletter.newsletter_type);
+    setSavedId(newsletter.id);
     setActiveTab('new');
   };
 
@@ -703,3 +817,4 @@ const Newsletter: React.FC = () => {
 };
 
 export default Newsletter;
+

@@ -10,6 +10,8 @@ from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.models.usage import UsageTool
+from core.services.usage_tracking import UsageTrackingService
 from core.services.vera_compliance_service import (
     VeraComplianceConfigurationError,
     VeraComplianceService,
@@ -87,7 +89,14 @@ class NewsletterChatView(APIView):
         session_key = build_vera_session_key(request.user, session_context)
 
         if stream:
-            return self._stream_response(enriched_message, session_key, tag=vera_tag)
+            return self._stream_response(
+                enriched_message,
+                session_key,
+                tag=vera_tag,
+                request=request,
+                raw_message=raw_message,
+                draft_type=draft_type,
+            )
 
         try:
             service = VeraComplianceService()
@@ -107,12 +116,44 @@ class NewsletterChatView(APIView):
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
+        self._record_newsletter_usage(
+            request=request,
+            session_key=session_key,
+            raw_message=raw_message,
+            draft_type=draft_type,
+            streamed=False,
+        )
+
         return Response(
             {"answer": answer, "sessionKey": session_key},
             status=status.HTTP_200_OK,
         )
 
-    def _stream_response(self, message, session_key, tag=None):
+    @staticmethod
+    def _record_newsletter_usage(*, request, session_key, raw_message, draft_type, streamed):
+        UsageTrackingService.record_usage_event(
+            user=request.user,
+            tool=UsageTool.NEWSLETTER_PILL,
+            quantity=1,
+            company=getattr(request.user, "company", None),
+            metadata={
+                "source": "newsletter_chat",
+                "draft_type": draft_type,
+                "session_key": session_key,
+                "message_length": len(raw_message or ""),
+                "streamed": streamed,
+            },
+        )
+
+    def _stream_response(
+        self,
+        message,
+        session_key,
+        tag=None,
+        request=None,
+        raw_message="",
+        draft_type="newsletter",
+    ):
         def event_stream():
             full_answer = ""
             stream_queue = queue.Queue()
@@ -192,6 +233,14 @@ class NewsletterChatView(APIView):
                     if event_type == "done":
                         if payload:
                             full_answer = payload
+                        if request is not None:
+                            self._record_newsletter_usage(
+                                request=request,
+                                session_key=session_key,
+                                raw_message=raw_message,
+                                draft_type=draft_type,
+                                streamed=True,
+                            )
                         yield _encode_sse_event(
                             "answer_completed",
                             {

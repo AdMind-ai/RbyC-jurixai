@@ -17,6 +17,7 @@ export interface SavedNewsletterSummary {
 
 export interface SavedNewsletter extends SavedNewsletterSummary {
   content: string;
+  metadata?: Record<string, unknown>;
 }
 
 export const savedNewsletterService = {
@@ -33,6 +34,7 @@ export const savedNewsletterService = {
   async save(payload: {
     title?: string;
     content: string;
+    metadata?: Record<string, unknown>;
     newsletter_type?: NewsletterType;
   }): Promise<SavedNewsletter> {
     const { data } = await api.post<SavedNewsletter>('/newsletter/saved/', payload);

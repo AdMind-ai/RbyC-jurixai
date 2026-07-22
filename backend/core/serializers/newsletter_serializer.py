@@ -16,6 +16,7 @@ class SavedNewsletterSerializer(serializers.ModelSerializer):
             "newsletter_type_display",
             "source",
             "source_display",
+            "metadata",
             "generated_at",
             "created_at",
         ]
@@ -52,6 +53,7 @@ class SaveNewsletterSerializer(serializers.Serializer):
     """Used when the frontend saves a manually-created newsletter."""
     title = serializers.CharField(max_length=512, required=False, allow_blank=True)
     content = serializers.CharField()
+    metadata = serializers.JSONField(required=False)
     newsletter_type = serializers.ChoiceField(
         choices=NewsletterType.choices,
         default=NewsletterType.NEWSLETTER,
@@ -69,5 +71,6 @@ class SaveNewsletterSerializer(serializers.Serializer):
             content=content,
             newsletter_type=validated_data.get("newsletter_type", NewsletterType.NEWSLETTER),
             source=NewsletterSource.MANUAL,
+            metadata=validated_data.get("metadata") or {},
         )
 

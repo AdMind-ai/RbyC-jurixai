@@ -21,6 +21,8 @@ from core.models import (
     CheckComplianceConversation,
     CheckComplianceMessage,
 )
+from core.models.usage import UsageTool
+from core.services.usage_tracking import UsageTrackingService
 from core.services.vera_compliance_service import (
     VeraComplianceConfigurationError,
     VeraComplianceService,
@@ -370,7 +372,13 @@ class CheckComplianceChatView(APIView):
         vera_content = _build_vera_content(message, documents)
 
         if stream:
-            return self._stream_response(vera_content, session_key, tag=vera_tag)
+            return self._stream_response(
+                vera_content,
+                session_key,
+                tag=vera_tag,
+                request=request,
+                documents=documents,
+            )
 
         try:
             service = VeraComplianceService()
@@ -395,6 +403,14 @@ class CheckComplianceChatView(APIView):
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
+        self._record_chat_usage(
+            request=request,
+            session_key=session_key,
+            message=message,
+            documents=documents,
+            streamed=False,
+        )
+
         return Response(
             {
                 "answer": answer,
@@ -403,7 +419,23 @@ class CheckComplianceChatView(APIView):
             status=status.HTTP_200_OK,
         )
 
-    def _stream_response(self, message, session_key, tag=None):
+    @staticmethod
+    def _record_chat_usage(*, request, session_key, message, documents, streamed):
+        UsageTrackingService.record_usage_event(
+            user=request.user,
+            tool=UsageTool.CHECK_COMPLIANCE,
+            quantity=1,
+            company=getattr(request.user, "company", None),
+            metadata={
+                "source": "check_compliance_chat",
+                "session_key": session_key,
+                "message_length": len(message or ""),
+                "document_count": len(documents or []),
+                "streamed": streamed,
+            },
+        )
+
+    def _stream_response(self, message, session_key, tag=None, request=None, documents=None):
         def event_stream():
             full_answer = ""
             stream_queue = queue.Queue()
@@ -488,6 +520,14 @@ class CheckComplianceChatView(APIView):
                     if event_type == "done":
                         if payload:
                             full_answer = payload
+                        if request is not None:
+                            self._record_chat_usage(
+                                request=request,
+                                session_key=session_key,
+                                message=message,
+                                documents=documents or [],
+                                streamed=True,
+                            )
                         yield _encode_sse_event(
                             "answer_completed",
                             {

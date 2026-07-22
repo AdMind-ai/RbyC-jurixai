@@ -38,6 +38,8 @@ class SavedNewsletter(models.Model):
     # Populated when source=auto (Vera ingest)
     generated_at = models.DateTimeField(null=True, blank=True)
 
+    metadata = models.JSONField(default=dict, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
