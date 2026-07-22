@@ -196,12 +196,13 @@ def _build_upload_key(user, session_id, filename):
     return f"{prefix}{user_id}/{session_part}/{uuid4().hex}-{filename}"
 
 
-def _build_vera_content(message, documents):
+def _build_vera_content(message, documents, tag=None):
+    tag_prefix = f"{tag} " if tag else ""
     if not documents:
-        return message
+        return f"{tag_prefix}{message}"
 
     payload = {
-        "question": message,
+        "question": f"{tag_prefix}{message}",
         "documents": documents,
         "instructions": (
             "Use the S3 document references as the source documents for this "
@@ -369,13 +370,12 @@ class CheckComplianceChatView(APIView):
             request.user,
             _session_context_with_chat_session(session_context, session_id),
         )
-        vera_content = _build_vera_content(message, documents)
+        vera_content = _build_vera_content(message, documents, tag=vera_tag)
 
         if stream:
             return self._stream_response(
                 vera_content,
                 session_key,
-                tag=vera_tag,
                 request=request,
                 documents=documents,
             )
@@ -390,7 +390,6 @@ class CheckComplianceChatView(APIView):
                     }
                 ],
                 session_key=session_key,
-                tag=vera_tag,
             )
         except VeraComplianceConfigurationError:
             return Response(
@@ -435,7 +434,7 @@ class CheckComplianceChatView(APIView):
             },
         )
 
-    def _stream_response(self, message, session_key, tag=None, request=None, documents=None):
+    def _stream_response(self, message, session_key, request=None, documents=None):
         def event_stream():
             full_answer = ""
             stream_queue = queue.Queue()
@@ -452,7 +451,6 @@ class CheckComplianceChatView(APIView):
                             }
                         ],
                         session_key=session_key,
-                        tag=tag,
                     ):
                         event_type = event.get("type")
                         if event_type == "answer_delta":

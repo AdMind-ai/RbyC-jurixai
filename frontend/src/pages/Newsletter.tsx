@@ -15,7 +15,11 @@ import {
   User,
   X,
 } from 'lucide-react';
-import { newsletterChatService } from '../services/newsletterChatService';
+import {
+  newsletterChatService,
+  NewsletterChatAttachment,
+  NewsletterDocumentReference,
+} from '../services/newsletterChatService';
 import { savedNewsletterService, SavedNewsletterSummary, SavedNewsletter } from '../services/savedNewsletterService';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -29,7 +33,8 @@ type ChatMessage = {
   content: string;
   isStreaming?: boolean;
   liveStatus?: string;
-  files?: { name: string; size: number }[];
+  files?: { name: string; size: number; type?: string }[];
+  documents?: NewsletterDocumentReference[];
 };
 
 type DraftType = 'newsletter' | 'pill';
@@ -86,6 +91,7 @@ const archivedMessagesFromMetadata = (metadata: SavedNewsletter['metadata']): Ch
         role: raw.role,
         content: raw.content,
         files: Array.isArray(raw.files) ? raw.files : undefined,
+        documents: Array.isArray(raw.documents) ? raw.documents as NewsletterDocumentReference[] : undefined,
       };
     })
     .filter((item): item is ChatMessage => Boolean(item));
@@ -103,6 +109,7 @@ const buildArchivedMessages = (messages: ChatMessage[]) =>
         ? stripBozzaTag(message.content) || extractBozza(message.content) || message.content
         : message.content,
       files: message.files,
+      documents: message.documents,
     }));
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -374,7 +381,7 @@ const Newsletter: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([WELCOME]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [attachedFiles, setAttachedFiles] = useState<{ name: string; size: number; data: string; type: string }[]>([]);
+  const [attachedFiles, setAttachedFiles] = useState<NewsletterChatAttachment[]>([]);
   const [draftType, setDraftType] = useState<DraftType>('newsletter');
   const [previewContent, setPreviewContent] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -451,11 +458,12 @@ const Newsletter: React.FC = () => {
     if (!input.trim() && attachedFiles.length === 0) return;
     if (isTyping) return;
 
+    const messageAttachments = attachedFiles;
     const userMsg: ChatMessage = {
       id: uid(),
       role: 'user',
       content: input.trim(),
-      files: attachedFiles.map((f) => ({ name: f.name, size: f.size })),
+      files: messageAttachments.map((f) => ({ name: f.name, size: f.size, type: f.type })),
     };
 
     setMessages((prev) => [...prev, userMsg]);
@@ -471,6 +479,7 @@ const Newsletter: React.FC = () => {
         userMsg.content,
         draftType,
         sessionId,
+        messageAttachments,
         (delta) => {
           setMessages((prev) =>
             prev.map((m) =>
@@ -489,13 +498,26 @@ const Newsletter: React.FC = () => {
 
       const answer: string = data.answer ?? '';
       const returnedKey: string = data.sessionKey ?? '';
+      const returnedDocuments = data.documents ?? [];
 
       setMessages((prev) =>
-        prev.map((m) =>
-          m.id === aiId
-            ? { ...m, content: answer || m.content || 'Nessuna risposta ricevuta.', isStreaming: false, liveStatus: undefined }
-            : m
-        )
+        prev.map((m) => {
+          if (m.id === userMsg.id) {
+            return {
+              ...m,
+              documents: returnedDocuments.length ? returnedDocuments : m.documents,
+            };
+          }
+          if (m.id === aiId) {
+            return {
+              ...m,
+              content: answer || m.content || 'Nessuna risposta ricevuta.',
+              isStreaming: false,
+              liveStatus: undefined,
+            };
+          }
+          return m;
+        })
       );
 
       if (returnedKey) setSessionId(returnedKey);
