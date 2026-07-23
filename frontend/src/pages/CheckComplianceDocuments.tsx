@@ -1,6 +1,8 @@
 import React, { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
   Download,
   File as FileIcon,
   FileArchive,
@@ -24,6 +26,25 @@ import {
   checkComplianceDocumentsService,
   ComplianceDocument,
 } from '../services/checkComplianceDocumentsService';
+
+type SortField = 'name' | 'folder' | 'size' | 'lastModified';
+type SortDirection = 'asc' | 'desc';
+type SortCriterion = {
+  field: SortField;
+  direction: SortDirection;
+};
+
+const DEFAULT_SORT_CRITERIA: SortCriterion[] = [
+  { field: 'lastModified', direction: 'desc' },
+  { field: 'name', direction: 'asc' },
+];
+
+const SORT_FIELD_DEFAULT_DIRECTIONS: Record<SortField, SortDirection> = {
+  name: 'asc',
+  folder: 'asc',
+  size: 'desc',
+  lastModified: 'desc',
+};
 
 const folderLabels: Record<string, string> = {
   'documents/regulatory/banca-ditalia/': "Banca d'Italia",
@@ -138,6 +159,56 @@ const slugifyFolderName = (value: string) => {
     .replace(/^-+|-+$/g, '');
 };
 
+const compareText = (a: string, b: string) =>
+  a.localeCompare(b, 'it-IT', { sensitivity: 'base', numeric: true });
+
+const getTimestamp = (value: string | null) =>
+  value ? new Date(value).getTime() : 0;
+
+const SortHeader: React.FC<{
+  label: string;
+  field: SortField;
+  sortCriteria: SortCriterion[];
+  defaultSortCriteria: SortCriterion[];
+  align?: 'left' | 'center';
+  onSort: (field: SortField) => void;
+}> = ({ label, field, sortCriteria, defaultSortCriteria, align = 'center', onSort }) => {
+  const criterionIndex = sortCriteria.findIndex((criterion) => criterion.field === field);
+  const criterion = criterionIndex >= 0 ? sortCriteria[criterionIndex] : null;
+  const defaultCriterion = defaultSortCriteria.find((item) => item.field === field);
+  const visibleCriterion = criterion || defaultCriterion || {
+    field,
+    direction: SORT_FIELD_DEFAULT_DIRECTIONS[field],
+  };
+  const isUserActive = Boolean(criterion);
+  const Icon = visibleCriterion?.direction === 'asc' ? ArrowUp : ArrowDown;
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(field)}
+      className={`inline-flex w-full items-center gap-1.5 font-bold uppercase transition-colors hover:text-[#1F3A8B] ${
+        align === 'left' ? 'justify-start text-left' : 'justify-center text-center'
+      } ${isUserActive ? 'text-[#1F3A8B]' : 'text-slate-500'}`}
+      title={`Ordina per ${label}`}
+    >
+      <span className="truncate">{label}</span>
+      {visibleCriterion && (
+        <Icon
+          className={`h-3.5 w-3.5 shrink-0 ${
+            isUserActive ? 'text-[#1F3A8B]' : 'text-slate-400'
+          }`}
+        />
+      )}
+      {isUserActive && sortCriteria.length > 1 && (
+        <span className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-[#1F3A8B]/10 px-1 text-[10px] font-bold text-[#1F3A8B]">
+          {criterionIndex + 1}
+        </span>
+      )}
+    </button>
+  );
+};
+
 const CheckComplianceDocuments: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const folderMenuRef = useRef<HTMLDivElement | null>(null);
@@ -154,6 +225,7 @@ const CheckComplianceDocuments: React.FC = () => {
   const [openActionKey, setOpenActionKey] = useState<string | null>(null);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [sortCriteria, setSortCriteria] = useState<SortCriterion[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -192,9 +264,74 @@ const CheckComplianceDocuments: React.FC = () => {
     return () => document.removeEventListener('mousedown', handlePointerDown);
   }, [isFolderFilterOpen]);
 
+  const handleSort = (field: SortField) => {
+    setSortCriteria((currentCriteria) => {
+      const [primary] = currentCriteria;
+      if (primary?.field === field) {
+        const defaultDirection = SORT_FIELD_DEFAULT_DIRECTIONS[field];
+        if (primary.direction === defaultDirection) {
+          return currentCriteria.slice(1);
+        }
+        return [
+          {
+            field,
+            direction: defaultDirection,
+          },
+          ...currentCriteria.slice(1),
+        ];
+      }
+
+      const existing = currentCriteria.find((criterion) => criterion.field === field);
+      const currentVisibleDirection =
+        existing?.direction || SORT_FIELD_DEFAULT_DIRECTIONS[field];
+      return [
+        {
+          field,
+          direction: currentVisibleDirection === 'asc' ? 'desc' : 'asc',
+        },
+        ...currentCriteria.filter((criterion) => criterion.field !== field),
+      ];
+    });
+  };
+
+  const compareDocumentsByField = (
+    a: ComplianceDocument,
+    b: ComplianceDocument,
+    field: SortField,
+  ) => {
+    if (field === 'name') {
+      return compareText(a.name, b.name);
+    }
+    if (field === 'folder') {
+      return compareText(getFolderLabel(a.folder), getFolderLabel(b.folder));
+    }
+    if (field === 'size') {
+      return a.size - b.size;
+    }
+    if (field === 'lastModified') {
+      return getTimestamp(a.lastModified) - getTimestamp(b.lastModified);
+    }
+    return 0;
+  };
+
+  const sortDocuments = (items: ComplianceDocument[]) => {
+    const activeCriteria = sortCriteria.length ? sortCriteria : DEFAULT_SORT_CRITERIA;
+
+    return [...items].sort((a, b) => {
+      for (const criterion of activeCriteria) {
+        const result = compareDocumentsByField(a, b, criterion.field);
+        if (result !== 0) {
+          return criterion.direction === 'asc' ? result : -result;
+        }
+      }
+
+      return compareText(a.key, b.key);
+    });
+  };
+
   const visibleDocuments = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    return documents.filter((document) => {
+    const filteredDocuments = documents.filter((document) => {
       const folderMatches =
         folderFilter === 'all'
         || document.key.startsWith(folderFilter);
@@ -204,7 +341,8 @@ const CheckComplianceDocuments: React.FC = () => {
 
       return folderMatches && queryMatches;
     });
-  }, [documents, folderFilter, query]);
+    return sortDocuments(filteredDocuments);
+  }, [documents, folderFilter, query, sortCriteria]);
 
   const availableFolders = useMemo(() => {
     const folders = new Set<string>();
@@ -441,10 +579,43 @@ const CheckComplianceDocuments: React.FC = () => {
                   <table className="w-full table-fixed divide-y divide-slate-200 text-left text-sm">
                     <thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500">
                       <tr>
-                        <th className="w-[55%] px-4 py-3 text-left font-bold">Nome</th>
-                        <th className="w-[10%] px-3 py-3 text-center font-bold">Cartella</th>
-                        <th className="w-[8%] px-3 py-3 text-center font-bold">Dimensione</th>
-                        <th className="w-[17%] px-3 py-3 text-center font-bold">Ultima modifica</th>
+                        <th className="w-[55%] px-4 py-3 text-left font-bold">
+                          <SortHeader
+                            label="Nome"
+                            field="name"
+                            sortCriteria={sortCriteria}
+                            defaultSortCriteria={DEFAULT_SORT_CRITERIA}
+                            align="left"
+                            onSort={handleSort}
+                          />
+                        </th>
+                        <th className="w-[10%] px-3 py-3 text-center font-bold">
+                          <SortHeader
+                            label="Cartella"
+                            field="folder"
+                            sortCriteria={sortCriteria}
+                            defaultSortCriteria={DEFAULT_SORT_CRITERIA}
+                            onSort={handleSort}
+                          />
+                        </th>
+                        <th className="w-[8%] px-3 py-3 text-center font-bold">
+                          <SortHeader
+                            label="Dimensione"
+                            field="size"
+                            sortCriteria={sortCriteria}
+                            defaultSortCriteria={DEFAULT_SORT_CRITERIA}
+                            onSort={handleSort}
+                          />
+                        </th>
+                        <th className="w-[17%] px-3 py-3 text-center font-bold">
+                          <SortHeader
+                            label="Ultima modifica"
+                            field="lastModified"
+                            sortCriteria={sortCriteria}
+                            defaultSortCriteria={DEFAULT_SORT_CRITERIA}
+                            onSort={handleSort}
+                          />
+                        </th>
                         <th className="w-[8%] px-3 py-3 text-center font-bold">Azioni</th>
                       </tr>
                     </thead>
